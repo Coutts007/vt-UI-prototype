@@ -1,0 +1,10 @@
+{
+  "name": "Virtual Tailor",
+  "description": "AI-Powered Remote Tailoring & Virtual Body Measurement System for accurate on-device body measurements and tailor order management.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

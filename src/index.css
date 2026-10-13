@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+:root {
+  --vt-chalk: #F7F3EC;
+  --vt-paper: #FFFFFF;
+  --vt-ink: #1F1C18;
+  --vt-ink-muted: #5C554C;
+  --vt-thread: #2E3A87;
+  --vt-thread-ink: #FFFFFF;
+  --vt-kitenge: #C8531E;
+  --vt-line: #DDD5C8;
+  --vt-pass: #1E7B45;
+  --vt-check: #B26B00;
+  --vt-fail: #B3261E;
+  --vt-capture-bg: #0E0E10;
+  --vt-border-ok: #1E7B45;
+  --vt-border-wait: #D97706;
+  --vt-border-stop: #DC2626;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--vt-chalk);
+  color: var(--vt-ink);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tabular figures for all numeric displays */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Touch targets and safe area insets */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Print stylesheet for Specification Sheet */
+@media print {
+  body {
+    background-color: #FFFFFF !important;
+  }
+  header, nav, aside, button {
+    display: none !important;
+  }
+}
