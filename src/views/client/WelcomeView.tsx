@@ -83,24 +83,61 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onNavigate, initialCod
         </div>
       </div>
 
+      {/* Tailor Directory & Direct Start Options */}
+      <div className="w-full flex flex-col sm:flex-row items-center gap-3 mb-8">
+        <button
+          type="button"
+          onClick={() => onNavigate('/tailors')}
+          className="w-full sm:flex-1 p-4 rounded-xl border border-[var(--vt-thread,#2E3A87)] bg-indigo-50/80 hover:bg-indigo-100/80 transition-all flex items-center justify-between text-left cursor-pointer shadow-2xs group"
+        >
+          <div>
+            <span className="text-xs font-bold uppercase tracking-wider text-[var(--vt-thread,#2E3A87)] block">
+              Don't have a tailor code yet?
+            </span>
+            <span className="text-sm font-bold text-[var(--vt-ink,#1F1C18)] block">
+              Browse Tailors &amp; Get Code
+            </span>
+          </div>
+          <ArrowRight className="w-5 h-5 text-[var(--vt-thread,#2E3A87)] group-hover:translate-x-0.5 transition-transform shrink-0" />
+        </button>
+      </div>
+
       {/* Secondary Actions */}
-      <div className="flex flex-col sm:flex-row items-center gap-3 text-sm">
+      <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
+        <button
+          onClick={() => onNavigate('/tailors')}
+          className="text-[var(--vt-thread,#2E3A87)] font-semibold flex items-center gap-1.5 py-1.5 px-3 rounded-lg hover:bg-black/5 cursor-pointer"
+        >
+          <span>Find a Tailor</span>
+        </button>
+
+        <span className="text-[var(--vt-line,#DDD5C8)]">·</span>
+
         <button
           onClick={() => onNavigate('/me')}
-          className="text-[var(--vt-ink-muted,#5C554C)] hover:text-[var(--vt-ink,#1F1C18)] flex items-center gap-1.5 py-2 px-3 rounded-lg hover:bg-black/5 cursor-pointer font-medium"
+          className="text-[var(--vt-ink-muted,#5C554C)] hover:text-[var(--vt-ink,#1F1C18)] flex items-center gap-1.5 py-1.5 px-3 rounded-lg hover:bg-black/5 cursor-pointer font-medium"
         >
           <Layers className="w-4 h-4" />
           <span>{t('iHaveMeasurements')}</span>
         </button>
 
-        <span className="hidden sm:inline text-[var(--vt-line,#DDD5C8)]">·</span>
+        <span className="text-[var(--vt-line,#DDD5C8)]">·</span>
 
         <button
           onClick={() => onNavigate('/help')}
-          className="text-[var(--vt-ink-muted,#5C554C)] hover:text-[var(--vt-ink,#1F1C18)] flex items-center gap-1.5 py-2 px-3 rounded-lg hover:bg-black/5 cursor-pointer font-medium"
+          className="text-[var(--vt-ink-muted,#5C554C)] hover:text-[var(--vt-ink,#1F1C18)] flex items-center gap-1.5 py-1.5 px-3 rounded-lg hover:bg-black/5 cursor-pointer font-medium"
         >
           <BookOpen className="w-4 h-4" />
           <span>{t('howItWorks')}</span>
+        </button>
+
+        <span className="text-[var(--vt-line,#DDD5C8)]">·</span>
+
+        <button
+          onClick={() => onNavigate('/register')}
+          className="text-[var(--vt-ink-muted,#5C554C)] hover:text-[var(--vt-ink,#1F1C18)] py-1.5 px-2 rounded-lg hover:bg-black/5 cursor-pointer text-xs"
+        >
+          Tailor Registration
         </button>
       </div>
     </div>

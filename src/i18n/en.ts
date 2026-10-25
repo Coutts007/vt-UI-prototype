@@ -234,6 +234,27 @@ export const en = {
   unitsPreference: 'Units preference',
   centimeters: 'Centimetres (cm)',
   inches: 'Inches (in)',
+
+  // Business Directory & Registration
+  browseTailors: 'Browse Tailors',
+  directoryTitle: 'Tailor & Workshop Directory',
+  directorySubtitle: 'Browse verified fundis across Kenya, choose your tailor, and get your specific measurement code.',
+  filterSpecialty: 'Filter by specialty',
+  filterArea: 'Filter by area',
+  allSpecialties: 'All Specialties',
+  allLocations: 'All Locations',
+  getMeasurementCode: 'Get Measurement Code',
+  measureWithTailor: 'Select & Start Measuring',
+  codeForTailor: 'Specific code for {name}',
+  codeCopied: 'Code copied to clipboard!',
+  businessDetails: 'Workshop Profile',
+  registerBusiness: 'Register Your Workshop',
+  turnaround: 'Turnaround',
+  pricing: 'Pricing',
+  verifiedWorkshop: 'Verified Workshop',
+  dontHaveCode: 'Don\'t have a code yet? Browse verified tailors & pick one',
+  selectedFromDirectory: 'Selected from Directory',
+  contactTailor: 'WhatsApp Inquiry',
 };
 
 export type TranslationKey = keyof typeof en;

@@ -76,8 +76,11 @@ export const StartView: React.FC<StartViewProps> = ({ onNavigate, initialCode })
   };
 
   useEffect(() => {
-    if (initialCode && initialCode.length === 6) {
-      handleVerifyCode(initialCode);
+    if (initialCode) {
+      setCode(initialCode);
+      if (initialCode.length === 6) {
+        handleVerifyCode(initialCode);
+      }
     }
   }, [initialCode]);
 
@@ -151,13 +154,37 @@ export const StartView: React.FC<StartViewProps> = ({ onNavigate, initialCode })
           )}
 
           {codeVerified && tailorName && (
-            <div className="mt-3 flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-medium">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>
-                {t('codeFromTailor')}: <strong>{tailorName}</strong>
-              </span>
+            <div className="mt-3 flex items-center justify-between p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 font-medium">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>
+                  {t('codeFromTailor')}: <strong>{tailorName}</strong>
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigate('/tailors')}
+                className="text-[11px] text-emerald-700 hover:text-emerald-900 underline font-semibold ml-2 shrink-0 cursor-pointer"
+              >
+                Change Tailor
+              </button>
             </div>
           )}
+
+          {/* Directory helper link */}
+          <div className="mt-3 pt-3 border-t border-[var(--vt-line,#DDD5C8)]/60 flex items-center justify-between text-xs">
+            <span className="text-[var(--vt-ink-muted,#5C554C)]">
+              Don't have a tailor code yet?
+            </span>
+            <button
+              type="button"
+              onClick={() => onNavigate('/tailors')}
+              className="text-[var(--vt-thread,#2E3A87)] font-bold hover:underline inline-flex items-center gap-1 cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Browse tailors &amp; get code</span>
+            </button>
+          </div>
         </div>
 
         {/* 2. Height */}

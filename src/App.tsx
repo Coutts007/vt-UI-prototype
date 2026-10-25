@@ -19,6 +19,7 @@ import { MyMeasurementsView } from './views/client/MyMeasurementsView';
 import { HelpView } from './views/client/HelpView';
 import { PrivacyView } from './views/client/PrivacyView';
 import { DeclinedView } from './views/client/DeclinedView';
+import { BusinessDirectoryView } from './views/client/BusinessDirectoryView';
 
 // Tailor Views
 import { TailorLayout } from './views/tailor/TailorLayout';
@@ -84,6 +85,14 @@ export default function App() {
   }, []);
 
   const navigate = (path: string) => {
+    if (path.includes('?')) {
+      const queryStr = path.split('?')[1];
+      const params = new URLSearchParams(queryStr);
+      const code = params.get('code');
+      if (code) {
+        setInitialCode(code.toUpperCase());
+      }
+    }
     setCurrentPath(path);
     if (typeof window !== 'undefined') {
       window.history.pushState({}, '', path);
@@ -115,6 +124,16 @@ export default function App() {
     // Dev Tools
     if (currentPath === '/dev/ui') return <DevGalleryView />;
     if (currentPath === '/dev/capture-tuning') return <DevCaptureTuningView />;
+
+    // Business Directory
+    if (
+      currentPath === '/tailors' ||
+      currentPath === '/businesses' ||
+      currentPath.startsWith('/tailors?') ||
+      currentPath.startsWith('/businesses?')
+    ) {
+      return <BusinessDirectoryView onNavigate={navigate} />;
+    }
 
     // Auth
     if (currentPath === '/login') {

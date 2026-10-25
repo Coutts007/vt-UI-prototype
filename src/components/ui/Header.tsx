@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useI18n, Locale } from '../../i18n';
 import { UserAccount } from '../../types/api';
-import { Globe, MoreVertical, LogOut, Scissors, Shield, BookOpen, Layers } from 'lucide-react';
+import { Globe, MoreVertical, LogOut, Scissors, Shield, BookOpen, Layers, Store } from 'lucide-react';
 
 interface HeaderProps {
   currentPath: string;
@@ -133,6 +133,15 @@ export const Header: React.FC<HeaderProps> = ({
           ) : (
             <>
               <button
+                onClick={() => onNavigate('/tailors')}
+                className={`hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer flex items-center gap-1.5 ${
+                  currentPath.startsWith('/tailors') ? 'text-[var(--vt-thread,#2E3A87)] font-semibold' : ''
+                }`}
+              >
+                <Store className="w-3.5 h-3.5" />
+                <span>Find a Tailor</span>
+              </button>
+              <button
                 onClick={() => onNavigate('/start')}
                 className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
               >
@@ -222,6 +231,16 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="px-3 py-1.5 text-xs font-semibold text-[var(--vt-ink-muted,#5C554C)] uppercase tracking-wider border-b border-[var(--vt-line,#DDD5C8)]/50 mb-1">
                     Virtual Tailor Navigation
                   </div>
+                  <button
+                    onClick={() => {
+                      onNavigate('/tailors');
+                      setMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#F7F3EC] flex items-center gap-2 cursor-pointer font-medium"
+                  >
+                    <Store className="w-4 h-4 text-[var(--vt-thread,#2E3A87)]" />
+                    <span>Browse Tailor Directory</span>
+                  </button>
                   <button
                     onClick={() => {
                       onNavigate('/start');
