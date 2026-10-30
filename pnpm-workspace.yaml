@@ -1,0 +1,8 @@
+packages:
+  - apps/web
+  - packages/contracts
+  - packages/seed
+  - packages/parity-fixtures
+  - packages/rules
+onlyBuiltDependencies:
+  - esbuild

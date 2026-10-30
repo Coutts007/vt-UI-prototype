@@ -13,10 +13,10 @@ export function generateSyntheticPose(view: 'front' | 'side', modifier: 'good' |
   // Base y positions
   let noseY = 0.16;
   let shoulderY = 0.28;
-  let elbowY = 0.42;
-  let wristY = 0.58;
-  let hipY = 0.50;
-  let kneeY = 0.70;
+  const elbowY = 0.42;
+  const wristY = 0.58;
+  const hipY = 0.50;
+  const kneeY = 0.70;
   let ankleY = 0.90;
 
   if (modifier === 'too_close') {

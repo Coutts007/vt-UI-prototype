@@ -1,8 +1,49 @@
+# Secrets and local config
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+# Claude Code personal files
+.claude/settings.local.json
+CLAUDE.local.md
+.claude/worktrees/
+# Office lock files
+.~lock.*
+# Build and dependencies
 node_modules/
 build/
 dist/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 coverage/
+.coverage
+playwright-report/
+test-results/
 .DS_Store
 *.log
-.env*
-!.env.example
+# Data that must never be committed
+research/data/
+research/images/
+docs/reports/**/private/
+docs/proposal/
+*.vtimg
+paper_covariates*.csv
+# Planning and agent files stay on the owner's machine (decision D30)
+CLAUDE.md
+.claude/
+.mcp.json
+.worktreeinclude
+docs/specs/
+docs/IMPLEMENTATION_GUIDE.md
+docs/milestones.md
+docs/decisions.md
+docs/architecture.md
+docs/traceability.md
+docs/device-test-log.md
+docs/i18n-review.md
