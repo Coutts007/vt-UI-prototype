@@ -72,7 +72,7 @@ export const en = {
   checkFail: 'This phone cannot measure',
   checkSecure: 'Secure connection',
   checkBrowser: 'Modern web browser',
-  checkSIMD: 'WebAssembly SIMD',
+  checkSIMD: 'Can run the measuring tools',
   checkMemory: 'Device memory',
   checkRearCamera: 'Rear camera',
   checkResolution: 'Camera resolution',
@@ -262,6 +262,9 @@ export const en = {
   retentionMonthsLabel: 'Retention in months',
 
   // M5 client flow
+  declinedUnsent: '{n} measurements on this phone have not been sent. They stay here until they are sent or removed in My measurements.',
+  pfWaiting: 'Waiting',
+  syncRejectedNotice: 'A tailor\'s code was not found. Open My measurements to correct it.',
   welcomeEnHint: 'Choose your language',
   welcomeEnGo: 'Continue in English',
   welcomeSwHint: 'Chagua lugha yako',
@@ -343,7 +346,7 @@ export const en = {
   shareText: 'Hello, I have sent my Virtual Tailor measurements. My code is {code}.',
   sharedPhoneTitle: 'Clear my details',
   sharedPhoneBody: 'Your details will be cleared from this phone. Your tailor keeps what was sent.',
-  sharedPhoneUnsent: '{n} unsent. These stay on this phone until they are sent, then they clear.',
+  sharedPhoneUnsent: '{n} not sent yet. These stay on this phone until they are sent or you remove them.',
   installOffer: 'Add to home screen',
   installIos: 'To add this to your home screen: Share, then Add to Home Screen.',
   allProfiles: 'All measurements',

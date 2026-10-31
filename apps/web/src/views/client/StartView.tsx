@@ -78,6 +78,7 @@ export const StartView: React.FC<{ onNavigate: (path: string) => void; initialCo
       if (draft.height_mm) setHeight(Math.round(draft.height_mm / 10));
       if (draft.sex) setSex(draft.sex);
       if (draft.clothing_fit) setFit(draft.clothing_fit);
+      setRestored(true);
     });
     return () => {
       live = false;
@@ -85,6 +86,19 @@ export const StartView: React.FC<{ onNavigate: (path: string) => void; initialCo
     // Only on arrival: typing is handled below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialCode]);
+
+  // What is typed survives a reload (9.2). A code is only kept once it is complete.
+  const [restored, setRestored] = useState(false);
+  useEffect(() => {
+    if (!restored) return;
+    vtStorage.saveDraft({
+      ...vtStorage.getDraft(),
+      client_code: CODE.test(code) ? code : undefined,
+      height_mm: height > 0 ? height * 10 : undefined,
+      sex: sex || undefined,
+      clothing_fit: fit,
+    });
+  }, [restored, code, height, sex, fit]);
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -155,10 +169,10 @@ export const StartView: React.FC<{ onNavigate: (path: string) => void; initialCo
         </div>
 
         <Field label={t('heightLabel')} hint={t('heightHint')} error={heightError ?? undefined}>
-          {({ id }) => (
+          {(field) => (
             <>
               <NumberInput
-                id={id}
+                {...field}
                 value={height}
                 onChange={(next) => {
                   setHeight(next);

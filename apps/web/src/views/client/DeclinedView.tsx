@@ -7,6 +7,7 @@ import { useI18n } from '../../i18n';
 export const DeclinedView: React.FC<{ onNavigate: (path: string) => void }> = ({ onNavigate }) => {
   const { t } = useI18n();
   const [cleared, setCleared] = useState(false);
+  const [unsent, setUnsent] = useState<number | null>(null);
 
   return (
     <div className="max-w-md mx-auto px-4 py-12 text-center min-h-[70vh] flex flex-col items-center justify-center">
@@ -22,6 +23,7 @@ export const DeclinedView: React.FC<{ onNavigate: (path: string) => void }> = ({
         {cleared ? (
           <p role="status" className="font-medium text-emerald-900">
             {t('detailsCleared')}
+            {unsent ? ` ${t('declinedUnsent', { n: unsent })}` : ''}
           </p>
         ) : (
           <Button
@@ -29,7 +31,12 @@ export const DeclinedView: React.FC<{ onNavigate: (path: string) => void }> = ({
             size="md"
             icon={<Trash2 aria-hidden="true" className="w-4 h-4" />}
             className="w-full"
-            onClick={() => void vtStorage.clearClientDetails().then(() => setCleared(true))}
+            onClick={() =>
+              void vtStorage.clearClientDetails().then(({ keptUnsent }) => {
+                setUnsent(keptUnsent);
+                setCleared(true);
+              })
+            }
           >
             {t('clearEnteredDetails')}
           </Button>

@@ -1,30 +1,28 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Cloud, Share2, Trash2 } from 'lucide-react';
 import { captureSession } from '../../capture/session';
 import { Button } from '../../components/ui/Button';
-import { CodeInput } from '../../components/ui/CodeInput';
 import { Dialog, EmptyState } from '../../components/ui/feedback';
 import { onSyncChange, syncNow } from '../../db/sync';
 import { LocalProfile, vtStorage } from '../../db/storage';
 import { useI18n } from '../../i18n';
+import { ChangeCodeForm } from './ChangeCodeForm';
 import { canInstall, isIos, promptInstall } from '../../sw/install';
-
-const CODE = /^[A-Z]{2}[0-9]{4}$/;
 
 export const SavedView: React.FC<{ onNavigate: (path: string) => void }> = ({ onNavigate }) => {
   const { locale, t } = useI18n();
   const [profile, setProfile] = useState<LocalProfile | null | undefined>(undefined);
-  const [newCode, setNewCode] = useState('');
-  const [codeError, setCodeError] = useState(false);
   const [askClear, setAskClear] = useState(false);
   const [unsent, setUnsent] = useState(0);
   const [cleared, setCleared] = useState(false);
   const [installable, setInstallable] = useState(() => canInstall() || isIos());
 
+  // Once details are cleared this screen shows nothing more, even when the sync timer fires (9.11).
+  const clearedRef = useRef(false);
   const load = useCallback(async () => {
+    if (clearedRef.current) return;
     const id = captureSession.savedProfileId;
-    const found = id ? await vtStorage.getProfileById(id) : (await vtStorage.getProfiles())[0];
-    setProfile(found ?? null);
+    setProfile(id ? await vtStorage.getProfileById(id) : await vtStorage.latestOwnProfile());
   }, []);
 
   useEffect(() => {
@@ -82,33 +80,7 @@ export const SavedView: React.FC<{ onNavigate: (path: string) => void }> = ({ on
       </h1>
       {profile.needs_help && <p role="alert" className="font-medium">{t('syncNeedsHelp')}</p>}
 
-      {status === 'rejected' && (
-        <form
-          className="w-full p-4 rounded-2xl border border-[var(--vt-line)] bg-white flex flex-col gap-3 text-left"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            if (!CODE.test(newCode)) {
-              setCodeError(true);
-              return;
-            }
-            await vtStorage.changeProfileCode(profile.profile_id, newCode);
-            setNewCode('');
-            await load();
-            void syncNow();
-          }}
-        >
-          <p className="font-semibold">{t('clientCodeLabel')}</p>
-          <CodeInput
-            value={newCode}
-            onChange={(next) => {
-              setNewCode(next);
-              setCodeError(false);
-            }}
-            error={codeError ? t('clientCodeError') : undefined}
-          />
-          <Button type="submit">{t('changeCode')}</Button>
-        </form>
-      )}
+      {status === 'rejected' && <ChangeCodeForm profileId={profile.profile_id} onChanged={() => void load()} />}
 
       <p className="w-full p-4 rounded-2xl border border-[var(--vt-line)] bg-white">
         {t('yourCode')}: <strong className="font-mono">{profile.client_code}</strong> · {t('measuredAt')} {dateText}
@@ -148,8 +120,7 @@ export const SavedView: React.FC<{ onNavigate: (path: string) => void }> = ({ on
         type="button"
         className="min-h-12 flex items-center gap-1.5 text-sm cursor-pointer"
         onClick={async () => {
-          const ops = await vtStorage.getProfiles();
-          setUnsent(ops.filter((row) => row.sync_status === 'pending').length);
+          setUnsent(await vtStorage.countUnsent());
           setAskClear(true);
         }}
       >
@@ -167,6 +138,7 @@ export const SavedView: React.FC<{ onNavigate: (path: string) => void }> = ({ on
             variant="danger"
             className="flex-1"
             onClick={async () => {
+              clearedRef.current = true;
               await vtStorage.clearClientDetails();
               captureSession.savedProfileId = null;
               setAskClear(false);

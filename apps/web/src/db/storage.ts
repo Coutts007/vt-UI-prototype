@@ -1,3 +1,4 @@
+import { DETAILS_CLEARED_EVENT } from './events';
 import Dexie, { Table } from 'dexie';
 import type { components } from '@vt/contracts';
 
@@ -23,6 +24,8 @@ export interface PendingSyncOp {
   client_code?: string;
   /** Past the 24-hour retry window (12.2). Tried again only when the app next opens. */
   gave_up?: boolean;
+  /** A send has begun, so the server may hold this profile even with no reply yet. */
+  started?: boolean;
 }
 
 export interface PreflightRecord {
@@ -120,8 +123,15 @@ class VTDatabase extends Dexie {
 
 const LEGACY_DRAFT_KEY = 'vt_client_draft';
 const DRAFT_ROW = 'draft';
-const PURGE_ROW = 'purge_after_sync';
+// Ids a shared-phone client left behind when they cleared their details (9.11).
+const LEFT_ROW = 'left_behind';
 const EMPTY_DRAFT: ClientDraftSettings = { capture_mode: 'self', clothing_fit: 'fitted' };
+
+function announceCleared(): void {
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    window.dispatchEvent(new Event(DETAILS_CLEARED_EVENT));
+  }
+}
 
 class VTStorage {
   readonly db = new VTDatabase();
@@ -158,6 +168,35 @@ class VTStorage {
     return (await this.db.profiles.get(profileId)) ?? null;
   }
 
+  private async leftIds(): Promise<string[]> {
+    return ((await this.db.settings.get(LEFT_ROW))?.value as string[] | undefined) ?? [];
+  }
+
+  private async setLeftIds(ids: string[]): Promise<void> {
+    if (ids.length) await this.db.settings.put({ key: LEFT_ROW, value: ids });
+    else await this.db.settings.delete(LEFT_ROW);
+  }
+
+  /** What this client may see: not what an earlier client left waiting to send. */
+  async getVisibleProfiles(): Promise<LocalProfile[]> {
+    const left = new Set(await this.leftIds());
+    return (await this.getProfiles()).filter(
+      (row) => !(left.has(row.profile_id) && row.sync_status === 'pending'),
+    );
+  }
+
+  /** The newest profile that is this client's own, for a Saved screen opened without one. */
+  async latestOwnProfile(): Promise<LocalProfile | null> {
+    const left = new Set(await this.leftIds());
+    return (await this.getProfiles()).find((row) => !left.has(row.profile_id)) ?? null;
+  }
+
+  /** Not yet with the server: waiting to send, or refused and needing a corrected code. */
+  async countUnsent(): Promise<number> {
+    const rows = await this.getProfiles();
+    return rows.filter((row) => row.sync_status === 'pending' || row.sync_status === 'rejected').length;
+  }
+
   /** The highest local version for this code, plus one (12.2). */
   async nextVersion(clientCode: string): Promise<number> {
     const rows = await this.db.profiles.where('client_code').equals(clientCode).toArray();
@@ -170,9 +209,13 @@ class VTStorage {
 
   /** A rejected code was fixed, so the profile goes back in the queue. */
   async changeProfileCode(profileId: string, clientCode: string): Promise<void> {
-    await this.db.transaction('rw', this.db.profiles, this.db.pending_sync, async () => {
+    const version = await this.nextVersion(clientCode);
+    const left = await this.leftIds();
+    await this.db.transaction('rw', this.db.profiles, this.db.pending_sync, this.db.settings, async () => {
+      await this.setLeftIds(left.filter((id) => id !== profileId));
       await this.db.profiles.update(profileId, {
         client_code: clientCode,
+        version,
         sync_status: 'pending',
         needs_help: false,
       });
@@ -191,14 +234,14 @@ class VTStorage {
 
   /**
    * Delete my data, or withdraw consent (9.12). Local records go now and the server is asked later.
-   * A profile the server cannot have seen needs no request: its code was refused, or it was never sent.
+   * A profile the server cannot have seen needs no request: its code was refused, or no send has begun.
    */
   async deleteMyData(clientCode: string, reason: 'delete' | 'withdraw'): Promise<void> {
     await this.db.transaction('rw', this.db.profiles, this.db.pending_sync, this.db.settings, async () => {
       const rows = await this.db.profiles.where('client_code').equals(clientCode).toArray();
       for (const row of rows) {
         const creates = await this.db.pending_sync.where('profile_id').equals(row.profile_id).toArray();
-        const neverSent = row.sync_status === 'pending' && creates.every((c) => c.attempts === 0);
+        const neverSent = row.sync_status === 'pending' && creates.every((c) => !c.started && c.attempts === 0);
         await this.db.pending_sync.where('profile_id').equals(row.profile_id).delete();
         await this.db.profiles.delete(row.profile_id);
         if (!neverSent && row.sync_status !== 'rejected') {
@@ -206,10 +249,13 @@ class VTStorage {
         }
       }
     });
-    const { consent, ...rest } = await this.loadDraft();
+    const draft = await this.loadDraft();
+    if (draft.client_code && draft.client_code !== clientCode) return;
+    const { consent, client_code: _code, code_verified: _verified, height_mm: _height, sex: _sex, ...rest } = draft;
     this.saveDraft(
       reason === 'withdraw' && consent ? { ...rest, consent: { ...consent, withdrawn_at: new Date().toISOString() } } : rest,
     );
+    announceCleared();
   }
 
   async getPendingOps(): Promise<PendingSyncOp[]> {
@@ -234,26 +280,30 @@ class VTStorage {
     }
   }
 
-  /** Shared phone (9.11): details go now, and anything unsent stays until it has been sent. */
+  /**
+   * Shared phone (9.11): details go now. Anything the server has not received stays: pending until it
+   * settles, rejected until someone corrects the code or deletes it on My measurements.
+   */
   async clearClientDetails(): Promise<{ keptUnsent: number }> {
     const rows = await this.db.profiles.toArray();
-    const unsent = rows.filter((row) => row.sync_status === 'pending');
-    await this.db.profiles.bulkDelete(
-      rows.filter((row) => row.sync_status !== 'pending').map((row) => row.profile_id),
-    );
+    const unsent = rows.filter((row) => row.sync_status === 'pending' || row.sync_status === 'rejected');
+    const kept = new Set(unsent.map((row) => row.profile_id));
+    const left = await this.leftIds();
+    await this.db.profiles.bulkDelete(rows.filter((row) => !kept.has(row.profile_id)).map((row) => row.profile_id));
     await this.db.settings.clear();
     this.draft = null;
     localStorage.removeItem(LEGACY_DRAFT_KEY);
-    if (unsent.length) await this.db.settings.put({ key: PURGE_ROW, value: true });
+    await this.setLeftIds([...new Set([...left.filter((id) => kept.has(id)), ...kept])]);
+    announceCleared();
     return { keptUnsent: unsent.length };
   }
 
-  /** Once the last profile a shared-phone user left behind has gone, it leaves the phone too. */
+  /** A left-behind profile has settled, so it leaves the phone. Nobody else's is touched. */
   async purgeAfterSync(profileId: string): Promise<boolean> {
-    const row = await this.db.settings.get(PURGE_ROW);
-    if (!row?.value) return false;
+    const left = await this.leftIds();
+    if (!left.includes(profileId)) return false;
     await this.db.profiles.delete(profileId);
-    if ((await this.db.profiles.count()) === 0) await this.db.settings.delete(PURGE_ROW);
+    await this.setLeftIds(left.filter((id) => id !== profileId));
     return true;
   }
 

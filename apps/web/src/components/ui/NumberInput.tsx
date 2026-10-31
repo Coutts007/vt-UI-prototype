@@ -13,6 +13,8 @@ interface NumberInputProps {
   className?: string;
   onOfferConvert?: (cm: number) => void;
   id?: string;
+  'aria-describedby'?: string;
+  'aria-invalid'?: boolean;
 }
 
 export const NumberInput: React.FC<NumberInputProps> = ({
@@ -27,6 +29,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   className = '',
   onOfferConvert,
   id,
+  ...aria
 }) => {
   const { t } = useI18n();
   const numVal = typeof value === 'number' ? value : parseFloat(value) || 0;
@@ -41,6 +44,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
     <div className={`flex flex-col gap-1.5 ${className}`}>
       <div className="relative flex items-center">
         <input
+          {...aria}
           id={id}
           type="number"
           value={value === 0 ? '' : value}

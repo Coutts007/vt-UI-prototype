@@ -4,6 +4,8 @@ The newest entry comes first. Every change or improvement adds a line in the sam
 
 ## 2026-10-31: M5 client capture flow on fake vision
 
+- After an independent review, phone data: Delete my data now removes the code, height and sex. Clearing a shared phone keeps rejected as well as pending profiles and warns about both. Only the profiles left behind are purged, so a later client is safe, and they no longer reappear. Deleting during a first send still asks the server to delete. Change code is also on My measurements, with a notice. Start saves as you type, and a clear forgets the code from the link. Coming online skips the backoff wait.
+- **Known limit:** a corrected code takes the next version known on this phone. If the server already holds that version under the code, the profile still ends as a conflict; the phone cannot know.
 - Browser tests cover the 21.1 client scenarios against the mock, including accessibility and a check that nothing but numbers leaves the phone.
 - **Not done:** the real camera and MediaPipe (M6) and the real measure port (M7), so a production build cannot measure yet.
 - Voice clips and the printable measuring sheet now work offline. The sheet's marker has not been read by a real detector yet.

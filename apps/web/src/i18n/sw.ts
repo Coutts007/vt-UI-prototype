@@ -74,7 +74,7 @@ export const sw: Record<TranslationKey, string> = {
   checkFail: 'Simu hii haiwezi kupima',
   checkSecure: 'Muunganisho salama',
   checkBrowser: 'Kivinjari cha kisasa',
-  checkSIMD: 'WebAssembly SIMD',
+  checkSIMD: 'Inaweza kuendesha zana za kupima',
   checkMemory: 'Kumbukumbu ya simu (RAM)',
   checkRearCamera: 'Kamera ya nyuma',
   checkResolution: 'Ubora wa picha ya kamera',
@@ -264,6 +264,9 @@ export const sw: Record<TranslationKey, string> = {
   retentionMonthsLabel: 'Muda wa kuhifadhi kwa miezi',
 
   // M5 client flow
+  declinedUnsent: 'Vipimo {n} kwenye simu hii havijatumwa. Vinabaki hapa hadi vitumwe au kuondolewa kwenye Vipimo vyangu.',
+  pfWaiting: 'Inasubiri',
+  syncRejectedNotice: 'Nambari ya fundi haikupatikana. Fungua Vipimo vyangu uirekebishe.',
   welcomeEnHint: 'Chagua lugha yako',
   welcomeEnGo: 'Endelea kwa Kiingereza',
   welcomeSwHint: 'Chagua lugha yako',
@@ -345,7 +348,7 @@ export const sw: Record<TranslationKey, string> = {
   shareText: 'Habari, nimetuma vipimo vyangu vya Virtual Tailor. Nambari yangu ni {code}.',
   sharedPhoneTitle: 'Futa taarifa zangu',
   sharedPhoneBody: 'Taarifa zako zitafutwa kwenye simu hii. Fundi wako anabaki na kilichotumwa.',
-  sharedPhoneUnsent: '{n} hazijatumwa. Hizi zinabaki kwenye simu hii hadi zitumwe, kisha zinafutwa.',
+  sharedPhoneUnsent: '{n} hazijatumwa. Hizi zinabaki kwenye simu hii hadi zitumwe au uziondoe.',
   installOffer: 'Weka kwenye skrini ya mwanzo',
   installIos: 'Ili kuweka kwenye skrini ya mwanzo: Shiriki, kisha Add to Home Screen.',
   allProfiles: 'Vipimo vyote',

@@ -7,6 +7,7 @@ import { I18nProvider, useI18n } from './i18n';
 import { FEATURE_DIRECTORY } from './config/features';
 import { guard, homeFor, matchRoute, ROUTES, RouteDef, safeNext } from './router/routes';
 import { VIEWS, ViewContext } from './router/views';
+import { DETAILS_CLEARED_EVENT } from './db/events';
 import './sw/install';
 import { registerServiceWorker } from './sw/register';
 import type { UserAccount } from './types/api';
@@ -98,6 +99,15 @@ function Shell() {
   // Client pages only, loaded after the first paint so it never counts against the first screen.
   const clientArea = match?.route.area === 'client';
   useEffect(() => {
+    // A clear ends that client's session, so their code from the link goes too.
+    const forget = () => {
+      setInitialCode('');
+      if (codeFrom(window.location.search)) window.history.replaceState(null, '', window.location.pathname);
+    };
+    window.addEventListener(DETAILS_CLEARED_EVENT, forget);
+    return () => window.removeEventListener(DETAILS_CLEARED_EVENT, forget);
+  }, []);
+  useEffect(() => {
     if (!clientArea) return;
     let stop: (() => void) | undefined;
     let cancelled = false;
@@ -109,7 +119,9 @@ function Shell() {
         setSyncNotice(
           notice.needsHelp
             ? 'syncNeedsHelp'
-            : notice.overdue
+            : notice.rejected
+              ? 'syncRejectedNotice'
+              : notice.overdue
               ? 'syncOverdue'
               : notice.unsent && !persisted
                 ? 'storageWarning'

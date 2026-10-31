@@ -6,6 +6,7 @@ import { Dialog, EmptyState } from '../../components/ui/feedback';
 import { onSyncChange, syncNow } from '../../db/sync';
 import { LocalProfile, vtStorage } from '../../db/storage';
 import { useI18n } from '../../i18n';
+import { ChangeCodeForm } from './ChangeCodeForm';
 import { MeasurementSummary } from './MeasurementSummary';
 
 type Action = 'delete' | 'withdraw';
@@ -20,7 +21,7 @@ export const MyMeasurementsView: React.FC<{ onNavigate: (path: string) => void; 
   const [confirmed, setConfirmed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const load = useCallback(() => void vtStorage.getProfiles().then(setProfiles), []);
+  const load = useCallback(() => void vtStorage.getVisibleProfiles().then(setProfiles), []);
   useEffect(() => {
     load();
     return onSyncChange(load);
@@ -76,6 +77,7 @@ export const MyMeasurementsView: React.FC<{ onNavigate: (path: string) => void; 
                 </span>
                 <SyncBadge status={active.sync_status} />
               </div>
+              {active.sync_status === 'rejected' && <ChangeCodeForm profileId={active.profile_id} onChanged={load} />}
               <MeasurementSummary profile={active} />
               <section className="p-4 rounded-xl bg-white border border-[var(--vt-line)] text-sm" data-testid="checks-summary">
                 <h2 className="font-bold mb-1">{t('checksSummaryTitle')}</h2>

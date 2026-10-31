@@ -255,3 +255,114 @@ describe('draft', () => {
     expect((await vtStorage.loadDraft()).height_mm).toBe(1650);
   });
 });
+
+describe('review findings: shared phone and deletion', () => {
+  const draft = { capture_mode: 'self', clothing_fit: 'fitted' } as const;
+
+  it('delete my data removes the code, height and sex from the draft', async () => {
+    await vtStorage.loadDraft();
+    vtStorage.saveDraft({ ...draft, client_code: 'AB1234', height_mm: 1700, sex: 'female' });
+    await vtStorage.saveProfile(profile('a'));
+    await vtStorage.deleteMyData('AB1234', 'delete');
+    const after = vtStorage.getDraft();
+    expect(after.client_code).toBeUndefined();
+    expect(after.height_mm).toBeUndefined();
+    expect(after.sex).toBeUndefined();
+  });
+
+  it('withdrawing keeps only the withdrawn consent record', async () => {
+    await vtStorage.loadDraft();
+    vtStorage.saveDraft({
+      ...draft,
+      client_code: 'AB1234',
+      height_mm: 1700,
+      consent: { consent_version: '1.0' } as never,
+    });
+    await vtStorage.deleteMyData('AB1234', 'withdraw');
+    const after = vtStorage.getDraft();
+    expect(after.client_code).toBeUndefined();
+    expect(after.consent?.withdrawn_at).toBeTruthy();
+  });
+
+  it('clearing keeps a rejected profile, and counts it as unsent', async () => {
+    await vtStorage.saveProfile(profile('r', { sync_status: 'rejected' }));
+    await vtStorage.saveProfile(profile('p'));
+    await vtStorage.saveProfile(profile('s', { sync_status: 'synced' }));
+    expect(await vtStorage.countUnsent()).toBe(2);
+    await vtStorage.clearClientDetails();
+    expect(await status('r')).toBe('rejected');
+    expect(await status('s')).toBeUndefined();
+  });
+
+  it('a later client is not purged when the earlier one has been', async () => {
+    await vtStorage.saveProfile(profile('a'));
+    await vtStorage.clearClientDetails();
+    await vtStorage.saveProfile(profile('b', { client_code: 'CD5678' }));
+    await run(() => ({})).done;
+    expect(await status('a')).toBeUndefined();
+    expect(await status('b')).toBe('synced');
+  });
+
+  it.each([
+    [409, 'conflict'],
+    [404, 'rejected'],
+  ])('a left-behind profile ending %i is purged too', async (code) => {
+    await vtStorage.saveProfile(profile('a'));
+    await vtStorage.clearClientDetails();
+    await run(fail(new ApiError(code, 'x', {}))).done;
+    expect(await status('a')).toBeUndefined();
+    await vtStorage.saveProfile(profile('b'));
+    await run(() => ({})).done;
+    expect(await status('b')).toBe('synced');
+  });
+
+  it('a left-behind unsent profile is hidden from the next client', async () => {
+    await vtStorage.saveProfile(profile('a'));
+    await vtStorage.clearClientDetails();
+    expect((await vtStorage.getVisibleProfiles()).map((p) => p.profile_id)).toEqual([]);
+    await vtStorage.saveProfile(profile('b'));
+    expect((await vtStorage.getVisibleProfiles()).map((p) => p.profile_id)).toEqual(['b']);
+  });
+
+  it('deleting while the first send is in flight still asks the server to delete', async () => {
+    await vtStorage.saveProfile(profile('a'));
+    const post = vi.fn(async (path: unknown) => {
+      if (path === '/profiles') await vtStorage.deleteMyData('AB1234', 'delete');
+      return {};
+    });
+    await runSync({ api: { post } as never, now: () => (clock += 86_400_000), online: () => true });
+    const ops = await vtStorage.getPendingOps();
+    expect(ops.map((op) => op.operation)).toEqual(['delete']);
+  });
+
+  it('a corrected code gets the next version under that code', async () => {
+    await vtStorage.saveProfile(profile('old', { client_code: 'CD5678', sync_status: 'synced' }));
+    await vtStorage.saveProfile(profile('a', { sync_status: 'rejected' }));
+    await vtStorage.changeProfileCode('a', 'CD5678');
+    expect((await vtStorage.getProfileById('a'))?.version).toBe(2);
+  });
+
+  it('success clears the needs-help mark', async () => {
+    await vtStorage.saveProfile(profile('a', { needs_help: true }));
+    await run(() => ({})).done;
+    expect((await vtStorage.getProfileById('a'))?.needs_help).toBe(false);
+  });
+
+  it('coming back online ignores the backoff wait', async () => {
+    await vtStorage.saveProfile(profile('a'));
+    const op = (await vtStorage.getPendingOps())[0];
+    await vtStorage.updateOp(op.op_id!, {
+      next_attempt_at: new Date(NOW + 3_600_000).toISOString(),
+    });
+    const post = vi.fn(async () => ({}));
+    await runSync({ api: { post } as never, now: () => NOW, online: () => true });
+    expect(post).not.toHaveBeenCalled();
+    await runSync({
+      api: { post } as never,
+      now: () => NOW,
+      online: () => true,
+      ignoreBackoff: true,
+    });
+    expect(post).toHaveBeenCalledOnce();
+  });
+});

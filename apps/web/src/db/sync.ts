@@ -19,6 +19,8 @@ export interface SyncDeps {
   online?: () => boolean;
   /** App start: also try operations past the 24-hour window. */
   includeGaveUp?: boolean;
+  /** Back online: the wait was for the connection, so try now. */
+  ignoreBackoff?: boolean;
 }
 
 function toPayload(profile: LocalProfile) {
@@ -36,7 +38,7 @@ async function sendCreate(op: PendingSyncOp, api: SyncDeps['api']): Promise<Outc
       body: toPayload(profile),
       headers: { 'Idempotency-Key': profile.profile_id },
     } as never);
-    await vtStorage.updateProfileSyncStatus(profile.profile_id, 'synced');
+    await vtStorage.db.profiles.update(profile.profile_id, { sync_status: 'synced', needs_help: false });
     await vtStorage.purgeAfterSync(profile.profile_id);
     return 'done';
   } catch (error) {
@@ -44,10 +46,12 @@ async function sendCreate(op: PendingSyncOp, api: SyncDeps['api']): Promise<Outc
     if (!(error instanceof ApiError)) throw error;
     if (error.status === 409) {
       await vtStorage.updateProfileSyncStatus(profile.profile_id, 'conflict');
+      await vtStorage.purgeAfterSync(profile.profile_id);
       return 'done';
     }
     if (error.status === 404) {
       await vtStorage.updateProfileSyncStatus(profile.profile_id, 'rejected');
+      await vtStorage.purgeAfterSync(profile.profile_id);
       return 'done';
     }
     if (error.status === 413 || error.status === 415 || error.status === 422) {
@@ -89,7 +93,8 @@ export async function runSync(deps: SyncDeps): Promise<number> {
   let settled = 0;
   for (const op of await vtStorage.getPendingOps()) {
     if (op.gave_up && !deps.includeGaveUp) continue;
-    if (!op.gave_up && Date.parse(op.next_attempt_at) > now()) continue;
+    if (!op.gave_up && !deps.ignoreBackoff && Date.parse(op.next_attempt_at) > now()) continue;
+    if (op.operation === 'create') await vtStorage.updateOp(op.op_id!, { started: true });
     const outcome =
       op.operation === 'create' ? await sendCreate(op, deps.api) : await sendDeletion(op, deps.api);
     if (outcome === 'done') {
@@ -112,15 +117,22 @@ export async function runSync(deps: SyncDeps): Promise<number> {
 export interface SyncNotice {
   /** The server refused a profile three times (12.2). */
   needsHelp: boolean;
+  /** A code was refused and can be corrected on My measurements. */
+  rejected: boolean;
   /** Something has waited past the 24-hour window. */
   overdue: boolean;
   unsent: number;
 }
 
 export async function readNotice(): Promise<SyncNotice> {
-  const [ops, profiles] = await Promise.all([vtStorage.getPendingOps(), vtStorage.getProfiles()]);
+  const [ops, profiles, visible] = await Promise.all([
+    vtStorage.getPendingOps(),
+    vtStorage.getProfiles(),
+    vtStorage.getVisibleProfiles(),
+  ]);
   return {
-    needsHelp: profiles.some((p) => p.needs_help),
+    needsHelp: visible.some((p) => p.needs_help),
+    rejected: visible.some((p) => p.sync_status === 'rejected'),
     overdue: ops.some((op) => op.gave_up),
     unsent: profiles.filter((p) => p.sync_status === 'pending').length,
   };
@@ -135,10 +147,10 @@ export function onSyncChange(listener: () => void): () => void {
 let running: Promise<void> | null = null;
 let api: SyncDeps['api'] | null = null;
 
-export function syncNow(includeGaveUp = false): Promise<void> {
+export function syncNow(includeGaveUp = false, ignoreBackoff = false): Promise<void> {
   if (!api) return Promise.resolve();
   const client = api;
-  running ??= runSync({ api: client, includeGaveUp })
+  running ??= runSync({ api: client, includeGaveUp, ignoreBackoff })
     .catch(() => 0)
     .then(() => {
       running = null;
@@ -154,12 +166,13 @@ export function startSyncLoop(client: SyncDeps['api']): () => void {
   const visible = () => {
     if (document.visibilityState === 'visible') trigger();
   };
-  window.addEventListener('online', trigger);
+  const backOnline = () => void syncNow(true, true);
+  window.addEventListener('online', backOnline);
   document.addEventListener('visibilitychange', visible);
   const timer = setInterval(trigger, TIMER_MS);
   void syncNow(true);
   return () => {
-    window.removeEventListener('online', trigger);
+    window.removeEventListener('online', backOnline);
     document.removeEventListener('visibilitychange', visible);
     clearInterval(timer);
   };
