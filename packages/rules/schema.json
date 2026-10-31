@@ -123,7 +123,8 @@
       "required": [
         "stature_disagree_check_pct",
         "stature_disagree_retake_pct",
-        "depth_correction_mm"
+        "depth_correction_mm",
+        "nominal_distance_mm"
       ],
       "properties": {
         "stature_disagree_check_pct": {
@@ -150,6 +151,11 @@
               "type": "number"
             }
           }
+        },
+        "nominal_distance_mm": {
+          "description": "A14. Typical distance from the sheet to the camera, used with depth_correction_mm.",
+          "type": "number",
+          "exclusiveMinimum": 0
         }
       }
     },
@@ -322,7 +328,8 @@
       "required": [
         "visibility_fail",
         "visibility_check",
-        "marker_conf_check"
+        "marker_conf_check",
+        "free_arm_min_distance_ratio"
       ],
       "properties": {
         "visibility_fail": {
@@ -333,6 +340,11 @@
         },
         "marker_conf_check": {
           "$ref": "#/$defs/fraction"
+        },
+        "free_arm_min_distance_ratio": {
+          "description": "A14. The free wrist must be this many times farther from the marker than the other wrist.",
+          "type": "number",
+          "minimum": 1
         }
       }
     },

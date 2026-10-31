@@ -9,6 +9,7 @@ import yaml
 from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
+from vt_measure.derive import derive, ellipse_perimeter
 
 ROOT = Path(__file__).parents[1]
 CONTRACT = yaml.safe_load((ROOT.parent / "contracts" / "openapi.yaml").read_text())
@@ -144,8 +145,19 @@ def test_girths_agree_with_silhouettes():
     for profile in SEED["profiles"]:
         for site in ("chest", "waist", "hip", "neck"):
             row = rows(profile)[site]
-            expected = generate.ellipse_perimeter(row["half_width_mm"], row["half_depth_mm"])
+            expected = ellipse_perimeter(row["half_width_mm"], row["half_depth_mm"])
             assert abs(row["value_mm"] - expected) <= 0.5
+
+
+def test_every_stored_measurement_recomputes_from_its_numbers():
+    rules = json.loads((ROOT.parent / "rules" / "rules-0.1-uncalibrated.json").read_text())
+    for profile in SEED["profiles"]:
+        result = derive(profile, rules)
+        for row in profile["measurements"]:
+            site = result.sites[row["site_code"]]
+            assert row["value_mm"] == site.value_mm
+            assert row["confidence_flag"] == site.flag
+            assert row["flag_reasons"] == site.reasons
 
 
 def test_markers_agree_with_the_session_scale():

@@ -1,27 +1,26 @@
 """Generate seed.json, the single demo seed. Output is byte-identical on every run.
 
-All data is synthetic. Measurement values come from a simple stacked-ellipse body so that the
-silhouettes and values agree; M2 replaces them with values derived by vt_measure.
+All data is synthetic. Every measurement is derived by vt_measure from the numbers stored
+beside it, so the two can never disagree.
 """
 
 import json
-import math
 import random
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from vt_measure.derive import SITES, derive
+from vt_measure.synthetic import IMAGE_H, IMAGE_W, Body, make_input
+
 NAMESPACE = uuid.UUID("6f1d3c52-8a44-5e0b-9a7c-1f2e3d4c5b6a")
 ANCHOR = date(2026, 11, 2)
 RULES_VERSION = "0.1-uncalibrated"
 CONSENT_VERSION = "1.0"
 APP_VERSION = "0.1.0"
-SITES = ["stature", "shoulder", "chest", "waist", "hip", "sleeve", "outleg", "inleg", "neck"]
 
-IMAGE_W, IMAGE_H = 1080, 1920
-MASK_TOP, MASK_BOTTOM = 200.0, 1800.0
-U_NECK, U_SHOULDER, U_HIP, U_CROTCH, U_KNEE = 0.15, 0.18, 0.52, 0.53, 0.73
+RULES_PATH = Path(__file__).parents[1] / "rules" / f"rules-{RULES_VERSION}.json"
 
 
 def uid(name: str) -> str:
@@ -39,194 +38,28 @@ def day(days: int) -> str:
     return (ANCHOR + timedelta(days=days)).isoformat()
 
 
-def interpolate(points: list[tuple[float, float]], u: float) -> float:
-    for (u0, v0), (u1, v1) in zip(points, points[1:], strict=False):
-        if u0 <= u <= u1:
-            return v0 + (v1 - v0) * (u - u0) / (u1 - u0)
-    return points[-1][1]
-
-
-def ellipse_perimeter(a: float, b: float) -> float:
-    """Ramanujan's second approximation."""
-    h = ((a - b) / (a + b)) ** 2
-    return math.pi * (a + b) * (1 + 3 * h / (10 + math.sqrt(4 - 3 * h)))
-
-
-def body_profiles(body: dict[str, Any]) -> tuple[list[float], list[float]]:
-    k = body["stature"] / 1650
-    width = [
-        (0.0, 40),
-        (0.06, 75),
-        (U_NECK, 58),
-        (U_SHOULDER, body["shoulder"] / k / 2),
-        (0.27, body["chest_w"]),
-        (0.39, body["waist_w"]),
-        (U_HIP, body["hip_w"]),
-        (U_KNEE, 110),
-        (1.0, 80),
-    ]
-    depth = [
-        (0.0, 40),
-        (0.06, 90),
-        (U_NECK, 55),
-        (U_SHOULDER, 90),
-        (0.27, body["chest_d"]),
-        (0.39, body["waist_d"]),
-        (U_HIP, body["hip_d"]),
-        (U_KNEE, 70),
-        (1.0, 60),
-    ]
-    half_width = [round(interpolate(width, i / 100) * k, 1) for i in range(101)]
-    half_depth = [round(interpolate(depth, i / 100) * k, 1) for i in range(101)]
-    return half_width, half_depth
-
-
-def landmarks(body: dict[str, Any], view: str, visibility: float, rng: random.Random) -> list[dict]:
-    """The 33 BlazePose landmarks of a person standing centred in the frame."""
-    scale = body["stature"] / (MASK_BOTTOM - MASK_TOP)
-    half_width, half_depth = body_profiles(body)
-
-    def point(u: float, offset_mm: float) -> tuple[float, float]:
-        x = (IMAGE_W / 2 + offset_mm / scale) / IMAGE_W
-        y = (MASK_TOP + u * (MASK_BOTTOM - MASK_TOP)) / IMAGE_H
-        return x, y
-
-    shoulder = half_width[18] if view == "front" else half_depth[18] * 0.4
-    hip = half_width[52] * 0.55 if view == "front" else half_depth[52] * 0.3
-    spread = 1.0 if view == "front" else 0.3
-    pairs = [
-        (0.03, 25 * spread),
-        (0.03, 35 * spread),
-        (0.03, 45 * spread),
-        (0.05, 70 * spread),
-        (0.08, 20 * spread),
-    ]
-    points = [point(0.04, 0.0)]
-    for u, offset in pairs[:3]:
-        points.append(point(u, -offset))
-    for u, offset in pairs[:3]:
-        points.append(point(u, offset))
-    points += [point(pairs[3][0], -pairs[3][1]), point(pairs[3][0], pairs[3][1])]
-    points += [point(pairs[4][0], -pairs[4][1]), point(pairs[4][0], pairs[4][1])]
-    arm = shoulder + 110 * spread
-    for u, off in [
-        (U_SHOULDER, shoulder),
-        (0.33, arm),
-        (0.46, arm + 40 * spread),
-        (0.48, arm + 45 * spread),
-        (0.48, arm + 30 * spread),
-        (0.47, arm + 35 * spread),
-    ]:
-        points += [point(u, -off), point(u, off)]
-    for u, off in [
-        (U_HIP, hip),
-        (U_KNEE, hip),
-        (0.95, hip),
-        (0.97, hip),
-        (0.985, hip + 40 * spread),
-    ]:
-        points += [point(u, -off), point(u, off)]
-    return [
-        {
-            "x": round(x, 5),
-            "y": round(y, 5),
-            "z": round(rng.uniform(-0.1, 0.1), 4),
-            "visibility": round(min(1.0, visibility + rng.uniform(0, 0.04)), 3),
-        }
-        for x, y in points
-    ]
-
-
-def marker(scale: float, u: float, rng: random.Random) -> dict[str, Any]:
-    side = 150 / scale
-    cx = IMAGE_W / 2 + rng.uniform(-3, 3)
-    cy = MASK_TOP + u * (MASK_BOTTOM - MASK_TOP)
-    half = side / 2
-    return {
-        "corners": [
-            [round(cx - half, 2), round(cy - half, 2)],
-            [round(cx + half, 2), round(cy - half, 2)],
-            [round(cx + half, 2), round(cy + half, 2)],
-            [round(cx - half, 2), round(cy + half, 2)],
-        ],
-        "image_w": IMAGE_W,
-        "image_h": IMAGE_H,
-        "side_px": round(side, 3),
-        "confidence": 0.95,
-    }
-
-
-def base_measurements(body: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    half_width, half_depth = body_profiles(body)
-    out: dict[str, dict[str, Any]] = {}
-
-    def add(site: str, value: float, **extra: Any) -> None:
-        out[site] = {
-            "site_code": site,
-            "value_mm": round(value),
-            "method": "auto",
-            "confidence_flag": "pass",
-            "flag_reasons": [],
-            **extra,
-        }
-
-    def girth(site: str, index: int, fraction: float) -> None:
-        a, b = half_width[index], half_depth[index]
-        add(
-            site,
-            ellipse_perimeter(a, b),
-            correction_factor=1.0,
-            level_fraction=fraction,
-            half_width_mm=a,
-            half_depth_mm=b,
-        )
-
-    stature = body["stature"]
-    add("stature", stature)
-    add("shoulder", half_width[18] * 2)
-    girth("chest", 27, 0.25)
-    girth("waist", 38, 0.6)
-    girth("hip", 52, 1.0)
-    add("sleeve", stature * 0.355)
-    add("outleg", stature * 0.61)
-    add("inleg", stature * 0.46)
-    girth("neck", 15, 0.1)
-    return out
-
-
-def flag(rows: dict[str, dict], sites: list[str], severity: str, reason: str) -> None:
-    for site in sites:
-        row = rows[site]
-        row["confidence_flag"] = severity
-        row["flag_reasons"].append(reason)
-        if severity == "fail":
-            row["value_mm"] = None
-
-
 def checks(**overrides: str) -> dict[str, str]:
     names = ["level", "frame", "distance", "symmetry", "arms", "marker", "light", "sharpness"]
     return {name: overrides.get(name, "pass") for name in names}
 
 
 BODIES = {
-    "a": dict(stature=1640, shoulder=400, chest_w=150, waist_w=128, hip_w=172,
-              chest_d=112, waist_d=98, hip_d=118, sex="female"),
-    "b": dict(stature=1775, shoulder=450, chest_w=165, waist_w=145, hip_w=165,
-              chest_d=120, waist_d=110, hip_d=115, sex="male"),
-    "c": dict(stature=1590, shoulder=385, chest_w=158, waist_w=148, hip_w=182,
-              chest_d=120, waist_d=112, hip_d=128, sex="female"),
-    "d": dict(stature=1710, shoulder=430, chest_w=155, waist_w=132, hip_w=160,
-              chest_d=110, waist_d=98, hip_d=108, sex="unspecified"),
+    "a": Body(1640.0, 400.0, 285.0, 290.0, 150.0, 112.0, 128.0, 98.0, 172.0, 118.0, 56.0, 52.0),
+    "b": Body(1775.0, 450.0, 320.0, 310.0, 165.0, 120.0, 145.0, 110.0, 165.0, 115.0, 66.0, 62.0,
+              "male"),
+    "c": Body(1625.0, 385.0, 280.0, 285.0, 158.0, 120.0, 148.0, 112.0, 182.0, 128.0, 57.0, 54.0),
+    "d": Body(1710.0, 430.0, 300.0, 300.0, 155.0, 110.0, 132.0, 98.0, 160.0, 108.0, 60.0, 56.0,
+              "unspecified"),
 }  # fmt: skip
 
 TAILORS = {"wanjiru": uid("user:wanjiru"), "otieno": uid("user:otieno")}
 CLIENTS = [
     ("W1", "wanjiru", "AB1001", "Akinyi", 1640),
-    ("W2", "wanjiru", "AB1002", None, 1590),
+    ("W2", "wanjiru", "AB1002", None, 1677),
     ("W3", "wanjiru", "AB1003", "Njeri", 1710),
     ("W4", "wanjiru", "AB1004", None, 1775),
     ("W5", "wanjiru", "AB1005", "Chebet", 1640),
-    ("W6", "wanjiru", "AB1006", "Mwende", 1590),
+    ("W6", "wanjiru", "AB1006", "Mwende", 1625),
     ("W7", "wanjiru", "AB1007", None, 1710),
     ("W8", "wanjiru", "AB1008", "Halima", None),
     ("O1", "otieno", "CD2001", "Ouma", 1775),
@@ -294,30 +127,43 @@ PROFILES = [
 ]
 
 
-def build_profile(entry: tuple, rng: random.Random) -> dict[str, Any]:
+def measurement_rows(result: Any) -> list[dict[str, Any]]:
+    rows = []
+    for site in SITES:
+        site_result = result.sites[site]
+        row: dict[str, Any] = {
+            "site_code": site,
+            "value_mm": site_result.value_mm,
+            "method": "auto",
+            "confidence_flag": site_result.flag,
+            "flag_reasons": site_result.reasons,
+        }
+        if site_result.perimeter_mm is not None:
+            row.update(
+                correction_factor=site_result.correction_factor,
+                level_fraction=site_result.level_fraction,
+                half_width_mm=site_result.a_mm,
+                half_depth_mm=site_result.b_mm,
+            )
+        rows.append(row)
+    return rows
+
+
+def build_profile(entry: tuple, rng: random.Random, rules: dict[str, Any]) -> dict[str, Any]:
     key, client_key, version, body_key, days, status, scenario = entry
     body = BODIES[body_key]
     client_code = CLIENT_BY_KEY[client_key][2]
-    scale = body["stature"] / (MASK_BOTTOM - MASK_TOP)
-    disagreement = 3.2 if scenario == "waist_check" else 0.4
-    rows = base_measurements(body)
-    half_width, half_depth = body_profiles(body)
-    crotch_y: float | None = MASK_TOP + U_CROTCH * (MASK_BOTTOM - MASK_TOP)
-    level_state = "pass"
-    fit = "fitted"
+    # 1677 against a 1625 mm mask height is a scale disagreement of exactly 3.2%.
+    numbers = make_input(
+        body,
+        height_mm=1677 if scenario == "waist_check" else None,
+        clothing_fit="loose" if scenario == "loose" else "fitted",
+        level_unchecked=scenario == "level_unchecked",
+        crotch=scenario != "inleg_fail",
+    )
+    result = derive(numbers, rules)
+    level_state = "skipped" if scenario == "level_unchecked" else "pass"
     server_checks: list[dict[str, Any]] = []
-
-    if scenario == "waist_check":
-        flag(rows, ["waist"], "check", "scale_disagree")
-    elif scenario == "inleg_fail":
-        flag(rows, ["inleg"], "fail", "crotch_not_found")
-        crotch_y = None
-    elif scenario == "level_unchecked":
-        flag(rows, SITES, "check", "level_unchecked")
-        level_state = "skipped"
-    elif scenario == "loose":
-        flag(rows, ["chest", "waist", "hip"], "check", "loose_clothing")
-        fit = "loose"
     if key == "p02":
         server_checks.append(
             {
@@ -347,12 +193,7 @@ def build_profile(entry: tuple, rng: random.Random) -> dict[str, Any]:
         "received_at": at(days, 10),
         "status": status,
         "rules_version": RULES_VERSION,
-        "covariates": {
-            "height_mm_entered": body["stature"],
-            "sex": body["sex"],
-            "clothing_fit": fit,
-            "code_verified": True,
-        },
+        "covariates": numbers["covariates"],
         "consent": {
             "consent_version": CONSENT_VERSION,
             "language": "en",
@@ -380,39 +221,22 @@ def build_profile(entry: tuple, rng: random.Random) -> dict[str, Any]:
             "capture_fallback": False,
             "front_checks": checks(level=level_state),
             "side_checks": checks(level=level_state),
-            "scale_front_mm_px": round(scale, 5),
-            "scale_side_mm_px": round(scale * 1.002, 5),
-            "scale_stature_mm_px": round(scale * (1 + disagreement / 100), 5),
-            "scale_disagreement_pct": disagreement,
+            "scale_front_mm_px": round(result.scale_front, 5),
+            "scale_side_mm_px": round(result.scale_side, 5),
+            "scale_stature_mm_px": round(result.scale_stature, 5),
+            "scale_disagreement_pct": round(result.disagreement_pct, 2),
             "processing_ms": 6200 + rng.randrange(1500),
             "retake_count": 0,
             "config_hash": "sha256:synthetic",
             **study,
         },
-        "landmarks_front": landmarks(body, "front", 0.9, rng),
-        "landmarks_side": landmarks(body, "side", 0.9, rng),
-        "marker_front": marker(scale, 0.27, rng),
-        "marker_side": marker(scale, 0.52, rng),
-        "silhouette_front": {
-            "samples": 101,
-            "mask_top_px": MASK_TOP,
-            "mask_bottom_px": MASK_BOTTOM,
-            "image_w": IMAGE_W,
-            "image_h": IMAGE_H,
-            "half_width_mm": half_width,
-            "centre_x_px": [IMAGE_W / 2] * 101,
-            "crotch_y_px": crotch_y,
-        },
-        "silhouette_side": {
-            "samples": 101,
-            "mask_top_px": MASK_TOP,
-            "mask_bottom_px": MASK_BOTTOM,
-            "image_w": IMAGE_W,
-            "image_h": IMAGE_H,
-            "half_depth_mm": half_depth,
-            "anterior_mm": [round(v * 1.05, 1) for v in half_depth],
-        },
-        "measurements": [rows[site] for site in SITES],
+        "landmarks_front": numbers["landmarks_front"],
+        "landmarks_side": numbers["landmarks_side"],
+        "marker_front": numbers["marker_front"],
+        "marker_side": numbers["marker_side"],
+        "silhouette_front": numbers["silhouette_front"],
+        "silhouette_side": numbers["silhouette_side"],
+        "measurements": measurement_rows(result),
         "server_checks": server_checks,
     }
 
@@ -615,8 +439,9 @@ def build_study(profiles: dict[str, dict]) -> tuple[list[dict], list[dict]]:
 
 def build_seed() -> dict[str, Any]:
     rng = random.Random(20261031)
+    rules = json.loads(RULES_PATH.read_text())
     users = build_users()
-    profiles = {entry[0]: build_profile(entry, rng) for entry in PROFILES}
+    profiles = {entry[0]: build_profile(entry, rng, rules) for entry in PROFILES}
     orders = [build_order(entry, profiles) for entry in ORDERS]
     participants, readings = build_study(profiles)
     return {

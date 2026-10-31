@@ -911,7 +911,7 @@ export interface components {
         /** @enum {string} */
         Flag: "pass" | "check" | "fail";
         /** @enum {string} */
-        FlagReason: "scale_disagree" | "level_unchecked" | "loose_clothing" | "landmark_low" | "mask_gap" | "out_of_range" | "crotch_not_found" | "marker_weak" | "waist_level_mismatch" | "chest_level_mismatch" | "view_failed";
+        FlagReason: "scale_disagree" | "level_unchecked" | "loose_clothing" | "landmark_low" | "mask_gap" | "out_of_range" | "crotch_not_found" | "marker_weak" | "waist_level_mismatch" | "chest_level_mismatch" | "view_failed" | "free_arm_unknown";
         /** @enum {string} */
         CheckState: "pass" | "fail" | "skipped";
         ClientCode: string;

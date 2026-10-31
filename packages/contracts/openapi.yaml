@@ -1134,6 +1134,7 @@ components:
         - waist_level_mismatch
         - chest_level_mismatch
         - view_failed
+        - free_arm_unknown
     CheckState: { type: string, enum: [pass, fail, skipped] }
     ClientCode: { type: string, pattern: '^[A-Z]{2}[0-9]{4}$' }
     ParticipantCode: { type: string, pattern: '^P[0-9]{3}$' }
@@ -1366,7 +1367,7 @@ components:
         value_mm: { type: [integer, 'null'], minimum: 100, maximum: 3000 }
         method: { type: string, enum: [auto, override] }
         confidence_flag: { $ref: '#/components/schemas/Flag' }
-        flag_reasons: { type: array, maxItems: 11, uniqueItems: true, items: { $ref: '#/components/schemas/FlagReason' } }
+        flag_reasons: { type: array, maxItems: 12, uniqueItems: true, items: { $ref: '#/components/schemas/FlagReason' } }
         correction_factor: { type: number, exclusiveMinimum: 0, maximum: 10 }
         level_fraction: { type: number, minimum: 0, maximum: 2 }
         half_width_mm: { type: number, minimum: 0, maximum: 400 }
