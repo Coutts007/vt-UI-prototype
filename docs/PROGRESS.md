@@ -4,6 +4,7 @@ The newest entry comes first. Every change or improvement adds a line in the sam
 
 ## 2026-10-31: M5 client capture flow on fake vision
 
+- Voice clips and the printable measuring sheet now work offline. The sheet's marker has not been read by a real detector yet.
 - Every client screen (9.1 to 9.14) now works on a laptop in English and Kiswahili, using the contract API client. Client screens have no literal words, and a test checks that. New Kiswahili is unreviewed and privacy contact details are still [CONFIRM].
 - Each client now downloads one language (D35), which keeps the whole flow at 166.9 KB, under the 170 KB stop but still over the 120 KB target.
 - Fixed along the way: the phone check's SIMD test rejected every browser, and the header caused sideways scrolling on phones.
