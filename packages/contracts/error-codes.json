@@ -5,6 +5,7 @@
   "account_rejected": { "status": 403, "title": "This account was not approved" },
   "approvals_missing": { "status": 409, "title": "Study approvals are missing" },
   "client_has_orders": { "status": 409, "title": "This client has active orders" },
+  "client_records_retained": { "status": 409, "title": "This client's records are kept until the retention schedule removes them" },
   "code_not_found": { "status": 404, "title": "Client code not found" },
   "cohort_locked": { "status": 409, "title": "The cohort cannot change once readings exist" },
   "consent_missing": { "status": 422, "title": "Valid consent is required" },

@@ -36,7 +36,9 @@ def app_url(owner_url: str) -> str:
 
 @pytest.fixture
 def settings(app_url: str) -> Settings:
-    return Settings(env="staging", database_url=app_url, _env_file=None)  # type: ignore[call-arg]
+    return Settings(  # type: ignore[call-arg]
+        env="staging", database_url=app_url, directory_enabled=True, _env_file=None
+    )
 
 
 @pytest.fixture

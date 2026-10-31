@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEV_JWT_SECRET = "dev-only-jwt-secret-change-me-0123456789"
@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     ip_pepper: str = DEV_IP_PEPPER
     trusted_proxies: str = ""
     token_hours: int = 24
+    # The tailor directory (D27). Stays off in production until M8 and M11's cleanup job exist.
+    directory_enabled: bool = False
+    directory_codes_per_tailor_day: int = Field(default=50, ge=1)
+    directory_codes_global_day: int = Field(default=1000, ge=1)
 
     @model_validator(mode="after")
     def refuse_default_secrets(self) -> "Settings":

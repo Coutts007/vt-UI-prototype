@@ -2,6 +2,14 @@
 
 The newest entry comes first. Every change or improvement adds a line in the same commit.
 
+## 2026-11-01: Tailor directory after the independent review (D27)
+
+- **Stays off in production** until both M8 and M11's cleanup job exist. The API now has its own switch, `DIRECTORY_ENABLED`, off by default: the public directory endpoints and the listing opt-in answer 404 `not_found` while it is off. A tailor can still see and clear existing codes.
+- Issuing is capped at 50 codes a day per tailor and 1000 a day overall, both settings, on top of the limits per address, refused with `rate_limited` and `Retry-After`. IPv6 now counts per /64 on the directory and code check endpoints. IPv4 is unchanged.
+- Removing a client is refused with the new `client_records_retained` for collected orders or a study participant, for tailors and admins alike. Those records leave only through the retention job. A measured client with neither can still be removed.
+- `POST /me/directory-clients/remove-unused` removes a tailor's directory clients with no profile, no orders and no participant, in one audit row with the count only. The list now reports `unused_total`.
+- **Carried forward to M9:** rate limit counts live in memory and reset on restart (`services/ratelimit.py`), and the client list in `ClientListView` does not show where a client came from.
+
 ## 2026-10-31: Tailor directory and Get code (D27)
 
 - API: public `GET /tailors` and `POST /tailors/{listing_id}/codes`, `GET /me/directory-clients`, `DELETE /clients/{id}`, and `GET /client-codes/{code}` (the part of M8 this flow needs). Migration 0002 adds the listing fields, off by default, and each client's `source`. Issuing is limited to 10 an hour and 30 a day per address, and audited with no personal data. The mock answers the same.

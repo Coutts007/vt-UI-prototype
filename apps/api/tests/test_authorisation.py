@@ -96,6 +96,7 @@ SCHEMA_PAIRS = {
     "listTailors": (None, "TailorListingPage"),
     "issueDirectoryCode": (None, "DirectoryCodeIssued"),
     "listDirectoryClients": (None, "DirectoryClientPage"),
+    "removeUnusedDirectoryClients": (None, "DirectoryClientsRemoved"),
 }
 
 

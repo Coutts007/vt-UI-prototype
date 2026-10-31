@@ -9,12 +9,13 @@ import jsonschema
 import pytest
 import yaml
 from app.api.v1 import directory
-from app.models import AuditLog, Client, Order, Tailor, UserAccount
+from app.models import AuditLog, Client, MeasurementProfile, Order, Participant, Tailor, UserAccount
+from app.security.ip_hash import network_key
 from fastapi import FastAPI
 from httpx import AsyncClient
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from support import bearer, sign_in
+from support import bearer, owner_execute, sign_in
 
 ROOT = Path(__file__).parents[3]
 CONTRACT = yaml.safe_load((ROOT / "packages/contracts/openapi.yaml").read_text())
@@ -374,3 +375,268 @@ async def test_the_database_refuses_bad_values(session: AsyncSession) -> None:
     tailor.directory_specialties = ["nope"]
     with pytest.raises(IntegrityError):
         await session.flush()
+
+
+def seed_client(code: str) -> dict[str, Any]:
+    return next(row for row in SEED["clients"] if row["client_code"] == code)
+
+
+async def issued_client(client: AsyncClient, session: AsyncSession, tailor: dict[str, Any]) -> Any:
+    code = (await issue(client, tailor)).json()["client_code"]
+    row = await session.scalar(select(Client).where(Client.client_code == code))
+    assert row
+    return row.client_id
+
+
+async def give_to(owner_url: str, table: str, column: str, row_id: Any, client_id: Any) -> None:
+    await owner_execute(
+        owner_url,
+        f"UPDATE {table} SET client_id = '{client_id}' WHERE {column} = '{row_id}'",
+    )
+
+
+async def is_deleted(session: AsyncSession, client_id: Any) -> bool:
+    session.expire_all()
+    row = await session.get(Client, client_id)
+    assert row
+    return row.deleted_at is not None
+
+
+async def a_profile_of(session: AsyncSession, code: str) -> Any:
+    client_id = uuid.UUID(seed_client(code)["client_id"])
+    return await session.scalar(
+        select(MeasurementProfile.profile_id)
+        .where(MeasurementProfile.client_id == client_id)
+        .limit(1)
+    )
+
+
+async def test_a_measured_client_can_be_removed(
+    client: AsyncClient, session: AsyncSession, owner_url: str
+) -> None:
+    client_id = await issued_client(client, session, WANJIRU)
+    profile = await a_profile_of(session, "AB1002")
+    await give_to(owner_url, "measurement_profile", "profile_id", profile, client_id)
+    token = await sign_in(client, WANJIRU["email"])
+    rows = (await client.get(f"{PREFIX}/me/directory-clients", headers=bearer(token))).json()
+    assert [row["has_profile"] for row in rows["items"]] == [True]
+    assert rows["unused_total"] == 0
+    reply = await client.delete(f"{PREFIX}/clients/{client_id}", headers=bearer(token))
+    assert reply.status_code == 204
+    assert await is_deleted(session, client_id)
+
+
+@pytest.mark.parametrize("role", ["owner", "admin"])
+async def test_a_study_participant_cannot_be_removed(
+    client: AsyncClient, session: AsyncSession, role: str
+) -> None:
+    # AB1008 has no orders and no profile, so only being a participant can refuse it.
+    client_id = seed_client("AB1008")["client_id"]
+    email = WANJIRU["email"] if role == "owner" else "admin@vt.test"
+    token = await sign_in(client, email)
+    reply = await client.delete(f"{PREFIX}/clients/{client_id}", headers=bearer(token))
+    assert reply.status_code == 409
+    assert reply.json()["code"] == "client_records_retained"
+    assert not await is_deleted(session, uuid.UUID(client_id))
+
+
+async def test_a_client_with_collected_orders_cannot_be_removed(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    # AB1006 has one collected order and is no participant.
+    client_id = uuid.UUID(seed_client("AB1006")["client_id"])
+    statuses = await session.scalars(select(Order.status).where(Order.client_id == client_id))
+    assert statuses.all() == ["collected"]
+    assert not await session.scalar(select(Participant).where(Participant.client_id == client_id))
+    token = await sign_in(client, WANJIRU["email"])
+    reply = await client.delete(f"{PREFIX}/clients/{client_id}", headers=bearer(token))
+    assert reply.status_code == 409
+    assert reply.json()["code"] == "client_records_retained"
+    assert not await is_deleted(session, client_id)
+
+
+async def test_bulk_removal_touches_only_unused_directory_clients(
+    client: AsyncClient, session: AsyncSession, owner_url: str, app: FastAPI
+) -> None:
+    unused = [await issued_client(client, session, WANJIRU) for _ in range(2)]
+    measured = await issued_client(client, session, WANJIRU)
+    ordered = await issued_client(client, session, WANJIRU)
+    participant = await issued_client(client, session, WANJIRU)
+    theirs = await issued_client(client, session, OTIENO)
+    await give_to(
+        owner_url,
+        "measurement_profile",
+        "profile_id",
+        await a_profile_of(session, "AB1002"),
+        measured,
+    )
+    order_id = await session.scalar(
+        select(Order.order_id).where(
+            Order.client_id == uuid.UUID(seed_client("AB1006")["client_id"])
+        )
+    )
+    await give_to(owner_url, '"order"', "order_id", order_id, ordered)
+    participant_id = await session.scalar(
+        select(Participant.participant_id).where(
+            Participant.client_id == uuid.UUID(seed_client("AB1008")["client_id"])
+        )
+    )
+    await give_to(owner_url, "participant", "participant_id", participant_id, participant)
+    token = await sign_in(client, WANJIRU["email"])
+    page = (await client.get(f"{PREFIX}/me/directory-clients", headers=bearer(token))).json()
+    assert (page["total"], page["unused_total"]) == (5, 2)
+
+    reply = await client.post(f"{PREFIX}/me/directory-clients/remove-unused", headers=bearer(token))
+    assert reply.status_code == 200
+    fits("DirectoryClientsRemoved", reply.json())
+    assert reply.json() == {"removed": 2}
+    for client_id in unused:
+        assert await is_deleted(session, client_id)
+    for client_id in (measured, ordered, participant, theirs):
+        assert not await is_deleted(session, client_id)
+    # AB1008 now holds nothing at all, but the tailor made it, so it is not a directory client.
+    assert not await is_deleted(session, uuid.UUID(seed_client("AB1008")["client_id"]))
+
+    entries = await session.scalars(
+        select(AuditLog).where(AuditLog.action == "deletion", AuditLog.user_id.is_not(None))
+    )
+    entry = entries.one()
+    assert entry.detail == {"source": "directory", "count": 2}
+    assert entry.client_id is None
+
+    again = await client.post(f"{PREFIX}/me/directory-clients/remove-unused", headers=bearer(token))
+    assert again.json() == {"removed": 0}
+    page = (await client.get(f"{PREFIX}/me/directory-clients", headers=bearer(token))).json()
+    assert (page["total"], page["unused_total"]) == (3, 0)
+
+
+async def test_bulk_removal_is_for_tailors(client: AsyncClient) -> None:
+    assert (await client.post(f"{PREFIX}/me/directory-clients/remove-unused")).status_code == 401
+    token = await sign_in(client, "admin@vt.test")
+    reply = await client.post(f"{PREFIX}/me/directory-clients/remove-unused", headers=bearer(token))
+    assert reply.status_code == 403
+
+
+async def test_one_tailor_has_a_daily_cap(app: FastAPI, client: AsyncClient) -> None:
+    app.state.settings.directory_codes_per_tailor_day = 2
+    for _ in range(2):
+        assert (await issue(client, WANJIRU)).status_code == 201
+    refused = await issue(client, WANJIRU)
+    assert refused.status_code == 429
+    assert refused.json()["code"] == "rate_limited"
+    assert int(refused.headers["retry-after"]) > 3600
+    assert (await issue(client, OTIENO)).status_code == 201
+
+
+async def test_a_daily_cap_holds_across_all_tailors(app: FastAPI, client: AsyncClient) -> None:
+    app.state.settings.directory_codes_global_day = 2
+    assert (await issue(client, WANJIRU)).status_code == 201
+    assert (await issue(client, OTIENO)).status_code == 201
+    refused = await issue(client, WANJIRU)
+    assert refused.status_code == 429
+    assert refused.json()["code"] == "rate_limited"
+    assert int(refused.headers["retry-after"]) > 3600
+
+
+async def test_tapping_a_full_tailor_does_not_use_the_global_cap(
+    app: FastAPI, client: AsyncClient
+) -> None:
+    app.state.settings.directory_codes_per_tailor_day = 1
+    app.state.settings.directory_codes_global_day = 2
+    assert (await issue(client, WANJIRU)).status_code == 201
+    for _ in range(3):
+        assert (await issue(client, WANJIRU)).status_code == 429
+    assert (await issue(client, OTIENO)).status_code == 201
+
+
+async def test_a_refused_tailor_uses_no_cap(
+    app: FastAPI, client: AsyncClient, session: AsyncSession
+) -> None:
+    app.state.settings.directory_codes_global_day = 1
+    await session.execute(
+        update(Tailor)
+        .where(Tailor.tailor_id == uuid.UUID(WANJIRU["user_id"]))
+        .values(directory_listed=False)
+    )
+    await session.commit()
+    assert (await issue(client, WANJIRU)).status_code == 404
+    assert (await issue(client, OTIENO)).status_code == 201
+
+
+@pytest.mark.parametrize(
+    ("address", "key"),
+    [
+        ("197.232.1.5", "197.232.1.5"),
+        ("2001:db8:1:2:aaaa::1", "2001:db8:1:2::/64"),
+        ("2001:db8:1:2:bbbb::9", "2001:db8:1:2::/64"),
+        ("2001:db8:1:3::1", "2001:db8:1:3::/64"),
+        ("::ffff:197.232.1.5", "197.232.1.5"),
+        ("::ffff:197.232.1.6", "197.232.1.6"),
+        ("unknown", "unknown"),
+    ],
+)
+def test_addresses_are_keyed_by_network(address: str, key: str) -> None:
+    assert network_key(address) == key
+
+
+async def test_one_ipv6_network_shares_the_issuing_limit(app: FastAPI, client: AsyncClient) -> None:
+    app.state.settings.trusted_proxies = "127.0.0.1/32"
+
+    async def from_address(address: str) -> int:
+        reply = await client.post(
+            f"{PREFIX}/tailors/{LISTING[WANJIRU['user_id']]}/codes",
+            headers={"x-forwarded-for": address},
+        )
+        return reply.status_code
+
+    for host in range(10):
+        assert await from_address(f"2001:db8:1:2::{host + 1:x}") == 201
+    assert await from_address("2001:db8:1:2:ffff::1") == 429
+    assert await from_address("2001:db8:1:3::1") == 201
+
+
+async def test_ipv4_addresses_stay_separate(app: FastAPI, client: AsyncClient) -> None:
+    app.state.settings.trusted_proxies = "127.0.0.1/32"
+    path = f"{PREFIX}/tailors/{LISTING[WANJIRU['user_id']]}/codes"
+    for _ in range(10):
+        reply = await client.post(path, headers={"x-forwarded-for": "197.232.1.5"})
+        assert reply.status_code == 201
+    assert (await client.post(path, headers={"x-forwarded-for": "197.232.1.5"})).status_code == 429
+    assert (await client.post(path, headers={"x-forwarded-for": "197.232.1.6"})).status_code == 201
+
+
+async def test_switched_off_the_directory_answers_not_found(
+    app: FastAPI, client: AsyncClient, session: AsyncSession
+) -> None:
+    app.state.settings.directory_enabled = False
+    for reply in (await client.get(f"{PREFIX}/tailors"), await issue(client, WANJIRU)):
+        assert reply.status_code == 404
+        assert reply.json()["code"] == "not_found"
+    entries = await session.scalars(select(AuditLog).where(AuditLog.action == "code_issue"))
+    assert all(row.actor_type != "client" for row in entries)
+
+    token = await sign_in(client, WANJIRU["email"])
+    for field, value in (
+        ("directory_listed", True),
+        ("directory_show_phone", True),
+        ("directory_specialties", ["suits"]),
+        ("directory_description", "Words"),
+    ):
+        reply = await client.patch(f"{PREFIX}/me", headers=bearer(token), json={field: value})
+        assert reply.status_code == 404, field
+        assert reply.json()["code"] == "not_found"
+    # Everything else about the account still saves, and a tailor can still clear old codes.
+    other = await client.patch(f"{PREFIX}/me", headers=bearer(token), json={"area": "Thika"})
+    assert other.status_code == 200
+    mine = await client.get(f"{PREFIX}/me/directory-clients", headers=bearer(token))
+    assert mine.status_code == 200
+    code = SEED["clients"][0]["client_code"]
+    assert (await client.get(f"{PREFIX}/client-codes/{code}")).status_code == 200
+
+
+def test_the_directory_is_off_unless_a_setting_turns_it_on() -> None:
+    from app.config import Settings
+
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.directory_enabled is False
+    assert settings.directory_codes_per_tailor_day == 50

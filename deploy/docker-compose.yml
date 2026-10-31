@@ -43,6 +43,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-me-0123456789}
       IP_PEPPER: ${IP_PEPPER:-dev-only-ip-pepper}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12,192.168.0.0/16}
+      DIRECTORY_ENABLED: ${DIRECTORY_ENABLED:-false}
+      DIRECTORY_CODES_PER_TAILOR_DAY: ${DIRECTORY_CODES_PER_TAILOR_DAY:-50}
+      DIRECTORY_CODES_GLOBAL_DAY: ${DIRECTORY_CODES_GLOBAL_DAY:-1000}
     depends_on:
       migrate:
         condition: service_completed_successfully
