@@ -1,0 +1,11 @@
+FROM node:22-slim AS web
+RUN corepack enable
+WORKDIR /repo
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web apps/web
+RUN pnpm install --frozen-lockfile --filter @vt/web
+RUN pnpm --filter @vt/web build
+
+FROM caddy:2-alpine
+COPY deploy/Caddyfile /etc/caddy/Caddyfile
+COPY --from=web /repo/apps/web/dist /srv

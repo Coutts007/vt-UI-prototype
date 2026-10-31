@@ -1,0 +1,46 @@
+[project]
+name = "virtual-tailor"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["apps/api", "packages/py/*"]
+
+[tool.uv.sources]
+vt-api = { workspace = true }
+vt-measure = { workspace = true }
+vt-ml = { workspace = true }
+vt-analysis = { workspace = true }
+
+[dependency-groups]
+dev = [
+  "vt-api",
+  "vt-measure",
+  "vt-ml",
+  "vt-analysis",
+  "httpx>=0.28",
+  "mypy>=1.13",
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "ruff>=0.8",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "--import-mode=importlib"
+asyncio_default_fixture_loop_scope = "function"

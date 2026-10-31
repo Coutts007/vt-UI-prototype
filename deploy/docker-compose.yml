@@ -1,0 +1,54 @@
+name: virtual-tailor
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-vt}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vt-dev-only}
+      POSTGRES_DB: ${POSTGRES_DB:-vt}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-vt}']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    environment:
+      ENV: ${ENV:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-vt}:${POSTGRES_PASSWORD:-vt-dev-only}@db:5432/${POSTGRES_DB:-vt}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request as u; u.urlopen('http://localhost:8000/api/v1/health')"
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  caddy:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.caddy
+    ports:
+      - '${VT_HTTP_PORT:-80}:80'
+      - '${VT_HTTPS_PORT:-443}:443'
+    volumes:
+      - caddy-data:/data
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  db-data:
+  caddy-data:

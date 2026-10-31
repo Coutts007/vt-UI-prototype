@@ -1,0 +1,8 @@
+docs/
+.claude/
+packages/
+pnpm-lock.yaml
+uv.lock
+dist/
+coverage/
+apps/web/src/
