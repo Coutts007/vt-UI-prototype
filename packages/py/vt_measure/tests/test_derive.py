@@ -501,3 +501,10 @@ def test_arm_choice_uses_plain_addition():
     picked = derive(data, RULES).sites["sleeve"].raw_mm
     data["session"]["free_arm"] = "left" if left > right else "right"
     assert derive(data, RULES).sites["sleeve"].raw_mm == picked
+
+
+def test_rules_really_choose_the_neck_level():
+    rules = rules_with(["levels", "neck_above_shoulder_frac"], 0.2)
+    neck = site(derive(asymmetric_input(), rules), "neck")
+    # Front y = 300 - 0.2 x 800 = 140, u 0.025. Side y = 400 - 0.2 x 600 = 280, u 0.05.
+    assert (neck.a_mm, neck.b_mm) == (pytest.approx(102.5), pytest.approx(55.0))
