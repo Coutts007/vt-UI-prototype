@@ -9,6 +9,7 @@ The newest entry comes first. Every change or improvement adds a line in the sam
 - The flag: on in dev and mock builds, off in production builds unless set to `true`. Production stays off until M8's client flow runs on the real API. Settings and registration used to claim a directory listing even with the flag off, and no longer do.
 - Browser tests cover the flow, the rate limit message, Kiswahili, accessibility and touch targets at 360 and 1280 px, plus a separate real build with the flag off. The directory is its own 2.8 KB chunk outside the client flow count; its words add to the dictionaries, so the client flow is now 169.3 KB of the 170 KB stop.
 - The size check now prints the directory chunk on its own line, and `make e2e` also builds the flag-off copy.
+- A new code from the directory clears any consent in the phone's draft, because that consent was given for another tailor.
 - **Carried forward:** removing directory codes that are never used goes to the M11 retention job. Tailors can already remove them by hand.
 
 ## 2026-10-31: M5 consent save timing

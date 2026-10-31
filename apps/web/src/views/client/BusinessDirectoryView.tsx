@@ -121,7 +121,8 @@ export const BusinessDirectoryView: React.FC<{ onNavigate: (path: string) => voi
         path: { listing_id: listing.listing_id },
       });
       // Read the phone's draft first, because getDraft alone is empty after a reload.
-      const draft = await vtStorage.loadDraft();
+      // A new code is a new tailor, so consent given for the last one does not carry over.
+      const { consent: _earlier, ...draft } = await vtStorage.loadDraft();
       await vtStorage.saveDraft({ ...draft, client_code: reply.client_code, code_verified: true });
       setIssued(reply);
       window.scrollTo(0, 0);

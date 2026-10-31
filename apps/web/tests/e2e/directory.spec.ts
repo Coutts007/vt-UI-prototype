@@ -38,6 +38,24 @@ async function smallTargets(page: Page) {
     );
 }
 
+// The draft as it is on disk, the row that holds client_code in the settings store.
+const storedDraft = (page: Page) =>
+  page.evaluate(async () => {
+    const [{ name }] = await indexedDB.databases();
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const open = indexedDB.open(name!);
+      open.onsuccess = () => resolve(open.result);
+      open.onerror = () => reject(open.error);
+    });
+    const rows = await new Promise<{ value?: Record<string, unknown> }[]>((resolve, reject) => {
+      const all = db.transaction('settings').objectStore('settings').getAll();
+      all.onsuccess = () => resolve(all.result);
+      all.onerror = () => reject(all.error);
+    });
+    db.close();
+    return rows.find((row) => row.value && 'client_code' in row.value)?.value ?? {};
+  });
+
 test('browse, search, get a code, and reach consent with the code verified', async ({ page }) => {
   await page.goto('/tailors');
   await expect(page.getByRole('heading', { name: en.directoryTitle })).toBeVisible();
@@ -77,6 +95,27 @@ test('the code survives a reload, because it is saved before it is shown', async
   const code = (await page.getByTestId('issued-code').textContent())!;
   await page.goto('/start');
   await expect(page.getByLabel(en.clientCodeLabel)).toHaveValue(code);
+});
+
+test('consent given for one tailor does not carry over to a new code', async ({ page }) => {
+  await page.goto('/tailors');
+  await getCode(page, WANJIRU).click();
+  await page.getByRole('button', { name: en.continue, exact: true }).click();
+  await page.getByLabel(en.heightLabel).fill('170');
+  await page.getByText(en.sexFemale, { exact: true }).click();
+  await page.getByRole('button', { name: en.continue, exact: true }).click();
+  for (const box of [en.consentBox1, en.consentBox2, en.consentBox3]) {
+    await page.getByText(box, { exact: true }).click();
+  }
+  await page.getByRole('button', { name: en.openCamera }).click();
+  await expect(page).toHaveURL(/\/check/);
+  expect(await storedDraft(page)).toHaveProperty('consent');
+  await page.goto('/tailors');
+  await getCode(page, OTIENO).click();
+  const code = (await page.getByTestId('issued-code').textContent())!;
+  const draft = await storedDraft(page);
+  expect(draft.client_code).toBe(code);
+  expect(draft).not.toHaveProperty('consent');
 });
 
 test('each tap gives a new code', async ({ page }) => {
