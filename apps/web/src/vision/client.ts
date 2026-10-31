@@ -68,11 +68,14 @@ export class VisionClient {
 
 export const FAKE_VISION_KEY = 'vt_fake_vision';
 
+/** Until M6 there is no real vision, so only dev and mock builds can measure. */
+export const visionAvailable = (): boolean => import.meta.env.DEV || import.meta.env.MODE === 'mock';
+
 const fakeBursts = { front: 0, side: 0 };
 
 /** Fake vision exists only in dev and mock builds. A production build has none until M6. */
 export async function createVisionClient(): Promise<{ client: VisionClient; speed: number } | null> {
-  if (!import.meta.env.DEV && import.meta.env.MODE !== 'mock') return null;
+  if (!visionAvailable()) return null;
   const { FakeVisionWorker, readFakeOptions } = await import('./fakeVision');
   const options = readFakeOptions();
   return { client: new VisionClient(new FakeVisionWorker(options, fakeBursts)), speed: options.speed };

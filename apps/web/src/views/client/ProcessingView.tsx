@@ -100,6 +100,7 @@ export const ProcessingView: React.FC<{ onNavigate: (path: string) => void }> = 
               <span aria-hidden="true" className="w-5 h-5 rounded-full border-2 border-slate-400 shrink-0" />
             )}
             <span>{t(key)}</span>
+            <span className="sr-only">{t(step > index ? 'done' : 'pfWaiting')}</span>
           </li>
         ))}
       </ol>

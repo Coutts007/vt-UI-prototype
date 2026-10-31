@@ -30,7 +30,9 @@ export class VoiceGuide implements AudioPort {
   private playing = false;
   private muted = false;
   /** What was asked for, in order. Dev and tests read it to prove the flow works by ear alone. */
+  /** What really began to sound: not muted, not a missing clip with no voice to read it. */
   readonly spoken: MessageKey[] = [];
+  private generation = 0;
   private locale: () => Locale = () => 'en';
 
   constructor() {
@@ -93,7 +95,6 @@ export class VoiceGuide implements AudioPort {
   }
 
   say(key: MessageKey, options: { interrupt?: boolean } = {}): void {
-    this.spoken.push(key);
     if (this.muted) return;
     if (options.interrupt) this.stop();
     this.queue.push(key);
@@ -105,6 +106,7 @@ export class VoiceGuide implements AudioPort {
   }
 
   stop(): void {
+    this.generation += 1;
     this.queue = [];
     this.playing = false;
     if (this.element) {
@@ -127,9 +129,11 @@ export class VoiceGuide implements AudioPort {
     };
     this.element ??= new Audio();
     const audio = this.element;
+    const generation = this.generation;
     let fellBack = false;
     const fallback = () => {
-      if (fellBack) return;
+      // An interrupted clip rejects too, and must not then be read aloud.
+      if (fellBack || generation !== this.generation) return;
       fellBack = true;
       audio.onended = null;
       audio.onerror = null;
@@ -139,7 +143,13 @@ export class VoiceGuide implements AudioPort {
     audio.onerror = fallback;
     audio.src = `/audio/${locale}/${key}.mp3`;
     const started = audio.play();
-    if (started) started.catch(fallback);
+    if (started) {
+      started.then(() => {
+        if (generation === this.generation) this.spoken.push(key);
+      }, fallback);
+    } else {
+      this.spoken.push(key);
+    }
   }
 
   /** The fallback. Without a voice for the language it stays silent and the flow carries on. */
@@ -157,6 +167,7 @@ export class VoiceGuide implements AudioPort {
     const utterance = new SpeechSynthesisUtterance(messageText(key, locale));
     utterance.lang = locale === 'sw' ? 'sw-KE' : 'en-KE';
     if (voice) utterance.voice = voice;
+    utterance.onstart = () => this.spoken.push(key);
     utterance.onend = done;
     utterance.onerror = done;
     window.speechSynthesis.speak(utterance);

@@ -107,12 +107,29 @@ describe('VoiceGuide', () => {
     expect(utterances).toEqual([]);
   });
 
-  it('mute stops sound but still records what the flow asked for', () => {
+  it('a muted clip does not count as spoken', () => {
     const guide = new VoiceGuide();
     guide.setMuted(true);
     guide.say('good');
     expect(FakeAudio.played).toEqual([]);
+    expect(guide.spoken).toEqual([]);
+  });
+
+  it('a clip that really plays counts as spoken, and a missing one with no voice does not', async () => {
+    const guide = new VoiceGuide();
+    guide.say('good');
+    await flush();
     expect(guide.spoken).toEqual(['good']);
+    FakeAudio.missing = true;
+    const quiet = new VoiceGuide();
+    vi.stubGlobal('speechSynthesis', {
+      getVoices: () => [{ lang: 'de-DE' }],
+      speak() {},
+      cancel() {},
+    });
+    quiet.say('good');
+    await flush();
+    expect(quiet.spoken).toEqual([]);
   });
 });
 

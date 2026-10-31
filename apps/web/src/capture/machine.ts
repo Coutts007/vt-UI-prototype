@@ -68,6 +68,8 @@ export interface CaptureContext {
   /** Runs of the computation that crashed since the last good one (retry once, 9.9). */
   crashes: number;
   scaleDisagree: View | null;
+  /** A computed result exists for a stopped retake to return to. */
+  hasReview: boolean;
 }
 
 export const INITIAL_CONTEXT: CaptureContext = {
@@ -77,6 +79,7 @@ export const INITIAL_CONTEXT: CaptureContext = {
   retakeCount: 0,
   crashes: 0,
   scaleDisagree: null,
+  hasReview: false,
 };
 
 export interface Machine {
@@ -101,6 +104,11 @@ const stop = (): Result => ({
   state: { name: 'idle' },
   context: { ...INITIAL_CONTEXT },
 });
+/** Stopping a retake keeps the result already reviewed. */
+const stopCapture = (_state: unknown, _event: unknown, context: CaptureContext): Result =>
+  context.retakeOf && context.hasReview
+    ? { state: { name: 'review' }, context: { retakeOf: null } }
+    : stop();
 const go = (state: CaptureState, context?: Partial<CaptureContext>): Result => ({ state, context });
 
 /** Null from a handler means a guard refused, so nothing changes. */
@@ -123,7 +131,7 @@ const TABLE: Table = {
   walkAway: {
     WALK_DONE: (s) => go({ name: 'checking', view: s.view }),
     VISION_UNAVAILABLE: () => go({ name: 'error', kind: 'vision_unavailable' }),
-    STOP: stop,
+    STOP: stopCapture,
   },
   checking: {
     // Alone, the phone counts down. With a helper, the shutter is pressed instead (9.7).
@@ -132,24 +140,24 @@ const TABLE: Table = {
     FLIP_VIEW: (s, _e, c) =>
       c.mode === 'assisted' && s.view === 'side' ? go({ name: 'checking', view: 'front' }) : null,
     VISION_UNAVAILABLE: () => go({ name: 'error', kind: 'vision_unavailable' }),
-    STOP: stop,
+    STOP: stopCapture,
   },
   countdown: {
     CHECK_FAILED: (s) => go({ name: 'checking', view: s.view }),
     COUNTDOWN_ZERO: (s) => go({ name: 'burst', view: s.view }),
-    STOP: stop,
+    STOP: stopCapture,
   },
   burst: {
     BURST_OK: (s) => go({ name: 'viewDone', view: s.view }),
     BURST_BAD: (s) => go({ name: 'checking', view: s.view }),
-    STOP: stop,
+    STOP: stopCapture,
   },
   viewDone: {
     ADVANCE: (s, _e, c) => {
       if (c.retakeOf || s.view === 'side') return go({ name: 'computing' });
       return go({ name: 'checking', view: 'side' });
     },
-    STOP: stop,
+    STOP: stopCapture,
   },
   computing: {
     COMPUTED: () => go({ name: 'scaleCheck' }, { crashes: 0 }),
@@ -160,8 +168,8 @@ const TABLE: Table = {
         : go({ name: 'error', kind: 'worker_crash' }, { crashes: 0 }),
   },
   scaleCheck: {
-    SCALE_OK: () => go({ name: 'review' }, { scaleDisagree: null, retakeOf: null }),
-    SCALE_DISAGREE: (_s, e) => go({ name: 'review' }, { scaleDisagree: e.view, retakeOf: null }),
+    SCALE_OK: () => go({ name: 'review' }, { scaleDisagree: null, retakeOf: null, hasReview: true }),
+    SCALE_DISAGREE: (_s, e) => go({ name: 'review' }, { scaleDisagree: e.view, retakeOf: null, hasReview: true }),
   },
   review: {
     RETAKE: (_s, e, c) =>
@@ -178,14 +186,14 @@ const TABLE: Table = {
   discarded: { RESET: stop },
   error: {
     RETRY: (s) => {
-      if (s.kind === 'camera_denied' || s.kind === 'camera_unavailable') {
+      if (s.kind === 'camera_denied' || s.kind === 'camera_unavailable' || s.kind === 'vision_unavailable') {
         return go({ name: 'permissions' });
       }
       if (s.kind === 'storage_failed') return go({ name: 'review' });
       return null;
     },
     RETAKE: (s, e, c) =>
-      s.kind === 'worker_crash'
+      s.kind === 'worker_crash' || s.kind === 'storage_failed'
         ? go({ name: 'retake', view: e.view }, { retakeOf: e.view, retakeCount: c.retakeCount + 1 })
         : null,
     RESET: stop,

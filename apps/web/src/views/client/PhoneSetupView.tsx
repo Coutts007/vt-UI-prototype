@@ -12,6 +12,7 @@ import { CAPTURE_CONFIG } from '../../capture/config';
 import type { CaptureMode } from '../../capture/machine';
 import { captureSession } from '../../capture/session';
 import { Button } from '../../components/ui/Button';
+import { visionAvailable } from '../../vision/client';
 import { LevelBubble } from '../../components/ui/LevelBubble';
 import { ProgressSteps } from '../../components/ui/data';
 import { Banner } from '../../components/ui/feedback';
@@ -79,6 +80,7 @@ export const PhoneSetupView: React.FC<{ onNavigate: (path: string) => void }> = 
   const levelSince = useRef<number | null>(null);
 
   useEffect(() => {
+    if (!visionAvailable()) return;
     void vtStorage.loadDraft().then((draft) => {
       if (!draft.consent) onNavigate(draft.client_code ? '/consent' : '/start');
       else if (draft.consent.withdrawn_at) onNavigate('/consent');
@@ -191,6 +193,21 @@ export const PhoneSetupView: React.FC<{ onNavigate: (path: string) => void }> = 
     voiceGuide.setMuted(!muted);
     setMuted(!muted);
   };
+
+  // No build but dev and mock can measure before M6, so nothing here may promise otherwise.
+  if (!visionAvailable()) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-6 flex flex-col gap-5">
+        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">{t('setupTitle')}</h1>
+        <p role="status" className="font-semibold">
+          {t('captureUnavailable')}
+        </p>
+        <Button variant="outline" onClick={() => onNavigate('/')}>
+          {t('backHome')}
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-xl mx-auto px-4 py-6 flex flex-col gap-5">

@@ -134,7 +134,7 @@ export const CaptureView: React.FC<{ view: View; onNavigate: (path: string) => v
     stopRunner();
     voiceGuide.stop();
     void document.exitFullscreen?.().catch(() => {});
-    onNavigate(state.name === 'retake' ? '/review' : '/setup');
+    onNavigate(captureSession.machine.state.name === 'review' ? '/review' : '/setup');
   };
 
   if (state.name === 'error') {
@@ -189,6 +189,9 @@ export const CaptureView: React.FC<{ view: View; onNavigate: (path: string) => v
                 {rowResult === 'fail' && <X aria-hidden="true" className="w-3.5 h-3.5 text-rose-400 shrink-0" />}
                 {rowResult === 'wait' && <Circle aria-hidden="true" className="w-3.5 h-3.5 text-slate-300 shrink-0" />}
                 <span>{t(row.key)}</span>
+                <span className="sr-only">
+                  {t(rowResult === 'pass' ? 'pfPass' : rowResult === 'fail' ? 'pfFail' : 'pfWaiting')}
+                </span>
               </li>
             );
           })}

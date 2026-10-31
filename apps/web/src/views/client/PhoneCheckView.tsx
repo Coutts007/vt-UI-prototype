@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { visionAvailable } from '../../vision/client';
 import { CAPTURE_CONFIG } from '../../capture/config';
 import {
   PreflightItem,
@@ -63,7 +64,7 @@ export const PhoneCheckView: React.FC<{ onNavigate: (path: string) => void }> = 
             }`}
           >
             {ICONS[verdict === 'ready' ? 'pass' : verdict]}
-            <span>{t(verdict === 'ready' ? 'checkReady' : verdict === 'caution' ? 'checkCaution' : 'checkFail')}</span>
+            <span>{t(!visionAvailable() ? 'captureUnavailable' : verdict === 'ready' ? 'checkReady' : verdict === 'caution' ? 'checkCaution' : 'checkFail')}</span>
           </div>
           <ul className="rounded-2xl border border-[var(--vt-line)] bg-white divide-y divide-[var(--vt-line)]">
             {items.map((item) => (
@@ -86,7 +87,7 @@ export const PhoneCheckView: React.FC<{ onNavigate: (path: string) => void }> = 
             <Button onClick={() => onNavigate('/sheet')} disabled={verdict === 'fail'} size="xl" className="w-full">
               {t('continue')}
             </Button>
-            {verdict === 'fail' && (
+            {verdict === 'fail' && visionAvailable() && (
               <>
                 <Button variant="outline" onClick={() => onNavigate('/help')} className="w-full">
                   {t('askTailorInPerson')}

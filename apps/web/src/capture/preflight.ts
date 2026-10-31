@@ -1,4 +1,5 @@
 // The device pre-flight (frontend-spec 9.4, A7). The rules are pure, and gathering is separate.
+import { visionAvailable } from '../vision/client';
 import type { TranslationKey } from '../i18n/en';
 
 export type PreflightStatus = 'pass' | 'caution' | 'fail';
@@ -14,6 +15,8 @@ export interface PreflightFacts {
   streamMax: number | null;
   motion: 'working' | 'absent' | 'needs-permission';
   freeMb: number | null;
+  /** False where this build cannot measure at all. */
+  visionAvailable?: boolean;
   modelsCached: boolean;
 }
 
@@ -66,7 +69,7 @@ export function runPreflight(facts: PreflightFacts): PreflightItem[] {
     item('resolution', 'checkResolution', resolution, 'pfResolution'),
     item('sensors', 'checkSensors', facts.motion === 'absent' ? 'caution' : 'pass', 'pfMotion'),
     item('storage', 'checkStorage', facts.freeMb !== null && facts.freeMb < 100 ? 'caution' : 'pass', 'pfStorage'),
-    item('models', 'checkModels', 'pass', 'pfStorage'),
+    item('models', 'checkModels', facts.visionAvailable === false ? 'fail' : 'pass', 'captureUnavailable'),
   ];
 }
 
@@ -122,6 +125,7 @@ export async function gatherFacts(motionWaitMs: number): Promise<PreflightFacts>
     simd = false;
   }
   return {
+    visionAvailable: visionAvailable(),
     secure: window.isSecureContext,
     browser: parseBrowser(navigator.userAgent),
     simd,

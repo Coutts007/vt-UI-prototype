@@ -246,3 +246,87 @@ describe('branches and guards', () => {
     expect(next.context).toEqual(INITIAL_CONTEXT);
   });
 });
+
+describe('review findings', () => {
+  const toReview = () => {
+    let m = { state: { name: 'idle' }, context: { ...INITIAL_CONTEXT } } as ReturnType<
+      typeof transition
+    >;
+    const events: CaptureEvent[] = [
+      { type: 'START', mode: 'self' },
+      { type: 'PERMISSIONS_OK' },
+      { type: 'LEVEL_OK' },
+      { type: 'WALK_DONE' },
+      { type: 'ALL_GREEN' },
+      { type: 'COUNTDOWN_ZERO' },
+      { type: 'BURST_OK' },
+      { type: 'ADVANCE' },
+      { type: 'ALL_GREEN' },
+      { type: 'COUNTDOWN_ZERO' },
+      { type: 'BURST_OK' },
+      { type: 'ADVANCE' },
+      { type: 'COMPUTED' },
+      { type: 'SCALE_OK' },
+    ];
+    for (const event of events) m = transition(m, event);
+    expect(m.state.name).toBe('review');
+    return m;
+  };
+
+  it('stopping during a retake returns to the reviewed result', () => {
+    let m = transition(toReview(), { type: 'RETAKE', view: 'front' });
+    m = transition(m, { type: 'BEGIN_RETAKE' });
+    expect(m.state.name).toBe('walkAway');
+    for (const next of [{ type: 'STOP' }] as CaptureEvent[]) m = transition(m, next);
+    expect(m.state.name).toBe('review');
+    expect(m.context.retakeOf).toBeNull();
+  });
+
+  it('stopping during a retake after a crash, with no result yet, goes idle', () => {
+    let m = { state: { name: 'idle' }, context: { ...INITIAL_CONTEXT } } as ReturnType<
+      typeof transition
+    >;
+    for (const event of [
+      { type: 'START', mode: 'self' },
+      { type: 'PERMISSIONS_OK' },
+      { type: 'LEVEL_OK' },
+      { type: 'WALK_DONE' },
+      { type: 'ALL_GREEN' },
+      { type: 'COUNTDOWN_ZERO' },
+      { type: 'BURST_OK' },
+      { type: 'ADVANCE' },
+      { type: 'ALL_GREEN' },
+      { type: 'COUNTDOWN_ZERO' },
+      { type: 'BURST_OK' },
+      { type: 'ADVANCE' },
+      { type: 'WORKER_CRASH' },
+      { type: 'WORKER_CRASH' },
+      { type: 'RETAKE', view: 'side' },
+      { type: 'BEGIN_RETAKE' },
+      { type: 'STOP' },
+    ] as CaptureEvent[])
+      m = transition(m, event);
+    expect(m.state.name).toBe('idle');
+  });
+
+  it('a failed save can still retake', () => {
+    let m = transition(toReview(), { type: 'SAVE_FAILED' });
+    m = transition(m, { type: 'RETAKE', view: 'side' });
+    expect(m.state).toEqual({ name: 'retake', view: 'side' });
+  });
+
+  it('vision unavailable can be retried from set-up', () => {
+    let m = { state: { name: 'idle' }, context: { ...INITIAL_CONTEXT } } as ReturnType<
+      typeof transition
+    >;
+    for (const event of [
+      { type: 'START', mode: 'self' },
+      { type: 'PERMISSIONS_OK' },
+      { type: 'LEVEL_OK' },
+      { type: 'VISION_UNAVAILABLE' },
+      { type: 'RETRY' },
+    ] as CaptureEvent[])
+      m = transition(m, event);
+    expect(m.state.name).toBe('permissions');
+  });
+});
