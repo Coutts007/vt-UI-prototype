@@ -2,6 +2,14 @@
 
 The newest entry comes first. Every change or improvement adds a line in the same commit.
 
+## 2026-10-31: M2 Python measurement core
+
+- Added `vt_measure`, which turns profile numbers into nine measurements and flags. It handles the one-handed sheet pose (A14), using the free arm for the sleeve, and warns when that arm is unknown.
+- Added a synthetic body with known answers. The code recovers each known value to within 0.1 mm.
+- Added 56 parity cases in `packages/parity-fixtures`, for the TypeScript version to match later. `make parity` now runs the Python half, and the CI parity job runs it with a 95% coverage limit.
+- Rebuilt the demo seed from `vt_measure`, so every stored measurement recomputes from the numbers beside it.
+- Added the `free_arm_unknown` flag reason to the contract. Added `nominal_distance_mm` and `free_arm_min_distance_ratio` to the draft rules. The depth correction stays at 0.
+
 ## 2026-10-31: M1 shared contract, seed and rules
 
 - Added the API contract: 60 endpoints in OpenAPI 3.1, with generated TypeScript types.

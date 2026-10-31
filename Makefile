@@ -39,10 +39,13 @@ test-web:
 	pnpm --filter @vt/web test
 
 test-api:
-	uv run pytest apps/api packages/py packages/contracts packages/rules packages/seed
+	uv run pytest apps/api packages/py packages/contracts packages/rules packages/seed packages/parity-fixtures
 
 parity:
-	@echo "make parity arrives in M2"
+	uv run python packages/parity-fixtures/generate.py
+	uv run pytest packages/parity-fixtures
+	git diff --exit-code -- packages/parity-fixtures/cases
+	test -z "$$(git status --porcelain -- packages/parity-fixtures/cases)"
 
 contract:
 	uv run python -m openapi_spec_validator packages/contracts/openapi.yaml

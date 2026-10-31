@@ -16,7 +16,8 @@
     "depth_correction_mm": {
       "front": 0,
       "side": 0
-    }
+    },
+    "nominal_distance_mm": 2250
   },
   "levels": {
     "chest": {
@@ -90,7 +91,8 @@
   "flags": {
     "visibility_fail": 0.5,
     "visibility_check": 0.7,
-    "marker_conf_check": 0.8
+    "marker_conf_check": 0.8,
+    "free_arm_min_distance_ratio": 1.05
   },
   "anomaly": {
     "static_ratio_bounds": {
@@ -122,5 +124,5 @@
     "bootstrap_ci": {},
     "notes": "Initial literature values (proposal Section 3.8.4). Not calibrated."
   },
-  "checksum": "sha256:455e6782027f676b3ff186421a7ab52821ed765db04e325b9002777050dfa50d"
+  "checksum": "sha256:1bc2a079e245395b720815cf66bb3645c95931275b2f49d6d2286ae0c6c7a80b"
 }
