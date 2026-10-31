@@ -15,6 +15,7 @@ CLAUDE.local.md
 node_modules/
 build/
 dist/
+dist-directory-off/
 .venv/
 __pycache__/
 *.pyc

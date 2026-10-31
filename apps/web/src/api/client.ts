@@ -28,12 +28,6 @@ export interface PublicSettings {
   min_app_version: string;
 }
 
-export interface ClientCodeVerification {
-  valid: boolean;
-  tailor_business_name: string;
-  height_mm?: number;
-}
-
 export interface SheetResult {
   sheet_id: string;
   order_id: string;
@@ -145,136 +139,6 @@ class ApiClient {
     this.logAudit('settings_change', 'settings', 'study_mode', `Study mode set to ${enabled}`);
   }
 
-  // --- Public Businesses Directory ---
-  async getPublicBusinesses(search = '', specialty = '', area = ''): Promise<UserAccount[]> {
-    let list = this.users.filter((u) => u.role === 'tailor' && u.status === 'active');
-
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      list = list.filter(
-        (u) =>
-          (u.business_name && u.business_name.toLowerCase().includes(q)) ||
-          (u.area && u.area.toLowerCase().includes(q)) ||
-          (u.description && u.description.toLowerCase().includes(q)) ||
-          (u.public_client_code && u.public_client_code.toLowerCase().includes(q))
-      );
-    }
-
-    if (specialty && specialty !== 'all') {
-      list = list.filter((u) => u.specialties && u.specialties.some((s) => s.toLowerCase().includes(specialty.toLowerCase())));
-    }
-
-    if (area && area !== 'all') {
-      list = list.filter((u) => u.area && u.area.toLowerCase().includes(area.toLowerCase()));
-    }
-
-    return list;
-  }
-
-  async getBusinessById(userId: string): Promise<UserAccount | null> {
-    return this.users.find((u) => u.user_id === userId && u.role === 'tailor') || null;
-  }
-
-  // --- Client Code Check ---
-  async verifyClientCode(code: string): Promise<ClientCodeVerification> {
-    const upperCode = code.trim().toUpperCase();
-
-    // Check specific client record
-    const client = this.clients.find((c) => c.client_code === upperCode);
-    if (client) {
-      const tailor = this.users.find((u) => u.user_id === client.tailor_id);
-      return {
-        valid: true,
-        tailor_business_name: tailor?.business_name || 'Virtual Tailor Workshop',
-        height_mm: client.height_mm,
-      };
-    }
-
-    // Check public business code from directory
-    const tailor = this.users.find((u) => u.public_client_code === upperCode && u.role === 'tailor');
-    if (tailor) {
-      // Ensure client record exists for this public code
-      const existingClient = this.clients.find((c) => c.client_code === upperCode);
-      if (!existingClient) {
-        this.clients.push({
-          client_id: 'c-' + Math.random().toString(36).substring(2, 9),
-          client_code: upperCode,
-          tailor_id: tailor.user_id,
-          display_name: '',
-          created_at: new Date().toISOString(),
-          profiles_count: 0,
-          open_orders_count: 0,
-          has_flags: false,
-        });
-        this.saveState();
-      }
-      return {
-        valid: true,
-        tailor_business_name: tailor.business_name || 'Virtual Tailor Workshop',
-      };
-    }
-
-    throw new Error('Code not found. Please verify with your tailor or browse the directory.');
-  }
-
-  async getClientCodeForBusiness(businessUserId: string, clientDisplayName?: string): Promise<{ client_code: string; tailor_business_name: string; area?: string }> {
-    const tailor = this.users.find((u) => u.user_id === businessUserId && u.role === 'tailor');
-    if (!tailor) throw new Error('Business not found');
-
-    if (tailor.public_client_code) {
-      // Ensure it is in clients
-      if (!this.clients.some((c) => c.client_code === tailor.public_client_code)) {
-        this.clients.push({
-          client_id: 'c-' + Math.random().toString(36).substring(2, 9),
-          client_code: tailor.public_client_code,
-          tailor_id: tailor.user_id,
-          display_name: clientDisplayName || '',
-          created_at: new Date().toISOString(),
-          profiles_count: 0,
-          open_orders_count: 0,
-          has_flags: false,
-        });
-        this.saveState();
-      }
-      return {
-        client_code: tailor.public_client_code,
-        tailor_business_name: tailor.business_name || 'Tailor Workshop',
-        area: tailor.area,
-      };
-    }
-
-    // Generate code
-    const initials = (tailor.business_name || 'VT')
-      .split(' ')
-      .map((w) => w[0])
-      .join('')
-      .toUpperCase()
-      .replace(/[^A-Z]/g, '')
-      .padEnd(2, 'T')
-      .slice(0, 2);
-    const num = Math.floor(1000 + Math.random() * 9000);
-    const newCode = `${initials}${num}`;
-    tailor.public_client_code = newCode;
-
-    this.clients.push({
-      client_id: 'c-' + Math.random().toString(36).substring(2, 9),
-      client_code: newCode,
-      tailor_id: tailor.user_id,
-      display_name: clientDisplayName || '',
-      created_at: new Date().toISOString(),
-      profiles_count: 0,
-      open_orders_count: 0,
-      has_flags: false,
-    });
-    this.saveState();
-
-    return {
-      client_code: newCode,
-      tailor_business_name: tailor.business_name || 'Tailor Workshop',
-      area: tailor.area,
-    };
-  }
-
   // --- Profile Submission ---
   async submitProfile(payload: MeasurementProfilePayload): Promise<{ profile_id: string; version: number }> {
     const client = this.clients.find((c) => c.client_code === payload.client_code);
@@ -351,23 +215,11 @@ class ApiClient {
       throw new Error('An account with this email already exists.');
     }
 
-    // Generate unique 6-char business client code
-    const initials = data.business_name
-      .split(' ')
-      .map((w) => w[0])
-      .join('')
-      .toUpperCase()
-      .replace(/[^A-Z]/g, '')
-      .padEnd(2, 'T')
-      .slice(0, 2);
-    const num = Math.floor(1000 + Math.random() * 9000);
-    const public_client_code = `${initials}${num}`;
-
     const newUser: UserAccount = {
       user_id: 'u-' + Math.random().toString(36).substring(2, 9),
       email: data.email,
       role: 'tailor',
-      status: 'active', // Auto-activate so business is immediately browsable and clients can use the code
+      status: 'active',
       business_name: data.business_name,
       phone: data.phone,
       area: data.area,
@@ -375,32 +227,18 @@ class ApiClient {
       locale: data.locale,
       unit_pref: 'cm',
       created_at: new Date().toISOString(),
-      public_client_code,
       specialties: data.specialties && data.specialties.length > 0 ? data.specialties : ['Custom Tailoring', 'General Garments'],
       description: data.description || `${data.business_name} located in ${data.area}. Quality tailoring and garment making.`,
       rating: 5.0,
       reviews_count: 1,
       turnaround_days: data.turnaround_days || '5-7 days',
       pricing_tier: data.pricing_tier || 'Mid-Range',
-      is_directory_listed: true,
     };
 
     this.users.push(newUser);
 
-    // Register primary client code record for the new workshop
-    this.clients.unshift({
-      client_id: 'c-' + Math.random().toString(36).substring(2, 9),
-      client_code: public_client_code,
-      tailor_id: newUser.user_id,
-      display_name: 'General Customer Intake',
-      created_at: new Date().toISOString(),
-      profiles_count: 0,
-      open_orders_count: 0,
-      has_flags: false,
-    });
-
     this.saveState();
-    this.logAudit('approve', 'user', newUser.user_id, `Business registered: ${newUser.business_name} (${public_client_code})`);
+    this.logAudit('approve', 'user', newUser.user_id, `Business registered: ${newUser.business_name}`);
     return newUser;
   }
 

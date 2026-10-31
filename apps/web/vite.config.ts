@@ -21,7 +21,7 @@ function dropMockWorker(mockMode: boolean): Plugin {
 
 // Client and sign-in screens work offline. Tailor, admin and study code never reaches a client's phone.
 const ONLINE_ONLY =
-  /^assets\/(Tailor|Client(List|Detail)|NewClientCode|ProfileDetail|OrderQueue|NewOrder|OrderDetail|OrderSheet|Conflicts|Audit|Admin|Study|BusinessDirectory)/;
+  /^assets\/(Tailor|Client(List|Detail)|NewClientCode|ProfileDetail|OrderQueue|NewOrder|OrderDetail|OrderSheet|Conflicts|Audit|Admin|Study|BusinessDirectory|DirectoryListing)/;
 
 function precacheList(): Plugin {
   return {

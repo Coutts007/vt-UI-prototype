@@ -27,6 +27,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   const isClientFlow =
     currentPath === '/' ||
+    currentPath.startsWith('/tailors') ||
     currentPath.startsWith('/start') ||
     currentPath.startsWith('/consent') ||
     currentPath.startsWith('/check') ||
@@ -141,7 +142,7 @@ export const Header: React.FC<HeaderProps> = ({
                 }`}
               >
                 <Store className="w-3.5 h-3.5" />
-                <span>Find a Tailor</span>
+                <span>{t('navFindTailor')}</span>
               </button>
 )}
               <button
@@ -246,7 +247,7 @@ export const Header: React.FC<HeaderProps> = ({
                     className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#F7F3EC] flex items-center gap-2 cursor-pointer font-medium"
                   >
                     <Store className="w-4 h-4 text-[var(--vt-thread,#2E3A87)]" />
-                    <span>Browse Tailor Directory</span>
+                    <span>{t('navFindTailor')}</span>
                   </button>
 )}
                   <button

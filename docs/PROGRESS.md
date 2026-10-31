@@ -5,6 +5,9 @@ The newest entry comes first. Every change or improvement adds a line in the sam
 ## 2026-10-31: Tailor directory and Get code (D27)
 
 - API: public `GET /tailors` and `POST /tailors/{listing_id}/codes`, `GET /me/directory-clients`, `DELETE /clients/{id}`, and `GET /client-codes/{code}` (the part of M8 this flow needs). Migration 0002 adds the listing fields, off by default, and each client's `source`. Issuing is limited to 10 an hour and 30 a day per address, and audited with no personal data. The mock answers the same.
+- Web: the client screen `/tailors` is rewritten on the contract client in both languages: browse, search, filter by specialty and area, Get code, copy, then Continue to `/start` with the code filled in and the tailor named. The code is saved on the phone before it is shown. Tailor Settings gains the opt-in, what to publish, and a list of directory clients with Remove. The prototype's shared business code is gone from settings, registration and the prototype client. Privacy text says what listed tailors publish, only when the directory is on.
+- The flag: on in dev and mock builds, off in production builds unless set to `true`. Production stays off until M8's client flow runs on the real API. Settings and registration used to claim a directory listing even with the flag off, and no longer do.
+- Browser tests cover the flow, the rate limit message, Kiswahili, accessibility and touch targets at 360 and 1280 px, plus a separate real build with the flag off. The directory is its own 2.8 KB chunk outside the client flow count; its words add to the dictionaries, so the client flow is now 169.3 KB of the 170 KB stop.
 - **Carried forward:** removing directory codes that are never used goes to the M11 retention job. Tailors can already remove them by hand.
 
 ## 2026-10-31: M5 consent save timing

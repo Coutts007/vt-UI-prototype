@@ -3,6 +3,7 @@ import { Button } from '../../components/ui/Button';
 import { useI18n } from '../../i18n';
 import { CONSENT_VERSION } from '../../i18n/consent';
 import { ConsentFullText } from './ConsentView';
+import { FEATURE_DIRECTORY } from '../../config/features';
 
 const BOX = 'p-4 rounded-xl border border-[var(--vt-line)] bg-white';
 
@@ -38,6 +39,7 @@ export const PrivacyView: React.FC<{ onNavigate: (path: string) => void }> = ({ 
       </section>
       {(
         [
+          ...(FEATURE_DIRECTORY ? ([['privacyListedTitle', 'privacyListedBody']] as const) : []),
           ['privacyRetentionTitle', 'privacyRetentionBody'],
           ['privacyS26Title', 'privacyS26Body'],
           ['privacyS32Title', 'privacyS32Body'],
