@@ -1,0 +1,15 @@
+{
+  "name": "@vt/contracts",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": { ".": "./src/generated.ts", "./error-codes.json": "./error-codes.json" },
+  "scripts": {
+    "generate": "openapi-typescript openapi.yaml -o src/generated.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.9.0",
+    "typescript": "^5.9.0"
+  }
+}

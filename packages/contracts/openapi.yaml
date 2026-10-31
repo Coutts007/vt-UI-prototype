@@ -1,0 +1,2147 @@
+openapi: 3.1.0
+info:
+  title: Virtual Tailor API
+  version: 0.1.0
+  description: >
+    The single source of truth for the API. Lengths are integer millimetres, timestamps are
+    ISO 8601 UTC, and errors are RFC 9457 problem+json with a stable code from error-codes.json.
+    No endpoint accepts or stores an image.
+servers:
+  - url: /api/v1
+tags:
+  - name: public
+  - name: auth
+  - name: clients
+  - name: profiles
+  - name: orders
+  - name: sheets
+  - name: audit
+  - name: admin
+  - name: study
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      tags: [public]
+      summary: Liveness check
+      responses:
+        '200':
+          description: The API is running
+          content: { application/json: { schema: { $ref: '#/components/schemas/Status' } } }
+  /ready:
+    get:
+      operationId: getReady
+      tags: [public]
+      summary: Readiness check, including the database
+      responses:
+        '200':
+          description: The API can reach the database
+          content: { application/json: { schema: { $ref: '#/components/schemas/Status' } } }
+        '503':
+          description: The database cannot be reached
+          content: { application/json: { schema: { $ref: '#/components/schemas/Status' } } }
+  /settings/public:
+    get:
+      operationId: getPublicSettings
+      tags: [public]
+      summary: Feature switches for the app
+      responses:
+        '200':
+          description: Public settings
+          content: { application/json: { schema: { $ref: '#/components/schemas/PublicSettings' } } }
+  /rules/current:
+    get:
+      operationId: getCurrentRules
+      tags: [public]
+      summary: The current rules artifact, with its status
+      description: Before the owner freezes any rules, this returns an artifact with status draft.
+      responses:
+        '200':
+          description: Rules artifact
+          content: { application/json: { schema: { $ref: '#/components/schemas/RulesArtifact' } } }
+  /rules/{version}:
+    get:
+      operationId: getRules
+      tags: [public]
+      summary: One rules artifact by version
+      parameters:
+        - { name: version, in: path, required: true, schema: { $ref: '#/components/schemas/RulesVersion' } }
+      responses:
+        '200':
+          description: Rules artifact
+          content: { application/json: { schema: { $ref: '#/components/schemas/RulesArtifact' } } }
+        '404': { $ref: '#/components/responses/Problem' }
+  /client-codes/{code}:
+    get:
+      operationId: verifyClientCode
+      tags: [public]
+      summary: Check a client code
+      parameters:
+        - { name: code, in: path, required: true, schema: { $ref: '#/components/schemas/ClientCode' } }
+      x-rate-limit: 10 per minute, 100 per day
+      responses:
+        '200':
+          description: The code exists
+          content: { application/json: { schema: { $ref: '#/components/schemas/ClientCodeCheck' } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+  /profiles:
+    post:
+      operationId: syncProfile
+      tags: [profiles]
+      summary: Sync a profile from a phone
+      x-audit: profile_ingest
+      x-rate-limit: 30 per hour per IP, 10 per hour per client code
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: The profile_id
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/MeasurementProfilePayload' } }
+      responses:
+        '201':
+          description: Stored, or an identical replay of an earlier request
+          content: { application/json: { schema: { $ref: '#/components/schemas/ProfileAccepted' } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+        '415': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+  /deletion-requests:
+    post:
+      operationId: requestDeletion
+      tags: [profiles]
+      summary: Ask for a client's data to be deleted, or withdraw consent
+      x-audit: deletion_request
+      x-rate-limit: 5 per hour
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/DeletionRequestInput' } }
+      responses:
+        '202':
+          description: Accepted
+          content: { application/json: { schema: { $ref: '#/components/schemas/DeletionRequestReceipt' } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+  /data-requests/access:
+    post:
+      operationId: requestDataAccess
+      tags: [profiles]
+      summary: Get a copy of a client's stored data
+      x-audit: access_request
+      x-rate-limit: 5 per hour
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/AccessRequestInput' } }
+      responses:
+        '200':
+          description: The client's stored data
+          content: { application/json: { schema: { $ref: '#/components/schemas/ClientDataExport' } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register as a tailor
+      x-audit: register
+      x-rate-limit: 5 per hour
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RegisterInput' } } }
+      responses:
+        '201':
+          description: Waiting for approval
+          content: { application/json: { schema: { $ref: '#/components/schemas/RegisterResult' } } }
+        '422': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Sign in
+      x-audit: login
+      x-rate-limit: 20 per minute per IP, plus the account lockout
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/LoginInput' } } }
+      responses:
+        '200':
+          description: Signed in
+          content: { application/json: { schema: { $ref: '#/components/schemas/LoginResult' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Sign out
+      x-audit: logout
+      x-roles: [tailor, admin, measurer]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Signed out }
+        '401': { $ref: '#/components/responses/Problem' }
+  /me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: The signed-in user
+      x-roles: [tailor, admin, measurer]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: User
+          content: { application/json: { schema: { $ref: '#/components/schemas/User' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: updateMe
+      tags: [auth]
+      summary: Change profile details and settings
+      x-audit: settings_change
+      x-roles: [tailor, admin, measurer]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/UserUpdate' } } }
+      responses:
+        '200':
+          description: Updated user
+          content: { application/json: { schema: { $ref: '#/components/schemas/User' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /me/password:
+    post:
+      operationId: changePassword
+      tags: [auth]
+      summary: Change password, which signs out every other session
+      x-audit: settings_change
+      x-roles: [tailor, admin, measurer]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PasswordChange' } } }
+      responses:
+        '204': { description: Changed }
+        '401': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /me/ease-presets:
+    get:
+      operationId: getEasePresets
+      tags: [orders]
+      summary: The tailor's saved ease values
+      x-roles: [tailor]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Presets
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/EasePreset' } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+    put:
+      operationId: putEasePresets
+      tags: [orders]
+      summary: Replace the tailor's saved ease values
+      x-audit: settings_change
+      x-roles: [tailor]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: array, items: { $ref: '#/components/schemas/EasePreset' } }
+      responses:
+        '200':
+          description: Saved presets
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/EasePreset' } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /clients:
+    get:
+      operationId: listClients
+      tags: [clients]
+      summary: List clients
+      x-roles: [tailor, admin]
+      x-ownership: tailors see their own clients only
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: search, in: query, schema: { type: string, maxLength: 60 } }
+        - { name: sort, in: query, schema: { type: string, enum: [last_capture, code, name] } }
+        - { name: filter, in: query, schema: { type: string, enum: [has_new, has_flags, no_profiles] } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: One page of clients
+          content: { application/json: { schema: { $ref: '#/components/schemas/ClientPage' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createClient
+      tags: [clients]
+      summary: Issue a client code
+      x-audit: code_issue
+      x-roles: [tailor]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ClientInput' } } }
+      responses:
+        '201':
+          description: The new code
+          content: { application/json: { schema: { $ref: '#/components/schemas/ClientCreated' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /clients/{client_id}:
+    parameters:
+      - { $ref: '#/components/parameters/ClientId' }
+    get:
+      operationId: getClient
+      tags: [clients]
+      summary: One client
+      x-roles: [tailor, admin]
+      x-ownership: tailors see their own clients only
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Client
+          content: { application/json: { schema: { $ref: '#/components/schemas/ClientDetail' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: updateClient
+      tags: [clients]
+      summary: Edit a client's display name or height
+      x-audit: client_update
+      x-roles: [tailor, admin]
+      x-ownership: tailors change their own clients only
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ClientInput' } } }
+      responses:
+        '200':
+          description: Updated client
+          content: { application/json: { schema: { $ref: '#/components/schemas/ClientDetail' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: deleteClient
+      tags: [clients]
+      summary: Delete a client's data
+      description: The API marks the client for deletion at once, and the retention job removes the rows.
+      x-audit: deletion
+      x-roles: [tailor, admin]
+      x-ownership: tailors delete their own clients only
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Marked for deletion }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /clients/{client_id}/rotate-code:
+    parameters:
+      - { $ref: '#/components/parameters/ClientId' }
+    post:
+      operationId: rotateClientCode
+      tags: [clients]
+      summary: Replace a client's code, so the old one stops working
+      x-audit: code_rotate
+      x-roles: [tailor]
+      x-ownership: own clients only
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: The new code
+          content: { application/json: { schema: { $ref: '#/components/schemas/ClientCodeRotated' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /clients/{client_id}/profiles:
+    parameters:
+      - { $ref: '#/components/parameters/ClientId' }
+    get:
+      operationId: listClientProfiles
+      tags: [clients]
+      summary: A client's profiles, newest first
+      x-roles: [tailor, admin]
+      x-ownership: tailors see their own clients only
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Profiles
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/ProfileSummary' } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /profiles/{profile_id}:
+    get:
+      operationId: getProfile
+      tags: [profiles]
+      summary: One full profile. Every call is audited
+      x-audit: profile_view
+      x-roles: [tailor, admin]
+      x-ownership: tailors see their own clients only
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: profile_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Profile
+          content: { application/json: { schema: { $ref: '#/components/schemas/MeasurementProfile' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /conflicts:
+    get:
+      operationId: listConflicts
+      tags: [profiles]
+      summary: Unresolved sync conflicts, with both versions
+      x-roles: [tailor]
+      x-ownership: own clients only
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Conflicts
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Conflict' } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /conflicts/{conflict_id}/resolve:
+    post:
+      operationId: resolveConflict
+      tags: [profiles]
+      summary: Choose which version to keep
+      x-audit: conflict_resolve
+      x-roles: [tailor]
+      x-ownership: own clients only
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: conflict_id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ConflictResolution' } } }
+      responses:
+        '200':
+          description: The conflict after resolution
+          content: { application/json: { schema: { $ref: '#/components/schemas/Conflict' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /orders:
+    get:
+      operationId: listOrders
+      tags: [orders]
+      summary: The order queue
+      x-roles: [tailor]
+      x-ownership: own orders only
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/OrderStatus' } }
+        - { name: sort, in: query, schema: { type: string, enum: [due_date, created_at] } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: One page of orders
+          content: { application/json: { schema: { $ref: '#/components/schemas/OrderPage' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Create an order from a profile
+      x-audit: order_create
+      x-roles: [tailor]
+      x-ownership: own clients only
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/OrderInput' } } }
+      responses:
+        '201':
+          description: The new order
+          content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /orders/{order_id}:
+    parameters:
+      - { $ref: '#/components/parameters/OrderId' }
+    get:
+      operationId: getOrder
+      tags: [orders]
+      summary: One order
+      x-roles: [tailor]
+      x-ownership: own orders only
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Order
+          content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: updateOrder
+      tags: [orders]
+      summary: Change status, due date, notes or items
+      x-audit: status_change, order_update or override
+      x-roles: [tailor]
+      x-ownership: own orders only
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/OrderUpdate' } } }
+      responses:
+        '200':
+          description: Updated order
+          content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: deleteOrder
+      tags: [orders]
+      summary: Delete an order that is still new
+      x-audit: order_delete
+      x-roles: [tailor]
+      x-ownership: own orders only
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /ease-suggestions:
+    get:
+      operationId: getEaseSuggestions
+      tags: [orders]
+      summary: Suggested ease per site, with where each value came from
+      x-roles: [tailor]
+      x-ownership: own clients only
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: client_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: profile_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: garment_type, in: query, required: true, schema: { $ref: '#/components/schemas/GarmentType' } }
+      responses:
+        '200':
+          description: Suggestions
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/EaseSuggestion' } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /orders/{order_id}/sheets:
+    parameters:
+      - { $ref: '#/components/parameters/OrderId' }
+    post:
+      operationId: createSheet
+      tags: [sheets]
+      summary: Generate a specification sheet
+      x-audit: export
+      x-roles: [tailor]
+      x-ownership: own orders only
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SheetInput' } } }
+      responses:
+        '201':
+          description: The sheet, with links that expire after 10 minutes
+          content: { application/json: { schema: { $ref: '#/components/schemas/Sheet' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /files/sheets/{sheet_file}:
+    get:
+      operationId: getSheetFile
+      tags: [sheets]
+      summary: Download a sheet through a signed link
+      description: The only binary responses in the API. They are server-rendered sheets, never client photos.
+      parameters:
+        - name: sheet_file
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9a-f-]{36}\.(png|pdf)$'
+        - { name: exp, in: query, required: true, schema: { type: integer } }
+        - { name: sig, in: query, required: true, schema: { type: string, pattern: '^[0-9a-f]{64}$' } }
+      responses:
+        '200':
+          description: The file
+          content:
+            image/png: { schema: { type: string, format: binary } }
+            application/pdf: { schema: { type: string, format: binary } }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /sheets/{sheet_id}/shares:
+    post:
+      operationId: logShare
+      tags: [sheets]
+      summary: Record that a sheet was shared
+      x-audit: share
+      x-roles: [tailor]
+      x-ownership: own orders only
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: sheet_id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ShareInput' } } }
+      responses:
+        '204': { description: Recorded }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /audit:
+    get:
+      operationId: listAudit
+      tags: [audit]
+      summary: Audit log. Tailors and measurers see only their own actions
+      x-roles: [tailor, admin, measurer]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: user, in: query, schema: { type: string, format: uuid } }
+        - { name: action, in: query, schema: { $ref: '#/components/schemas/AuditAction' } }
+        - { name: entity_type, in: query, schema: { type: string, maxLength: 40 } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: One page of audit entries
+          content: { application/json: { schema: { $ref: '#/components/schemas/AuditPage' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+  /admin/audit.csv:
+    get:
+      operationId: exportAudit
+      tags: [admin]
+      summary: Export the audit log as CSV
+      x-audit: export
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: user, in: query, schema: { type: string, format: uuid } }
+        - { name: action, in: query, schema: { $ref: '#/components/schemas/AuditAction' } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+      responses:
+        '200':
+          description: CSV file
+          content: { text/csv: { schema: { type: string } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /admin/accounts:
+    get:
+      operationId: listAccounts
+      tags: [admin]
+      summary: List accounts
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/AccountStatus' } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: One page of accounts
+          content: { application/json: { schema: { $ref: '#/components/schemas/AccountPage' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /admin/accounts/{user_id}/approve:
+    parameters:
+      - { $ref: '#/components/parameters/UserId' }
+    post:
+      operationId: approveAccount
+      tags: [admin]
+      summary: Approve an account
+      x-audit: approve
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Updated account
+          content: { application/json: { schema: { $ref: '#/components/schemas/Account' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /admin/accounts/{user_id}/reject:
+    parameters:
+      - { $ref: '#/components/parameters/UserId' }
+    post:
+      operationId: rejectAccount
+      tags: [admin]
+      summary: Reject an account, with a reason
+      x-audit: account_reject
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RejectInput' } } }
+      responses:
+        '200':
+          description: Updated account
+          content: { application/json: { schema: { $ref: '#/components/schemas/Account' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /admin/accounts/{user_id}/disable:
+    parameters:
+      - { $ref: '#/components/parameters/UserId' }
+    post:
+      operationId: disableAccount
+      tags: [admin]
+      summary: Disable an account
+      x-audit: account_disable
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Updated account
+          content: { application/json: { schema: { $ref: '#/components/schemas/Account' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /admin/accounts/{user_id}/enable:
+    parameters:
+      - { $ref: '#/components/parameters/UserId' }
+    post:
+      operationId: enableAccount
+      tags: [admin]
+      summary: Re-enable an account
+      x-audit: account_enable
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Updated account
+          content: { application/json: { schema: { $ref: '#/components/schemas/Account' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /admin/measurers:
+    post:
+      operationId: createMeasurer
+      tags: [admin]
+      summary: Create a measurer account
+      x-audit: account_create
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/MeasurerInput' } } }
+      responses:
+        '201':
+          description: The new account
+          content: { application/json: { schema: { $ref: '#/components/schemas/Account' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /admin/settings:
+    get:
+      operationId: getAdminSettings
+      tags: [admin]
+      summary: Read retention, study, rules and approvals settings
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Settings
+          content: { application/json: { schema: { $ref: '#/components/schemas/AdminSettings' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+    put:
+      operationId: putAdminSettings
+      tags: [admin]
+      summary: Change retention, study, rules and approvals settings
+      x-audit: settings_change
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AdminSettingsInput' } } }
+      responses:
+        '200':
+          description: Saved settings
+          content: { application/json: { schema: { $ref: '#/components/schemas/AdminSettings' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /admin/deletion-requests:
+    get:
+      operationId: listDeletionRequests
+      tags: [admin]
+      summary: Status of client deletion requests
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Requests
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/DeletionRequest' } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /admin/rules:
+    get:
+      operationId: listRules
+      tags: [admin]
+      summary: List rules versions with their freeze status
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Rules versions
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/RulesSummary' } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: registerRules
+      tags: [admin]
+      summary: Register a draft rules artifact
+      x-audit: rules_register
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RulesArtifact' } } }
+      responses:
+        '201':
+          description: Registered
+          content: { application/json: { schema: { $ref: '#/components/schemas/RulesSummary' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /admin/rules/{version}/freeze:
+    post:
+      operationId: freezeRules
+      tags: [admin]
+      summary: Freeze a rules version. This cannot be undone
+      x-audit: rules_freeze
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: version, in: path, required: true, schema: { $ref: '#/components/schemas/RulesVersion' } }
+      responses:
+        '200':
+          description: Frozen
+          content: { application/json: { schema: { $ref: '#/components/schemas/RulesSummary' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /admin/rederive:
+    post:
+      operationId: rederive
+      tags: [admin]
+      summary: Recompute a cohort's profiles under a rules version, into a separate table
+      x-audit: rederive
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: rules_version, in: query, required: true, schema: { $ref: '#/components/schemas/RulesVersion' } }
+        - { name: cohort, in: query, required: true, schema: { $ref: '#/components/schemas/Cohort' } }
+      responses:
+        '200':
+          description: How many profiles were recomputed
+          content: { application/json: { schema: { $ref: '#/components/schemas/RederiveResult' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /admin/study/reference-readings:
+    get:
+      operationId: listReferenceReadings
+      tags: [study]
+      summary: Tape readings for one participant, for the admin only
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: participant_code, in: query, required: true, schema: { $ref: '#/components/schemas/ParticipantCode' } }
+      responses:
+        '200':
+          description: Readings, with any corrections
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/ReferenceReading' } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /admin/study/reference-readings/{ref_id}/corrections:
+    post:
+      operationId: correctReferenceReading
+      tags: [study]
+      summary: Correct a tape-reading typo. The original reading stays on record
+      x-audit: reference_correction
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: ref_id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ReadingCorrectionInput' } } }
+      responses:
+        '201':
+          description: The reading with its correction
+          content: { application/json: { schema: { $ref: '#/components/schemas/ReferenceReading' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /study/participants:
+    get:
+      operationId: listParticipants
+      tags: [study]
+      summary: List participants and how complete their data is
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Participants
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Participant' } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: enrolParticipant
+      tags: [study]
+      summary: Enrol a participant. Refused in production until approvals exist
+      x-audit: participant_create
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ParticipantInput' } } }
+      responses:
+        '201':
+          description: Enrolled
+          content: { application/json: { schema: { $ref: '#/components/schemas/Participant' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /study/participants/{participant_id}:
+    patch:
+      operationId: updateParticipant
+      tags: [study]
+      summary: Change a participant's details. The cohort locks once readings exist
+      x-audit: participant_update
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: participant_id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ParticipantUpdate' } } }
+      responses:
+        '200':
+          description: Updated
+          content: { application/json: { schema: { $ref: '#/components/schemas/Participant' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /study/reference-readings:
+    post:
+      operationId: submitReferenceReadings
+      tags: [study]
+      summary: Save one measurer's tape readings. Refused in production until approvals exist
+      x-audit: reference_entry
+      x-roles: [measurer]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ReferenceReadingInput' } } }
+      responses:
+        '201':
+          description: Saved and locked
+          content: { application/json: { schema: { $ref: '#/components/schemas/ReferenceReadingReceipt' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /study/reference-readings/mine:
+    get:
+      operationId: listMyReferenceReadings
+      tags: [study]
+      summary: The caller's own readings. Never includes system values or other measurers' readings
+      x-roles: [measurer]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: participant_code, in: query, required: true, schema: { $ref: '#/components/schemas/ParticipantCode' } }
+      responses:
+        '200':
+          description: Readings
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/OwnReading' } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /study/export/captures.csv:
+    get:
+      operationId: exportCaptures
+      tags: [study]
+      summary: Export capture records as CSV
+      x-audit: export
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: rules_version, in: query, schema: { $ref: '#/components/schemas/RulesVersion' } }
+      responses:
+        '200':
+          description: CSV file
+          content: { text/csv: { schema: { type: string } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /study/export/reference.csv:
+    get:
+      operationId: exportReference
+      tags: [study]
+      summary: Export tape readings as CSV
+      x-audit: export
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: CSV file
+          content: { text/csv: { schema: { type: string } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    Page: { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+    PageSize: { name: page_size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+    ClientId: { name: client_id, in: path, required: true, schema: { type: string, format: uuid } }
+    OrderId: { name: order_id, in: path, required: true, schema: { type: string, format: uuid } }
+    UserId: { name: user_id, in: path, required: true, schema: { type: string, format: uuid } }
+  responses:
+    Problem:
+      description: An RFC 9457 error, with a stable code from error-codes.json
+      content:
+        application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } }
+  schemas:
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, maxLength: 256 }
+        title: { type: string, maxLength: 256 }
+        status: { type: integer }
+        code: { type: string, maxLength: 64 }
+        detail: { type: string, maxLength: 1000 }
+        errors:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [field, code]
+            properties:
+              field: { type: string, maxLength: 256 }
+              code: { type: string, maxLength: 64 }
+        server_version: { type: integer, minimum: 1 }
+        conflict_id: { type: string, format: uuid }
+    Status:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [ok, unavailable] }
+
+    SiteCode: { type: string, enum: [stature, shoulder, chest, waist, hip, sleeve, outleg, inleg, neck] }
+    Flag: { type: string, enum: [pass, check, fail] }
+    FlagReason:
+      type: string
+      enum:
+        - scale_disagree
+        - level_unchecked
+        - loose_clothing
+        - landmark_low
+        - mask_gap
+        - out_of_range
+        - crotch_not_found
+        - marker_weak
+        - waist_level_mismatch
+        - chest_level_mismatch
+        - view_failed
+    CheckState: { type: string, enum: [pass, fail, skipped] }
+    ClientCode: { type: string, pattern: '^[A-Z]{2}[0-9]{4}$' }
+    ParticipantCode: { type: string, pattern: '^P[0-9]{3}$' }
+    RulesVersion: { type: string, pattern: '^[0-9]+\.[0-9]+-[a-z0-9-]+$', maxLength: 40 }
+    Locale: { type: string, enum: [en, sw] }
+    Unit: { type: string, enum: [cm, in] }
+    Role: { type: string, enum: [tailor, admin, measurer] }
+    AccountStatus: { type: string, enum: [pending, active, disabled, rejected] }
+    Cohort: { type: string, enum: [pilot, calibration, test] }
+    Sex: { type: string, enum: [female, male, unspecified] }
+    ClothingFit: { type: string, enum: [fitted, loose] }
+    GarmentType: { type: string, enum: [shirt, dress, trousers, suit_jacket, skirt, other] }
+    OrderStatus: { type: string, enum: [new, cutting, fitting, ready, collected] }
+    SyncStatus: { type: string, enum: [pending, synced, conflict, rejected] }
+    ProfileStatus: { type: string, enum: [final, conflict, superseded, deleted] }
+    AuditAction:
+      type: string
+      enum:
+        - register
+        - login
+        - login_failed
+        - logout
+        - settings_change
+        - profile_ingest
+        - profile_view
+        - deletion_request
+        - access_request
+        - deletion
+        - code_issue
+        - code_rotate
+        - client_update
+        - conflict_resolve
+        - order_create
+        - order_update
+        - order_delete
+        - status_change
+        - override
+        - export
+        - share
+        - approve
+        - account_reject
+        - account_disable
+        - account_enable
+        - account_create
+        - rules_register
+        - rules_freeze
+        - rederive
+        - participant_create
+        - participant_update
+        - reference_entry
+        - reference_correction
+
+    PublicSettings:
+      type: object
+      additionalProperties: false
+      required: [study_mode, consent_version, min_app_version, current_rules_version]
+      properties:
+        study_mode: { type: boolean }
+        consent_version: { type: string, maxLength: 20 }
+        min_app_version: { type: string, maxLength: 20 }
+        current_rules_version: { $ref: '#/components/schemas/RulesVersion' }
+    ClientCodeCheck:
+      type: object
+      additionalProperties: false
+      required: [valid, tailor_business_name, height_mm]
+      properties:
+        valid: { type: boolean, const: true }
+        tailor_business_name: { type: string, maxLength: 120 }
+        height_mm: { type: [integer, 'null'], minimum: 1200, maximum: 2200 }
+
+    Landmark:
+      type: object
+      additionalProperties: false
+      required: [x, y, z, visibility]
+      properties:
+        x: { type: number, minimum: -0.5, maximum: 1.5 }
+        y: { type: number, minimum: -0.5, maximum: 1.5 }
+        z: { type: number }
+        visibility: { type: number, minimum: 0, maximum: 1 }
+    LandmarkSet:
+      type: array
+      minItems: 33
+      maxItems: 33
+      items: { $ref: '#/components/schemas/Landmark' }
+    MarkerObs:
+      type: object
+      additionalProperties: false
+      required: [corners, image_w, image_h, side_px, confidence]
+      properties:
+        corners:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items: { type: number, minimum: 0 }
+        image_w: { type: integer, minimum: 1 }
+        image_h: { type: integer, minimum: 1 }
+        side_px: { type: number, minimum: 0 }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+    MmProfile:
+      description: 101 samples from the top (0) to the bottom (100) of the mask. Null where undefined.
+      type: array
+      minItems: 101
+      maxItems: 101
+      items: { type: [number, 'null'], minimum: 0, maximum: 400 }
+    SilhouetteFront:
+      type: object
+      additionalProperties: false
+      required: [samples, mask_top_px, mask_bottom_px, image_w, image_h, half_width_mm, crotch_y_px]
+      properties:
+        samples: { type: integer, const: 101 }
+        mask_top_px: { type: number, minimum: 0 }
+        mask_bottom_px: { type: number, minimum: 0 }
+        image_w: { type: integer, minimum: 1 }
+        image_h: { type: integer, minimum: 1 }
+        half_width_mm: { $ref: '#/components/schemas/MmProfile' }
+        centre_x_px:
+          description: Torso centre line in pixels, so the millimetre limit does not apply.
+          type: array
+          minItems: 101
+          maxItems: 101
+          items: { type: [number, 'null'], minimum: 0 }
+        crotch_y_px: { type: [number, 'null'], minimum: 0 }
+    SilhouetteSide:
+      type: object
+      additionalProperties: false
+      required: [samples, mask_top_px, mask_bottom_px, image_w, image_h, half_depth_mm, anterior_mm]
+      properties:
+        samples: { type: integer, const: 101 }
+        mask_top_px: { type: number, minimum: 0 }
+        mask_bottom_px: { type: number, minimum: 0 }
+        image_w: { type: integer, minimum: 1 }
+        image_h: { type: integer, minimum: 1 }
+        half_depth_mm: { $ref: '#/components/schemas/MmProfile' }
+        anterior_mm: { $ref: '#/components/schemas/MmProfile' }
+    ViewChecks:
+      type: object
+      additionalProperties: false
+      required: [level, frame, distance, symmetry, arms, marker, light, sharpness]
+      properties:
+        level: { $ref: '#/components/schemas/CheckState' }
+        frame: { $ref: '#/components/schemas/CheckState' }
+        distance: { $ref: '#/components/schemas/CheckState' }
+        symmetry: { $ref: '#/components/schemas/CheckState' }
+        arms: { $ref: '#/components/schemas/CheckState' }
+        marker: { $ref: '#/components/schemas/CheckState' }
+        light: { $ref: '#/components/schemas/CheckState' }
+        sharpness: { $ref: '#/components/schemas/CheckState' }
+    StudyBlock:
+      type: object
+      additionalProperties: false
+      required: [participant_code, set_no, lighting, distance_m, clothing_fit_observed]
+      properties:
+        participant_code: { $ref: '#/components/schemas/ParticipantCode' }
+        set_no: { type: integer, minimum: 1, maximum: 3 }
+        lighting: { type: string, enum: [window, lamp, outdoor] }
+        distance_m: { type: number, minimum: 1.5, maximum: 3.5 }
+        clothing_fit_observed: { $ref: '#/components/schemas/ClothingFit' }
+        lux: { type: integer, minimum: 0 }
+    CaptureSession:
+      type: object
+      additionalProperties: false
+      required:
+        - session_id
+        - started_at
+        - capture_mode
+        - camera_facing
+        - guidance_mode
+        - free_arm
+        - app_version
+        - device_model
+        - os
+        - browser
+        - memory_gb
+        - model_variant
+        - stream_w
+        - stream_h
+        - still_source
+        - level_unchecked
+        - capture_fallback
+        - front_checks
+        - side_checks
+        - scale_front_mm_px
+        - scale_side_mm_px
+        - scale_stature_mm_px
+        - scale_disagreement_pct
+        - processing_ms
+        - retake_count
+        - config_hash
+      properties:
+        session_id: { type: string, format: uuid }
+        started_at: { type: string, format: date-time }
+        capture_mode: { type: string, enum: [self, assisted] }
+        camera_facing: { type: string, enum: [environment, user] }
+        guidance_mode: { type: string, enum: [voice, visual] }
+        free_arm:
+          description: The arm not holding the sheet in the front view (A14). Null if it could not be told apart.
+          type: [string, 'null']
+          enum: [left, right, null]
+        app_version: { type: string, maxLength: 20 }
+        device_model: { type: string, maxLength: 64 }
+        os: { type: string, maxLength: 64 }
+        browser: { type: string, maxLength: 64 }
+        memory_gb: { type: [number, 'null'], minimum: 0 }
+        model_variant: { type: string, enum: [lite, full, heavy] }
+        stream_w: { type: integer, minimum: 1 }
+        stream_h: { type: integer, minimum: 1 }
+        still_source: { type: string, enum: [imagecapture, canvas, file] }
+        level_unchecked: { type: boolean }
+        capture_fallback: { type: boolean }
+        front_checks: { $ref: '#/components/schemas/ViewChecks' }
+        side_checks: { $ref: '#/components/schemas/ViewChecks' }
+        scale_front_mm_px: { type: number, exclusiveMinimum: 0 }
+        scale_side_mm_px: { type: number, exclusiveMinimum: 0 }
+        scale_stature_mm_px: { type: number, exclusiveMinimum: 0 }
+        scale_disagreement_pct: { type: number, minimum: 0 }
+        processing_ms: { type: integer, minimum: 0 }
+        retake_count: { type: integer, minimum: 0 }
+        config_hash: { type: string, maxLength: 80 }
+        study: { $ref: '#/components/schemas/StudyBlock' }
+    Measurement:
+      description: In an auto row, value_mm is null if and only if the flag is fail (C4).
+      type: object
+      additionalProperties: false
+      required: [site_code, value_mm, method, confidence_flag, flag_reasons]
+      properties:
+        site_code: { $ref: '#/components/schemas/SiteCode' }
+        value_mm: { type: [integer, 'null'], minimum: 100, maximum: 3000 }
+        method: { type: string, enum: [auto, override] }
+        confidence_flag: { $ref: '#/components/schemas/Flag' }
+        flag_reasons: { type: array, items: { $ref: '#/components/schemas/FlagReason' } }
+        correction_factor: { type: number, exclusiveMinimum: 0 }
+        level_fraction: { type: number }
+        half_width_mm: { type: number, minimum: 0 }
+        half_depth_mm: { type: number, minimum: 0 }
+    ConsentRecord:
+      type: object
+      additionalProperties: false
+      required: [consent_version, language, scope, given_at]
+      properties:
+        consent_version: { type: string, maxLength: 20 }
+        language: { $ref: '#/components/schemas/Locale' }
+        scope:
+          type: array
+          items: { type: string, enum: [measure, measurements_only, retention, study_paper] }
+        given_at: { type: string, format: date-time }
+        withdrawn_at: { type: string, format: date-time }
+    Covariates:
+      type: object
+      additionalProperties: false
+      required: [height_mm_entered, sex, clothing_fit, code_verified]
+      properties:
+        height_mm_entered: { type: integer, minimum: 1200, maximum: 2200 }
+        sex: { $ref: '#/components/schemas/Sex' }
+        clothing_fit: { $ref: '#/components/schemas/ClothingFit' }
+        code_verified: { type: boolean }
+    MeasurementProfilePayload:
+      type: object
+      additionalProperties: false
+      required:
+        - profile_id
+        - client_code
+        - version
+        - captured_at
+        - status
+        - rules_version
+        - covariates
+        - consent
+        - session
+        - landmarks_front
+        - landmarks_side
+        - marker_front
+        - marker_side
+        - silhouette_front
+        - silhouette_side
+        - measurements
+      properties:
+        profile_id: { type: string, format: uuid }
+        client_code: { $ref: '#/components/schemas/ClientCode' }
+        version: { type: integer, minimum: 1 }
+        captured_at: { type: string, format: date-time }
+        status: { type: string, const: final }
+        rules_version: { $ref: '#/components/schemas/RulesVersion' }
+        covariates: { $ref: '#/components/schemas/Covariates' }
+        consent: { $ref: '#/components/schemas/ConsentRecord' }
+        session: { $ref: '#/components/schemas/CaptureSession' }
+        landmarks_front: { $ref: '#/components/schemas/LandmarkSet' }
+        landmarks_side: { $ref: '#/components/schemas/LandmarkSet' }
+        marker_front: { $ref: '#/components/schemas/MarkerObs' }
+        marker_side: { $ref: '#/components/schemas/MarkerObs' }
+        silhouette_front: { $ref: '#/components/schemas/SilhouetteFront' }
+        silhouette_side: { $ref: '#/components/schemas/SilhouetteSide' }
+        measurements:
+          type: array
+          minItems: 9
+          maxItems: 9
+          items: { $ref: '#/components/schemas/Measurement' }
+    ServerCheck:
+      type: object
+      additionalProperties: false
+      required: [kind, severity, site_code, detail]
+      properties:
+        kind:
+          type: string
+          enum:
+            - unusual_proportion
+            - outlier_profile
+            - change_since_last
+            - client_server_mismatch
+            - rules_version_unknown
+            - stale_rules
+            - height_mismatch
+        severity: { type: string, enum: [info, check] }
+        site_code:
+          oneOf:
+            - { $ref: '#/components/schemas/SiteCode' }
+            - { type: 'null' }
+        detail:
+          description: Machine-readable numbers. The UI builds the words in the reader's language.
+          type: object
+          additionalProperties: { type: [number, string], maxLength: 64 }
+    ProfileAccepted:
+      type: object
+      additionalProperties: false
+      required: [profile_id, version, server_checks]
+      properties:
+        profile_id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        server_checks: { type: array, items: { $ref: '#/components/schemas/ServerCheck' } }
+    MeasurementProfile:
+      type: object
+      additionalProperties: false
+      required:
+        - profile_id
+        - client_id
+        - client_code
+        - version
+        - captured_at
+        - received_at
+        - status
+        - rules_version
+        - covariates
+        - consent
+        - session
+        - landmarks_front
+        - landmarks_side
+        - marker_front
+        - marker_side
+        - silhouette_front
+        - silhouette_side
+        - measurements
+        - server_checks
+      properties:
+        profile_id: { type: string, format: uuid }
+        client_id: { type: string, format: uuid }
+        client_code: { $ref: '#/components/schemas/ClientCode' }
+        version: { type: integer, minimum: 1 }
+        captured_at: { type: string, format: date-time }
+        received_at: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/ProfileStatus' }
+        rules_version: { $ref: '#/components/schemas/RulesVersion' }
+        covariates: { $ref: '#/components/schemas/Covariates' }
+        consent: { $ref: '#/components/schemas/ConsentRecord' }
+        session: { $ref: '#/components/schemas/CaptureSession' }
+        landmarks_front: { $ref: '#/components/schemas/LandmarkSet' }
+        landmarks_side: { $ref: '#/components/schemas/LandmarkSet' }
+        marker_front: { $ref: '#/components/schemas/MarkerObs' }
+        marker_side: { $ref: '#/components/schemas/MarkerObs' }
+        silhouette_front:
+          oneOf:
+            - { $ref: '#/components/schemas/SilhouetteFront' }
+            - { type: 'null' }
+        silhouette_side:
+          oneOf:
+            - { $ref: '#/components/schemas/SilhouetteSide' }
+            - { type: 'null' }
+        measurements: { type: array, items: { $ref: '#/components/schemas/Measurement' } }
+        server_checks: { type: array, items: { $ref: '#/components/schemas/ServerCheck' } }
+    FlagCounts:
+      type: object
+      additionalProperties: false
+      required: [pass, check, fail]
+      properties:
+        pass: { type: integer, minimum: 0 }
+        check: { type: integer, minimum: 0 }
+        fail: { type: integer, minimum: 0 }
+    ProfileSummary:
+      type: object
+      additionalProperties: false
+      required: [profile_id, version, captured_at, status, capture_mode, flag_counts, server_check_count]
+      properties:
+        profile_id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        captured_at: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/ProfileStatus' }
+        capture_mode: { type: string, enum: [self, assisted] }
+        flag_counts: { $ref: '#/components/schemas/FlagCounts' }
+        server_check_count: { type: integer, minimum: 0 }
+    Conflict:
+      type: object
+      additionalProperties: false
+      required: [conflict_id, client_id, client_code, server_profile, incoming_profile, created_at, resolved_at, resolution]
+      properties:
+        conflict_id: { type: string, format: uuid }
+        client_id: { type: string, format: uuid }
+        client_code: { $ref: '#/components/schemas/ClientCode' }
+        server_profile: { $ref: '#/components/schemas/ConflictSide' }
+        incoming_profile: { $ref: '#/components/schemas/ConflictSide' }
+        created_at: { type: string, format: date-time }
+        resolved_at: { type: [string, 'null'], format: date-time }
+        resolution: { type: [string, 'null'], enum: [newer, server, null] }
+    ConflictSide:
+      type: object
+      additionalProperties: false
+      required: [profile_id, version, captured_at, measurements]
+      properties:
+        profile_id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        captured_at: { type: string, format: date-time }
+        measurements: { type: array, items: { $ref: '#/components/schemas/Measurement' } }
+    ConflictResolution:
+      type: object
+      additionalProperties: false
+      required: [keep]
+      properties:
+        keep: { type: string, enum: [newer, server] }
+    DeletionRequestInput:
+      type: object
+      additionalProperties: false
+      required: [client_code, profile_ids, reason]
+      properties:
+        client_code: { $ref: '#/components/schemas/ClientCode' }
+        profile_ids:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items: { type: string, format: uuid }
+        reason: { type: string, enum: [delete, withdraw_consent] }
+    DeletionStatus: { type: string, enum: [received, partially_done, done, rejected] }
+    DeletionRequestReceipt:
+      type: object
+      additionalProperties: false
+      required: [request_id, status]
+      properties:
+        request_id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/DeletionStatus' }
+        note: { type: string, maxLength: 256 }
+    DeletionRequest:
+      type: object
+      additionalProperties: false
+      required: [request_id, reason, received_at, status, completed_at]
+      properties:
+        request_id: { type: string, format: uuid }
+        reason: { type: string, enum: [delete, withdraw_consent] }
+        received_at: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/DeletionStatus' }
+        completed_at: { type: [string, 'null'], format: date-time }
+        note: { type: string, maxLength: 256 }
+    AccessRequestInput:
+      type: object
+      additionalProperties: false
+      required: [client_code, profile_ids]
+      properties:
+        client_code: { $ref: '#/components/schemas/ClientCode' }
+        profile_ids:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items: { type: string, format: uuid }
+    ClientDataExport:
+      type: object
+      additionalProperties: false
+      required: [client_code, profiles, consents, order_count]
+      properties:
+        client_code: { $ref: '#/components/schemas/ClientCode' }
+        profiles: { type: array, items: { $ref: '#/components/schemas/MeasurementProfile' } }
+        consents: { type: array, items: { $ref: '#/components/schemas/ConsentRecord' } }
+        order_count: { type: integer, minimum: 0 }
+
+    RegisterInput:
+      type: object
+      additionalProperties: false
+      required: [email, password, business_name, phone, area, locale]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 10, maxLength: 256 }
+        business_name: { type: string, minLength: 1, maxLength: 120 }
+        phone: { type: string, pattern: '^\+2547[0-9]{8}$|^\+2541[0-9]{8}$|^0[17][0-9]{8}$' }
+        area: { type: string, maxLength: 120 }
+        locale: { $ref: '#/components/schemas/Locale' }
+    RegisterResult:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, const: pending }
+    LoginInput:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, maxLength: 256 }
+    LoginResult:
+      type: object
+      additionalProperties: false
+      required: [access_token, expires_at, user]
+      properties:
+        access_token: { type: string, maxLength: 2048 }
+        expires_at: { type: string, format: date-time }
+        user: { $ref: '#/components/schemas/User' }
+    User:
+      type: object
+      additionalProperties: false
+      required: [user_id, email, role, status, locale, unit_pref]
+      properties:
+        user_id: { type: string, format: uuid }
+        email: { type: string, format: email, maxLength: 254 }
+        role: { $ref: '#/components/schemas/Role' }
+        status: { $ref: '#/components/schemas/AccountStatus' }
+        locale: { $ref: '#/components/schemas/Locale' }
+        unit_pref: { $ref: '#/components/schemas/Unit' }
+        business_name: { type: string, maxLength: 120 }
+        phone: { type: string, maxLength: 16 }
+        area: { type: string, maxLength: 120 }
+        measurer_code: { type: string, maxLength: 4 }
+    UserUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        business_name: { type: string, minLength: 1, maxLength: 120 }
+        phone: { type: string, pattern: '^\+2547[0-9]{8}$|^\+2541[0-9]{8}$|^0[17][0-9]{8}$' }
+        area: { type: string, maxLength: 120 }
+        locale: { $ref: '#/components/schemas/Locale' }
+        unit_pref: { $ref: '#/components/schemas/Unit' }
+    PasswordChange:
+      type: object
+      additionalProperties: false
+      required: [current_password, new_password]
+      properties:
+        current_password: { type: string, maxLength: 256 }
+        new_password: { type: string, minLength: 10, maxLength: 256 }
+
+    ClientInput:
+      type: object
+      additionalProperties: false
+      properties:
+        display_name: { type: [string, 'null'], maxLength: 60 }
+        height_mm: { type: [integer, 'null'], minimum: 1200, maximum: 2200 }
+    ClientCreated:
+      type: object
+      additionalProperties: false
+      required: [client_id, client_code, deep_link]
+      properties:
+        client_id: { type: string, format: uuid }
+        client_code: { $ref: '#/components/schemas/ClientCode' }
+        deep_link: { type: string, maxLength: 256 }
+    ClientCodeRotated:
+      type: object
+      additionalProperties: false
+      required: [client_code]
+      properties:
+        client_code: { $ref: '#/components/schemas/ClientCode' }
+    ClientSummary:
+      type: object
+      additionalProperties: false
+      required: [client_id, client_code, display_name, last_capture_at, flag_counts, open_orders, has_new, has_conflict]
+      properties:
+        client_id: { type: string, format: uuid }
+        client_code: { $ref: '#/components/schemas/ClientCode' }
+        display_name: { type: [string, 'null'], maxLength: 60 }
+        last_capture_at: { type: [string, 'null'], format: date-time }
+        flag_counts:
+          oneOf:
+            - { $ref: '#/components/schemas/FlagCounts' }
+            - { type: 'null' }
+        open_orders: { type: integer, minimum: 0 }
+        has_new: { type: boolean }
+        has_conflict: { type: boolean }
+    ClientDetail:
+      type: object
+      additionalProperties: false
+      required: [client_id, client_code, tailor_id, display_name, height_mm, created_at, deletion_requested]
+      properties:
+        client_id: { type: string, format: uuid }
+        client_code: { $ref: '#/components/schemas/ClientCode' }
+        tailor_id: { type: string, format: uuid }
+        display_name: { type: [string, 'null'], maxLength: 60 }
+        height_mm: { type: [integer, 'null'], minimum: 1200, maximum: 2200 }
+        created_at: { type: string, format: date-time }
+        deletion_requested: { type: boolean }
+
+    OrderItemInput:
+      type: object
+      additionalProperties: false
+      required: [site_code, body_mm, ease_mm, overridden]
+      properties:
+        site_code: { $ref: '#/components/schemas/SiteCode' }
+        body_mm: { type: [integer, 'null'], minimum: 100, maximum: 3000 }
+        ease_mm: { type: integer, minimum: 0, maximum: 300 }
+        overridden: { type: boolean }
+        override_reason: { type: string, maxLength: 256 }
+        flag_confirmed: { type: boolean }
+        pending_fitting: { type: boolean }
+    OrderItem:
+      type: object
+      additionalProperties: false
+      required: [site_code, body_mm, ease_mm, finished_mm, overridden, confidence_flag]
+      properties:
+        site_code: { $ref: '#/components/schemas/SiteCode' }
+        body_mm: { type: [integer, 'null'], minimum: 100, maximum: 3000 }
+        ease_mm: { type: integer, minimum: 0, maximum: 300 }
+        finished_mm: { type: [integer, 'null'], minimum: 100, maximum: 3300 }
+        overridden: { type: boolean }
+        override_reason: { type: string, maxLength: 256 }
+        flag_confirmed: { type: boolean }
+        pending_fitting: { type: boolean }
+        confidence_flag: { $ref: '#/components/schemas/Flag' }
+    OrderInput:
+      type: object
+      additionalProperties: false
+      required: [client_id, profile_id, garment_type, due_date, items]
+      properties:
+        client_id: { type: string, format: uuid }
+        profile_id: { type: string, format: uuid }
+        garment_type: { $ref: '#/components/schemas/GarmentType' }
+        due_date: { type: string, format: date }
+        notes: { type: string, maxLength: 1000 }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 9
+          items: { $ref: '#/components/schemas/OrderItemInput' }
+    OrderUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        due_date: { type: string, format: date }
+        notes: { type: string, maxLength: 1000 }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 9
+          items: { $ref: '#/components/schemas/OrderItemInput' }
+    Order:
+      type: object
+      additionalProperties: false
+      required:
+        - order_id
+        - order_no
+        - client_id
+        - client_code
+        - display_name
+        - profile_id
+        - profile_version
+        - garment_type
+        - status
+        - due_date
+        - notes
+        - items
+        - created_at
+        - updated_at
+        - status_history
+      properties:
+        order_id: { type: string, format: uuid }
+        order_no: { type: string, pattern: '^ORD-[0-9]{4,}$' }
+        client_id: { type: string, format: uuid }
+        client_code: { $ref: '#/components/schemas/ClientCode' }
+        display_name: { type: [string, 'null'], maxLength: 60 }
+        profile_id: { type: string, format: uuid }
+        profile_version: { type: integer, minimum: 1 }
+        garment_type: { $ref: '#/components/schemas/GarmentType' }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        due_date: { type: string, format: date }
+        notes: { type: string, maxLength: 1000 }
+        items: { type: array, items: { $ref: '#/components/schemas/OrderItem' } }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        status_history:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [status, at]
+            properties:
+              status: { $ref: '#/components/schemas/OrderStatus' }
+              at: { type: string, format: date-time }
+    OrderSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - order_id
+        - order_no
+        - client_id
+        - client_code
+        - display_name
+        - profile_version
+        - garment_type
+        - status
+        - due_date
+        - flagged_sites
+        - has_conflict
+      properties:
+        order_id: { type: string, format: uuid }
+        order_no: { type: string, pattern: '^ORD-[0-9]{4,}$' }
+        client_id: { type: string, format: uuid }
+        client_code: { $ref: '#/components/schemas/ClientCode' }
+        display_name: { type: [string, 'null'], maxLength: 60 }
+        profile_version: { type: integer, minimum: 1 }
+        garment_type: { $ref: '#/components/schemas/GarmentType' }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        due_date: { type: string, format: date }
+        flagged_sites: { type: integer, minimum: 0 }
+        has_conflict: { type: boolean }
+    EasePreset:
+      type: object
+      additionalProperties: false
+      required: [garment_type, site_code, ease_mm]
+      properties:
+        garment_type: { $ref: '#/components/schemas/GarmentType' }
+        site_code: { $ref: '#/components/schemas/SiteCode' }
+        ease_mm: { type: integer, minimum: 0, maximum: 300 }
+    EaseSuggestion:
+      type: object
+      additionalProperties: false
+      required: [site_code, ease_mm, source, n]
+      properties:
+        site_code: { $ref: '#/components/schemas/SiteCode' }
+        ease_mm: { type: integer, minimum: 0, maximum: 300 }
+        source: { type: string, enum: [history, preset, default] }
+        n: { type: integer, minimum: 0 }
+    SheetInput:
+      type: object
+      additionalProperties: false
+      required: [include_name]
+      properties:
+        include_name: { type: boolean }
+    Sheet:
+      type: object
+      additionalProperties: false
+      required: [sheet_id, png_url, pdf_url, share_text, generated_at]
+      properties:
+        sheet_id: { type: string, format: uuid }
+        png_url: { type: string, maxLength: 512 }
+        pdf_url: { type: string, maxLength: 512 }
+        share_text: { type: string, maxLength: 1500 }
+        generated_at: { type: string, format: date-time }
+    ShareInput:
+      type: object
+      additionalProperties: false
+      required: [via]
+      properties:
+        via: { type: string, enum: [whatsapp_share, wa_link, download, print] }
+    AuditEntry:
+      type: object
+      additionalProperties: false
+      required: [log_id, occurred_at, actor_type, user_email, role, action, entity_type, entity_id, summary]
+      properties:
+        log_id: { type: string, maxLength: 24 }
+        occurred_at: { type: string, format: date-time }
+        actor_type: { type: string, enum: [user, client, system] }
+        user_email: { type: [string, 'null'], maxLength: 254 }
+        role: { type: [string, 'null'], enum: [tailor, admin, measurer, null] }
+        action: { $ref: '#/components/schemas/AuditAction' }
+        entity_type: { type: string, maxLength: 40 }
+        entity_id: { type: string, maxLength: 64 }
+        summary: { type: string, maxLength: 256 }
+
+    Account:
+      type: object
+      additionalProperties: false
+      required: [user_id, email, role, status, created_at]
+      properties:
+        user_id: { type: string, format: uuid }
+        email: { type: string, format: email, maxLength: 254 }
+        role: { $ref: '#/components/schemas/Role' }
+        status: { $ref: '#/components/schemas/AccountStatus' }
+        business_name: { type: string, maxLength: 120 }
+        phone: { type: string, maxLength: 16 }
+        area: { type: string, maxLength: 120 }
+        measurer_code: { type: string, maxLength: 4 }
+        trained_on: { type: string, format: date }
+        created_at: { type: string, format: date-time }
+    RejectInput:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 256 }
+    MeasurerInput:
+      type: object
+      additionalProperties: false
+      required: [email, password, measurer_code, trained_on]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 10, maxLength: 256 }
+        measurer_code: { type: string, pattern: '^[A-Z]{1,4}$' }
+        trained_on: { type: string, format: date }
+    Approvals:
+      description: >
+        A9. Study writes are refused in production until the first five fields are filled and either
+        60 days have passed since dpia_submitted_on or odpc_response_on is recorded.
+      type: object
+      additionalProperties: false
+      required:
+        - ierc_ref
+        - nacosti_licence_no
+        - dpia_submitted_on
+        - approvals_confirmed_by
+        - confirmed_at
+        - odpc_response_on
+        - odpc_response_ref
+      properties:
+        ierc_ref: { type: [string, 'null'], maxLength: 80 }
+        nacosti_licence_no: { type: [string, 'null'], maxLength: 80 }
+        dpia_submitted_on: { type: [string, 'null'], format: date }
+        approvals_confirmed_by: { type: [string, 'null'], maxLength: 120 }
+        confirmed_at: { type: [string, 'null'], format: date-time }
+        odpc_response_on: { type: [string, 'null'], format: date }
+        odpc_response_ref: { type: [string, 'null'], maxLength: 80 }
+    AdminSettingsInput:
+      type: object
+      additionalProperties: false
+      properties:
+        retention_months: { type: integer, minimum: 1, maximum: 120 }
+        audit_retention_months: { type: integer, minimum: 1, maximum: 120 }
+        study_mode: { type: boolean }
+        study_collection_end: { type: [string, 'null'], format: date }
+        current_rules_version: { $ref: '#/components/schemas/RulesVersion' }
+        min_app_version: { type: string, maxLength: 20 }
+        approvals: { $ref: '#/components/schemas/Approvals' }
+    AdminSettings:
+      type: object
+      additionalProperties: false
+      required:
+        - retention_months
+        - audit_retention_months
+        - study_mode
+        - study_collection_end
+        - current_rules_version
+        - min_app_version
+        - consent_version
+        - approvals
+        - approvals_missing
+        - earliest_collection_date
+      properties:
+        retention_months: { type: integer, minimum: 1, maximum: 120 }
+        audit_retention_months: { type: integer, minimum: 1, maximum: 120 }
+        study_mode: { type: boolean }
+        study_collection_end: { type: [string, 'null'], format: date }
+        current_rules_version: { $ref: '#/components/schemas/RulesVersion' }
+        min_app_version: { type: string, maxLength: 20 }
+        consent_version: { type: string, maxLength: 20 }
+        approvals: { $ref: '#/components/schemas/Approvals' }
+        approvals_missing:
+          description: The approval fields still empty, for the admin banner.
+          type: array
+          items: { type: string, maxLength: 40 }
+        earliest_collection_date: { type: [string, 'null'], format: date }
+    RulesArtifact:
+      description: The full artifact is defined by packages/rules/schema.json.
+      type: object
+      additionalProperties: true
+      required: [rules_version, status, checksum]
+      properties:
+        rules_version: { $ref: '#/components/schemas/RulesVersion' }
+        status: { type: string, enum: [draft, frozen, retired] }
+        checksum: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+    RulesSummary:
+      type: object
+      additionalProperties: false
+      required: [rules_version, status, checksum, parent, frozen_at, created_at, is_current]
+      properties:
+        rules_version: { $ref: '#/components/schemas/RulesVersion' }
+        status: { type: string, enum: [draft, frozen, retired] }
+        checksum: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        parent: { type: [string, 'null'], maxLength: 40 }
+        frozen_at: { type: [string, 'null'], format: date-time }
+        created_at: { type: string, format: date-time }
+        is_current: { type: boolean }
+    RederiveResult:
+      type: object
+      additionalProperties: false
+      required: [rules_version, cohort, profiles_processed]
+      properties:
+        rules_version: { $ref: '#/components/schemas/RulesVersion' }
+        cohort: { $ref: '#/components/schemas/Cohort' }
+        profiles_processed: { type: integer, minimum: 0 }
+
+    Participant:
+      type: object
+      additionalProperties: false
+      required: [participant_id, participant_code, client_code, sex, age_band, venue, cohort, enrolled_at, sets_captured, readings_entered]
+      properties:
+        participant_id: { type: string, format: uuid }
+        participant_code: { $ref: '#/components/schemas/ParticipantCode' }
+        client_code: { $ref: '#/components/schemas/ClientCode' }
+        sex: { $ref: '#/components/schemas/Sex' }
+        age_band: { $ref: '#/components/schemas/AgeBand' }
+        venue: { type: string, maxLength: 80 }
+        cohort: { $ref: '#/components/schemas/Cohort' }
+        enrolled_at: { type: string, format: date-time }
+        sets_captured: { type: integer, minimum: 0, maximum: 3 }
+        readings_entered: { type: integer, minimum: 0, maximum: 4 }
+    AgeBand: { type: string, enum: ['18-24', '25-34', '35-44', '45-54', '55+'] }
+    ParticipantInput:
+      type: object
+      additionalProperties: false
+      required: [participant_code, sex, age_band, venue]
+      properties:
+        participant_code: { $ref: '#/components/schemas/ParticipantCode' }
+        sex: { $ref: '#/components/schemas/Sex' }
+        age_band: { $ref: '#/components/schemas/AgeBand' }
+        venue: { type: string, maxLength: 80 }
+    ParticipantUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        sex: { $ref: '#/components/schemas/Sex' }
+        age_band: { $ref: '#/components/schemas/AgeBand' }
+        venue: { type: string, maxLength: 80 }
+        cohort: { $ref: '#/components/schemas/Cohort' }
+    SiteValues:
+      description: Millimetres per site, for all nine sites.
+      type: object
+      additionalProperties: false
+      required: [stature, shoulder, chest, waist, hip, sleeve, outleg, inleg, neck]
+      properties:
+        stature: { type: integer, minimum: 100, maximum: 3000 }
+        shoulder: { type: integer, minimum: 100, maximum: 3000 }
+        chest: { type: integer, minimum: 100, maximum: 3000 }
+        waist: { type: integer, minimum: 100, maximum: 3000 }
+        hip: { type: integer, minimum: 100, maximum: 3000 }
+        sleeve: { type: integer, minimum: 100, maximum: 3000 }
+        outleg: { type: integer, minimum: 100, maximum: 3000 }
+        inleg: { type: integer, minimum: 100, maximum: 3000 }
+        neck: { type: integer, minimum: 100, maximum: 3000 }
+    ReferenceReadingInput:
+      type: object
+      additionalProperties: false
+      required: [participant_code, reading_no, values, taken_at]
+      properties:
+        participant_code: { $ref: '#/components/schemas/ParticipantCode' }
+        reading_no: { type: integer, enum: [1, 2] }
+        values: { $ref: '#/components/schemas/SiteValues' }
+        taken_at: { type: string, format: date-time }
+    ReferenceReadingReceipt:
+      type: object
+      additionalProperties: false
+      required: [participant_code, reading_no, measurer_code, out_of_order]
+      properties:
+        participant_code: { $ref: '#/components/schemas/ParticipantCode' }
+        reading_no: { type: integer, enum: [1, 2] }
+        measurer_code: { type: string, maxLength: 4 }
+        out_of_order: { type: boolean }
+    OwnReading:
+      type: object
+      additionalProperties: false
+      required: [participant_code, reading_no, site_code, value_mm, taken_at]
+      properties:
+        participant_code: { $ref: '#/components/schemas/ParticipantCode' }
+        reading_no: { type: integer, enum: [1, 2] }
+        site_code: { $ref: '#/components/schemas/SiteCode' }
+        value_mm: { type: integer, minimum: 100, maximum: 3000 }
+        taken_at: { type: string, format: date-time }
+    ReferenceReading:
+      type: object
+      additionalProperties: false
+      required: [ref_id, participant_code, measurer_code, reading_no, site_code, value_mm, taken_at, out_of_order, correction]
+      properties:
+        ref_id: { type: string, format: uuid }
+        participant_code: { $ref: '#/components/schemas/ParticipantCode' }
+        measurer_code: { type: string, maxLength: 4 }
+        reading_no: { type: integer, enum: [1, 2] }
+        site_code: { $ref: '#/components/schemas/SiteCode' }
+        value_mm: { type: integer, minimum: 100, maximum: 3000 }
+        taken_at: { type: string, format: date-time }
+        out_of_order: { type: boolean }
+        correction:
+          oneOf:
+            - { $ref: '#/components/schemas/ReadingCorrection' }
+            - { type: 'null' }
+    ReadingCorrection:
+      type: object
+      additionalProperties: false
+      required: [value_mm, reason, corrected_at]
+      properties:
+        value_mm: { type: integer, minimum: 100, maximum: 3000 }
+        reason: { type: string, maxLength: 256 }
+        corrected_at: { type: string, format: date-time }
+    ReadingCorrectionInput:
+      type: object
+      additionalProperties: false
+      required: [value_mm, reason]
+      properties:
+        value_mm: { type: integer, minimum: 100, maximum: 3000 }
+        reason: { type: string, minLength: 1, maxLength: 256 }
+
+    ClientPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, page_size, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/ClientSummary' } }
+        page: { type: integer, minimum: 1 }
+        page_size: { type: integer, minimum: 1 }
+        total: { type: integer, minimum: 0 }
+    OrderPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, page_size, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/OrderSummary' } }
+        page: { type: integer, minimum: 1 }
+        page_size: { type: integer, minimum: 1 }
+        total: { type: integer, minimum: 0 }
+    AuditPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, page_size, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/AuditEntry' } }
+        page: { type: integer, minimum: 1 }
+        page_size: { type: integer, minimum: 1 }
+        total: { type: integer, minimum: 0 }
+    AccountPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, page_size, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Account' } }
+        page: { type: integer, minimum: 1 }
+        page_size: { type: integer, minimum: 1 }
+        total: { type: integer, minimum: 0 }

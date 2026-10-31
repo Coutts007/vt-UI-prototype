@@ -1,0 +1,126 @@
+{
+  "rules_version": "0.1-uncalibrated",
+  "status": "draft",
+  "parent": null,
+  "created_at": "2026-10-31T00:00:00Z",
+  "created_by": "hand-written from the proposal's literature values",
+  "marker": {
+    "dictionary": "DICT_4X4_50",
+    "id": 0,
+    "side_mm": 150,
+    "max_corner_aspect": 1.03
+  },
+  "scale": {
+    "stature_disagree_check_pct": 2.0,
+    "stature_disagree_retake_pct": 4.0,
+    "depth_correction_mm": {
+      "front": 0,
+      "side": 0
+    }
+  },
+  "levels": {
+    "chest": {
+      "female": 0.25,
+      "male": 0.25,
+      "unspecified": 0.25
+    },
+    "waist": 0.6,
+    "waist_check_band": [
+      0.5,
+      0.7
+    ],
+    "waist_check_tol": 0.05,
+    "hip_band_knee_fraction": 0.25,
+    "neck_above_shoulder_frac": 0.1
+  },
+  "offsets_mm": {
+    "acromion": 0,
+    "shoulder": 0,
+    "sleeve": 0,
+    "outleg": 0,
+    "inleg": 0
+  },
+  "girth_model": {
+    "type": "ellipse_cf",
+    "correction_factors": {
+      "chest": 1.0,
+      "waist": 1.0,
+      "hip": 1.0,
+      "neck": 1.0
+    }
+  },
+  "plausible_mm": {
+    "stature": [
+      1200,
+      2200
+    ],
+    "shoulder": [
+      280,
+      600
+    ],
+    "chest": [
+      600,
+      1600
+    ],
+    "waist": [
+      450,
+      2000
+    ],
+    "hip": [
+      650,
+      1900
+    ],
+    "sleeve": [
+      450,
+      850
+    ],
+    "outleg": [
+      750,
+      1350
+    ],
+    "inleg": [
+      550,
+      1050
+    ],
+    "neck": [
+      280,
+      550
+    ]
+  },
+  "flags": {
+    "visibility_fail": 0.5,
+    "visibility_check": 0.7,
+    "marker_conf_check": 0.8
+  },
+  "anomaly": {
+    "static_ratio_bounds": {
+      "inleg_stature": [
+        0.38,
+        0.52
+      ],
+      "sleeve_stature": [
+        0.3,
+        0.4
+      ],
+      "waist_hip": [
+        0.6,
+        1.2
+      ],
+      "chest_stature": [
+        0.45,
+        0.85
+      ]
+    },
+    "notes": "Placeholders to review after the pilot"
+  },
+  "fit": {
+    "cohort": "literature",
+    "n_participants": 0,
+    "n_capture_sets": 0,
+    "cohort_hash": null,
+    "loo": {},
+    "bootstrap_ci": {},
+    "notes": "Initial literature values (proposal Section 3.8.4). Not calibrated."
+  },
+  "checksum": "sha256:455e6782027f676b3ff186421a7ab52821ed765db04e325b9002777050dfa50d"
+}
