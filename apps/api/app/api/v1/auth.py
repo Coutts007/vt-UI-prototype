@@ -1,5 +1,6 @@
 import math
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy import select
@@ -31,6 +32,15 @@ MAX_FAILURES = 5
 LOCK_MINUTES = 15
 LOCK_SECONDS = LOCK_MINUTES * 60
 PASSWORD_ATTEMPTS = 5
+TAILOR_FIELDS = {
+    "business_name",
+    "phone",
+    "area",
+    "directory_listed",
+    "directory_show_phone",
+    "directory_specialties",
+    "directory_description",
+}
 
 
 def to_e164(phone: str) -> str:
@@ -52,6 +62,10 @@ async def user_view(session: AsyncSession, user: UserAccount) -> User:
             view.business_name = tailor.business_name
             view.phone = tailor.phone_e164
             view.area = tailor.area
+            view.directory_listed = tailor.directory_listed
+            view.directory_show_phone = tailor.directory_show_phone
+            view.directory_specialties = tailor.directory_specialties  # type: ignore[assignment]
+            view.directory_description = tailor.directory_description
     if user.role == "measurer":
         view.measurer_code = await session.scalar(
             select(Measurer.measurer_code).where(Measurer.user_id == user.user_id)
@@ -223,7 +237,8 @@ async def update_me(
         user.locale = changes["locale"]
     if "unit_pref" in changes:
         user.unit_pref = changes["unit_pref"]
-    if {"business_name", "phone", "area"} & changes.keys():
+    detail: dict[str, Any] = {"fields": sorted(changes)}
+    if TAILOR_FIELDS & changes.keys():
         tailor = await session.scalar(select(Tailor).where(Tailor.user_id == user.user_id))
         if not tailor:
             raise ApiError("validation_failed")
@@ -231,6 +246,16 @@ async def update_me(
         tailor.area = changes.get("area", tailor.area)
         if "phone" in changes:
             tailor.phone_e164 = to_e164(changes["phone"])
+        if "directory_listed" in changes:
+            # Which way it went, because a listing is a public act. Never the published text.
+            detail["listed"] = changes["directory_listed"]
+            tailor.directory_listed = changes["directory_listed"]
+        if "directory_show_phone" in changes:
+            tailor.directory_show_phone = changes["directory_show_phone"]
+        if "directory_specialties" in changes:
+            tailor.directory_specialties = changes["directory_specialties"]
+        if "directory_description" in changes:
+            tailor.directory_description = changes["directory_description"].strip() or None
     audit.record(
         session,
         actor_type="user",
@@ -239,7 +264,7 @@ async def update_me(
         entity_id=user.user_id,
         user_id=user.user_id,
         ip_hash=ip_hash(request),
-        detail={"fields": sorted(changes)},
+        detail=detail,
     )
     await session.commit()
     return await user_view(session, user)

@@ -2,6 +2,11 @@
 
 The newest entry comes first. Every change or improvement adds a line in the same commit.
 
+## 2026-10-31: Tailor directory and Get code (D27)
+
+- API: public `GET /tailors` and `POST /tailors/{listing_id}/codes`, `GET /me/directory-clients`, `DELETE /clients/{id}`, and `GET /client-codes/{code}` (the part of M8 this flow needs). Migration 0002 adds the listing fields, off by default, and each client's `source`. Issuing is limited to 10 an hour and 30 a day per address, and audited with no personal data. The mock answers the same.
+- **Carried forward:** removing directory codes that are never used goes to the M11 retention job. Tailors can already remove them by hand.
+
 ## 2026-10-31: M5 consent save timing
 
 - The app moved on from the consent screen before the answer reached phone storage, so a reload straight afterwards asked for consent again. It now waits for the save. This was failing one browser test on CI.

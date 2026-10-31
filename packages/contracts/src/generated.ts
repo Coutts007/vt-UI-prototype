@@ -109,6 +109,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tailors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Browse the tailors who chose to be listed
+         * @description Active tailors who opted in, and only what they chose to publish. Never an email, a user id, a client count or anything about clients. Off in production builds until D27's flag is on.
+         */
+        get: operations["listTailors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tailors/{listing_id}/codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get a new client code under the chosen tailor
+         * @description Each call creates a new client with its own code, at once and without tailor approval (D27). It takes no name or phone. A tailor who is not listed, or not active, answers 404.
+         */
+        post: operations["issueDirectoryCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/profiles": {
         parameters: {
             query?: never;
@@ -257,6 +297,23 @@ export interface paths {
         get: operations["getEasePresets"];
         /** Replace the tailor's saved ease values */
         put: operations["putEasePresets"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/directory-clients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in tailor's clients who got their code from the directory */
+        get: operations["listDirectoryClients"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1256,6 +1313,10 @@ export interface components {
             phone?: string;
             area?: string;
             measurer_code?: string;
+            directory_listed?: boolean;
+            directory_show_phone?: boolean;
+            directory_specialties?: components["schemas"]["Specialty"][];
+            directory_description?: string | null;
         };
         UserUpdate: {
             business_name?: string;
@@ -1263,10 +1324,53 @@ export interface components {
             area?: string;
             locale?: components["schemas"]["Locale"];
             unit_pref?: components["schemas"]["Unit"];
+            directory_listed?: boolean;
+            directory_show_phone?: boolean;
+            directory_specialties?: components["schemas"]["Specialty"][];
+            directory_description?: string | null;
         };
         PasswordChange: {
             current_password: string;
             new_password: string;
+        };
+        /** @enum {string} */
+        ClientSource: "tailor" | "directory";
+        /** @enum {string} */
+        Specialty: "kitenge" | "suits" | "dresses" | "modest" | "uniforms" | "alterations" | "traditional" | "casual";
+        TailorListing: {
+            /** Format: uuid */
+            listing_id: string;
+            business_name: string;
+            area: string;
+            specialties: components["schemas"]["Specialty"][];
+            description: string | null;
+            phone: string | null;
+        };
+        TailorListingPage: {
+            items: components["schemas"]["TailorListing"][];
+            page: number;
+            page_size: number;
+            total: number;
+            /** @description Every area with a listed tailor, for the area filter */
+            areas: string[];
+        };
+        DirectoryCodeIssued: {
+            client_code: components["schemas"]["ClientCode"];
+            tailor_business_name: string;
+        };
+        DirectoryClient: {
+            /** Format: uuid */
+            client_id: string;
+            client_code: components["schemas"]["ClientCode"];
+            /** Format: date-time */
+            created_at: string;
+            has_profile: boolean;
+        };
+        DirectoryClientPage: {
+            items: components["schemas"]["DirectoryClient"][];
+            page: number;
+            page_size: number;
+            total: number;
         };
         ClientInput: {
             display_name?: string | null;
@@ -1286,6 +1390,7 @@ export interface components {
             client_id: string;
             client_code: components["schemas"]["ClientCode"];
             display_name: string | null;
+            source: components["schemas"]["ClientSource"];
             /** Format: date-time */
             last_capture_at: string | null;
             flag_counts: components["schemas"]["FlagCounts"] | null;
@@ -1304,6 +1409,7 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             deletion_requested: boolean;
+            source: components["schemas"]["ClientSource"];
         };
         OrderItemInput: {
             site_code: components["schemas"]["SiteCode"];
@@ -1809,6 +1915,60 @@ export interface operations {
                 };
             };
             404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    listTailors: {
+        parameters: {
+            query?: {
+                search?: string;
+                area?: string;
+                specialty?: components["schemas"]["Specialty"];
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of listed tailors */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TailorListingPage"];
+                };
+            };
+            422: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    issueDirectoryCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The new code */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectoryCodeIssued"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
             429: components["responses"]["RateLimited"];
         };
     };
@@ -2087,6 +2247,31 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    listDirectoryClients: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of directory clients, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectoryClientPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     listClients: {

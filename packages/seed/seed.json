@@ -450,6 +450,7 @@
    "deletion_requested": false,
    "display_name": "Akinyi",
    "height_mm": 1640,
+   "source": "tailor",
    "tailor_id": "073c37b0-ecc5-54d2-8c9a-5b74ed93e765"
   },
   {
@@ -459,6 +460,7 @@
    "deletion_requested": false,
    "display_name": null,
    "height_mm": 1677,
+   "source": "tailor",
    "tailor_id": "073c37b0-ecc5-54d2-8c9a-5b74ed93e765"
   },
   {
@@ -468,6 +470,7 @@
    "deletion_requested": false,
    "display_name": "Njeri",
    "height_mm": 1710,
+   "source": "tailor",
    "tailor_id": "073c37b0-ecc5-54d2-8c9a-5b74ed93e765"
   },
   {
@@ -477,6 +480,7 @@
    "deletion_requested": false,
    "display_name": null,
    "height_mm": 1775,
+   "source": "tailor",
    "tailor_id": "073c37b0-ecc5-54d2-8c9a-5b74ed93e765"
   },
   {
@@ -486,6 +490,7 @@
    "deletion_requested": false,
    "display_name": "Chebet",
    "height_mm": 1640,
+   "source": "tailor",
    "tailor_id": "073c37b0-ecc5-54d2-8c9a-5b74ed93e765"
   },
   {
@@ -495,6 +500,7 @@
    "deletion_requested": false,
    "display_name": "Mwende",
    "height_mm": 1625,
+   "source": "tailor",
    "tailor_id": "073c37b0-ecc5-54d2-8c9a-5b74ed93e765"
   },
   {
@@ -504,6 +510,7 @@
    "deletion_requested": false,
    "display_name": null,
    "height_mm": 1710,
+   "source": "tailor",
    "tailor_id": "073c37b0-ecc5-54d2-8c9a-5b74ed93e765"
   },
   {
@@ -513,6 +520,7 @@
    "deletion_requested": false,
    "display_name": "Halima",
    "height_mm": null,
+   "source": "tailor",
    "tailor_id": "073c37b0-ecc5-54d2-8c9a-5b74ed93e765"
   },
   {
@@ -522,6 +530,7 @@
    "deletion_requested": false,
    "display_name": "Ouma",
    "height_mm": 1775,
+   "source": "tailor",
    "tailor_id": "de4fee65-4a9f-547d-aa31-f0b93c1594d5"
   },
   {
@@ -531,6 +540,7 @@
    "deletion_requested": false,
    "display_name": null,
    "height_mm": 1710,
+   "source": "tailor",
    "tailor_id": "de4fee65-4a9f-547d-aa31-f0b93c1594d5"
   },
   {
@@ -540,6 +550,7 @@
    "deletion_requested": false,
    "display_name": "Atieno",
    "height_mm": 1640,
+   "source": "tailor",
    "tailor_id": "de4fee65-4a9f-547d-aa31-f0b93c1594d5"
   }
  ],
@@ -727,6 +738,39 @@
  ],
  "deletion_requests": [],
  "demo_password": "vt-demo-2026",
+ "directory_listings": [
+  {
+   "description": "Kitenge dresses and wedding wear.",
+   "listed": true,
+   "listing_id": "f999a691-e61b-5a4e-b94a-f0144f1d17e0",
+   "show_phone": false,
+   "specialties": [
+    "kitenge",
+    "dresses"
+   ],
+   "tailor_id": "073c37b0-ecc5-54d2-8c9a-5b74ed93e765"
+  },
+  {
+   "description": "Suits and shirts cut to measure in the CBD.",
+   "listed": true,
+   "listing_id": "4e34dea7-f48c-52e6-9726-0f441a1bebe4",
+   "show_phone": true,
+   "specialties": [
+    "suits"
+   ],
+   "tailor_id": "de4fee65-4a9f-547d-aa31-f0b93c1594d5"
+  },
+  {
+   "description": "Waiting for approval.",
+   "listed": true,
+   "listing_id": "5098792e-0547-57ca-9a45-c3166840ece3",
+   "show_phone": true,
+   "specialties": [
+    "casual"
+   ],
+   "tailor_id": "d52bd1b8-575b-5825-b188-b12325a00995"
+  }
+ ],
  "ease_presets": [
   {
    "presets": [
