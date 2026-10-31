@@ -6,3 +6,5 @@ packages:
   - packages/rules
 onlyBuiltDependencies:
   - esbuild
+allowBuilds:
+  msw: false
