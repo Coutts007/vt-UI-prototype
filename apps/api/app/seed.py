@@ -194,10 +194,12 @@ async def load_demo(session: AsyncSession, settings: Settings) -> bool:
             )
         )
     await session.flush()
+    listings = {row["tailor_id"]: row for row in seed["directory_listings"]}
     measurers: dict[str, uuid.UUID] = {}
     for row in seed["users"]:
         user_id = uuid.UUID(row["user_id"])
         if row["role"] == "tailor":
+            listing = listings.get(row["user_id"])
             session.add(
                 Tailor(
                     tailor_id=user_id,
@@ -206,6 +208,17 @@ async def load_demo(session: AsyncSession, settings: Settings) -> bool:
                     phone_e164=to_e164(row["phone"]),
                     area=row["area"],
                     created_at=stamp(row["created_at"]),
+                    **(
+                        {
+                            "listing_id": uuid.UUID(listing["listing_id"]),
+                            "directory_listed": listing["listed"],
+                            "directory_show_phone": listing["show_phone"],
+                            "directory_specialties": listing["specialties"],
+                            "directory_description": listing["description"],
+                        }
+                        if listing
+                        else {}
+                    ),
                 )
             )
         if row["role"] == "measurer":
@@ -231,6 +244,7 @@ async def load_demo(session: AsyncSession, settings: Settings) -> bool:
                 display_name=row["display_name"],
                 height_mm=row["height_mm"],
                 created_at=stamp(row["created_at"]),
+                source=row["source"],
             )
         )
     await session.flush()

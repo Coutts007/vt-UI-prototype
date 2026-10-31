@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 const ROOT = join(__dirname, '../../src');
 const CLIENT = readdirSync(join(ROOT, 'views/client'))
-  .filter((name) => name.endsWith('.tsx') && name !== 'BusinessDirectoryView.tsx')
+  .filter((name) => name.endsWith('.tsx'))
   .map((name) => `views/client/${name}`);
 const SHARED = [
   'CodeInput',
@@ -29,7 +29,7 @@ describe('client screens have no literal words', () => {
         ...[...code.matchAll(WORD_IN_JSX)].map((m) => m[1].trim()),
         ...[...code.matchAll(WORD_IN_PROP)].map((m) => m[1]),
       ].filter((word) => !/^(Virtual Tailor|ISO)$/.test(word));
-      // The tailor, admin and directory menu items are migrated with their screens (M9 to M11, D27).
+      // The tailor and admin menu items are migrated with their screens (M9 to M11, D27).
       if (file.endsWith('Header.tsx'))
         return expect(found.filter((word) => /^(Measure|Help|Privacy)$/.test(word))).toEqual([]);
       expect(found).toEqual([]);

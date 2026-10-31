@@ -33,6 +33,7 @@ export interface MockDb {
   today: string;
   users: Row[];
   clients: Row[];
+  listings: Row[];
   profiles: Row[];
   conflicts: Row[];
   orders: Row[];
@@ -59,6 +60,7 @@ export function createDb(rulesArtifact: Row, now = new Date()): MockDb {
     today: now.toISOString().slice(0, 10),
     users,
     clients: data.clients,
+    listings: data.directory_listings,
     profiles: data.profiles,
     conflicts: data.conflicts,
     orders: data.orders,

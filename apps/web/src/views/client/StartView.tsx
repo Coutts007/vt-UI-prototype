@@ -7,6 +7,7 @@ import { CodeInput } from '../../components/ui/CodeInput';
 import { NumberInput } from '../../components/ui/NumberInput';
 import { ProgressSteps } from '../../components/ui/data';
 import { Field, RadioCards } from '../../components/ui/forms';
+import { FEATURE_DIRECTORY } from '../../config/features';
 import { vtStorage } from '../../db/storage';
 import { useI18n } from '../../i18n';
 
@@ -151,6 +152,15 @@ export const StartView: React.FC<{ onNavigate: (path: string) => void; initialCo
             onBlur={() => void verify(code)}
             error={codeError ?? undefined}
           />
+          {FEATURE_DIRECTORY && !code && (
+            <button
+              type="button"
+              onClick={() => onNavigate('/tailors')}
+              className="min-h-12 mt-1 text-sm font-medium underline cursor-pointer"
+            >
+              {t('startNoCode')}
+            </button>
+          )}
           {codeState === 'checking' && <p className="text-sm mt-2">{t('codeChecking')}</p>}
           {codeState === 'verified' && tailor && (
             <p className="mt-2 flex items-center gap-2 text-sm font-medium text-emerald-900">

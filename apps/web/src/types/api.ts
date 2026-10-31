@@ -201,14 +201,12 @@ export interface UserAccount {
   measurer_code?: string;
   created_at: string;
   // Directory & Business Public Profile
-  public_client_code?: string;
   specialties?: string[];
   description?: string;
   rating?: number;
   reviews_count?: number;
   turnaround_days?: string;
   pricing_tier?: 'Affordable' | 'Mid-Range' | 'Premium Bespoke';
-  is_directory_listed?: boolean;
 }
 
 export interface ClientRecord {

@@ -97,9 +97,16 @@ function audit(
   });
 }
 
-function toUser(row: Row): Row {
+function toUser(row: Row, listing?: Row): Row {
   const { created_at: _created, trained_on: _trained, ...user } = row;
-  return user;
+  if (row.role !== 'tailor') return user;
+  return {
+    ...user,
+    directory_listed: listing?.listed ?? false,
+    directory_show_phone: listing?.show_phone ?? false,
+    directory_specialties: listing?.specialties ?? [],
+    directory_description: listing?.description ?? null,
+  };
 }
 
 function toAccount(row: Row): Row {
@@ -127,6 +134,23 @@ export function createHandlers(options: MockOptions = {}) {
     return clientById(order.client_id)?.tailor_id === user.user_id ? order : null;
   };
   const participant = (code: string) => db.participants.find((p) => p.participant_code === code);
+  const listingOf = (tailorId: string) => db.listings.find((l) => l.tailor_id === tailorId);
+  const asUser = (row: Row) => toUser(row, listingOf(row.user_id));
+  const issued: number[] = [];
+  /** Listed means opted in and active (D27): the same rule as the API. */
+  const listedRows = () =>
+    db.listings.flatMap((listing) => {
+      const tailor = db.users.find((u) => u.user_id === listing.tailor_id);
+      return listing.listed && tailor?.status === 'active' ? [{ listing, tailor }] : [];
+    });
+  const newCode = () => {
+    const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const pick = () => letters[Math.floor(Math.random() * letters.length)];
+    for (;;) {
+      const code = `${pick()}${pick()}${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
+      if (!db.clients.some((c) => c.client_code === code)) return code;
+    }
+  };
 
   function route(
     method: 'get' | 'post' | 'put' | 'patch' | 'delete',
@@ -147,10 +171,11 @@ export function createHandlers(options: MockOptions = {}) {
         if (!roles.includes(user.role)) return problem('forbidden');
       }
       const type = request.headers.get('Content-Type') ?? '';
-      if (method !== 'get' && method !== 'delete' && request.body && !type.includes('json')) {
+      const text = method === 'get' ? '' : await request.text();
+      // Like the API: only a body that is really there has to be JSON.
+      if (method !== 'delete' && text && !type.includes('json')) {
         return problem('unsupported_media_type');
       }
-      const text = method === 'get' ? '' : await request.text();
       let body = null;
       try {
         body = text ? JSON.parse(text) : null;
@@ -207,6 +232,59 @@ export function createHandlers(options: MockOptions = {}) {
         tailor_business_name: tailor?.business_name ?? '',
         height_mm: client.height_mm,
       };
+    }),
+    route('get', '/tailors', null, ({ url }) => {
+      const words = url.searchParams.get('search')?.trim().toLowerCase() ?? '';
+      const area = url.searchParams.get('area')?.trim().toLowerCase() ?? '';
+      const specialty = url.searchParams.get('specialty');
+      const everyone = listedRows();
+      const rows = everyone
+        .filter(
+          ({ listing, tailor }) =>
+            !words ||
+            [tailor.business_name, tailor.area, listing.description].some((text) =>
+              text?.toLowerCase().includes(words),
+            ),
+        )
+        .filter(({ tailor }) => !area || tailor.area.toLowerCase() === area)
+        .filter(({ listing }) => !specialty || listing.specialties.includes(specialty))
+        .sort((a, b) => a.tailor.business_name.localeCompare(b.tailor.business_name))
+        .map(({ listing, tailor }) => ({
+          listing_id: listing.listing_id,
+          business_name: tailor.business_name,
+          area: tailor.area,
+          specialties: listing.specialties,
+          description: listing.description,
+          phone: listing.show_phone ? tailor.phone : null,
+        }));
+      return {
+        ...page(url, rows),
+        areas: [...new Set(everyone.map(({ tailor }) => tailor.area))].filter(Boolean).sort(),
+      };
+    }),
+    route('post', '/tailors/:listing_id/codes', null, ({ params }) => {
+      const hit = listedRows().find(({ listing }) => listing.listing_id === params.listing_id);
+      if (!hit) return problem('not_found');
+      const hourAgo = now().getTime() - 3_600_000;
+      while (issued.length && issued[0] < hourAgo) issued.shift();
+      if (issued.length >= 10) return problem('rate_limited');
+      issued.push(now().getTime());
+      const client = {
+        client_id: newId(),
+        client_code: newCode(),
+        tailor_id: hit.tailor.user_id,
+        display_name: null,
+        height_mm: null,
+        created_at: now().toISOString(),
+        deletion_requested: false,
+        source: 'directory',
+      };
+      db.clients.push(client);
+      audit(db, null, 'code_issue', 'client', client.client_id, 'Code issued from the directory');
+      return created({
+        client_code: client.client_code,
+        tailor_business_name: hit.tailor.business_name,
+      });
     }),
     route('post', '/profiles', null, ({ body, request }) => {
       if (request.headers.get('Idempotency-Key') !== body.profile_id)
@@ -329,18 +407,45 @@ export function createHandlers(options: MockOptions = {}) {
       return {
         access_token: `mock.${user.user_id}`,
         expires_at: new Date(Date.now() + 86_400_000).toISOString(),
-        user: toUser(user),
+        user: asUser(user),
       };
     }),
     route('post', '/auth/logout', all, ({ user }) => {
       audit(db, user, 'logout', 'user', user!.user_id, 'Signed out');
       return null;
     }),
-    route('get', '/me', all, ({ user }) => toUser(user!)),
+    route('get', '/me', all, ({ user }) => asUser(user!)),
     route('patch', '/me', all, ({ user, body }) => {
-      Object.assign(user!, body);
+      const {
+        directory_listed: listed,
+        directory_show_phone: showPhone,
+        directory_specialties: specialties,
+        directory_description: description,
+        ...rest
+      } = body;
+      const touched = [listed, showPhone, specialties, description].some((v) => v !== undefined);
+      if (touched) {
+        if (user!.role !== 'tailor') return problem('validation_failed');
+        let listing = listingOf(user!.user_id);
+        if (!listing) {
+          listing = {
+            tailor_id: user!.user_id,
+            listing_id: newId(),
+            listed: false,
+            show_phone: false,
+            specialties: [],
+            description: null,
+          };
+          db.listings.push(listing);
+        }
+        if (listed !== undefined) listing.listed = listed;
+        if (showPhone !== undefined) listing.show_phone = showPhone;
+        if (specialties !== undefined) listing.specialties = specialties;
+        if (description !== undefined) listing.description = description.trim() || null;
+      }
+      Object.assign(user!, rest);
       audit(db, user, 'settings_change', 'user', user!.user_id, 'Changed settings');
-      return toUser(user!);
+      return asUser(user!);
     }),
     route('post', '/me/password', all, ({ user, body }) => {
       if (db.passwords[user!.email] !== body.current_password)
@@ -356,6 +461,20 @@ export function createHandlers(options: MockOptions = {}) {
       return body;
     }),
 
+    route('get', '/me/directory-clients', ['tailor'], ({ user, url }) =>
+      page(
+        url,
+        clientsOf(user!)
+          .filter((c) => c.source === 'directory' && !c.deletion_requested)
+          .sort((a, b) => b.created_at.localeCompare(a.created_at))
+          .map((c) => ({
+            client_id: c.client_id,
+            client_code: c.client_code,
+            created_at: c.created_at,
+            has_profile: db.profiles.some((p) => p.client_id === c.client_id),
+          })),
+      ),
+    ),
     route('get', '/clients', staff, ({ user, url }) => {
       const search = url.searchParams.get('search')?.toLowerCase() ?? '';
       const filter = url.searchParams.get('filter');
@@ -371,6 +490,7 @@ export function createHandlers(options: MockOptions = {}) {
             client_id: client.client_id,
             client_code: client.client_code,
             display_name: client.display_name,
+            source: client.source,
             last_capture_at: latest?.captured_at ?? null,
             flag_counts: counts,
             open_orders: db.orders.filter(

@@ -207,6 +207,9 @@ const CASES: Record<string, Case> = {
     body: { participant_code: 'P005', reading_no: 1, values, taken_at: '2026-01-01T00:00:00Z' },
   },
   listMyReferenceReadings: { role: 'measurer', query: { participant_code: 'P001' } },
+  listTailors: { query: { search: 'bespoke' } },
+  issueDirectoryCode: { path: { listing_id: seed.directory_listings[0].listing_id } },
+  listDirectoryClients: { role: 'tailor' },
   exportCaptures: { role: 'admin' },
   exportReference: { role: 'admin' },
 };
@@ -332,4 +335,53 @@ it('keeps exactly one order overdue after shifting dates', () => {
     .toISOString()
     .slice(0, 10);
   expect(shifted.filter((o) => o.due_date < anchor && o.status !== 'collected')).toHaveLength(1);
+});
+
+describe('tailor directory (D27)', () => {
+  // Earlier cases approve the pending tailor, so these start from a fresh copy of the seed.
+  beforeAll(() => server.use(...createHandlers()));
+  afterAll(() => server.resetHandlers());
+
+  const list = async (query = '') => (await fetch(`${BASE}/tailors${query}`)).json();
+
+  it('lists active tailors who opted in, with published fields only', async () => {
+    const { items, areas } = await list();
+    expect(items.map((row: any) => row.business_name)).not.toContain(pending.business_name);
+    expect(areas).not.toContain(pending.area);
+    for (const row of items) {
+      expect(Object.keys(row).sort()).toEqual(
+        ['area', 'business_name', 'description', 'listing_id', 'phone', 'specialties'].sort(),
+      );
+    }
+    const wanjiruRow = items.find((row: any) => row.business_name === wanjiru.business_name);
+    expect(wanjiruRow.phone).toBeNull();
+  });
+
+  it('a pending tailor issues no code, even when opted in', async () => {
+    const listing = seed.directory_listings.find((l) => l.tailor_id === pending.user_id)!;
+    const reply = await fetch(`${BASE}/tailors/${listing.listing_id}/codes`, { method: 'POST' });
+    expect(reply.status).toBe(404);
+  });
+
+  it('filters by words, area and specialty', async () => {
+    expect((await list('?area=gikomba')).total).toBe(1);
+    expect((await list('?specialty=suits')).total).toBe(1);
+    expect((await list('?specialty=uniforms')).total).toBe(0);
+    expect((await list('?search=zzz')).total).toBe(0);
+  });
+
+  it('issues a new unique code each time, marked as from the directory, then limits', async () => {
+    const { items } = await list();
+    const reply = await fetch(`${BASE}/tailors/${items[0].listing_id}/codes`, { method: 'POST' });
+    const first = (await reply.json()).client_code;
+    expect(first).toMatch(/^[A-Z]{2}[0-9]{4}$/);
+    const check = await (await fetch(`${BASE}/client-codes/${first}`)).json();
+    expect(check.tailor_business_name).toBe(items[0].business_name);
+    let last = 201;
+    for (let i = 0; i < 12; i += 1) {
+      last = (await fetch(`${BASE}/tailors/${items[0].listing_id}/codes`, { method: 'POST' }))
+        .status;
+    }
+    expect(last).toBe(429);
+  });
 });

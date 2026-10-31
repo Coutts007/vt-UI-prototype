@@ -90,6 +90,7 @@ function Shell() {
     },
     onLogout: () => {
       sessionStorage.removeItem('vt_session_user');
+      apiClient.auth.clear();
       void import('./api/client').then(({ api }) => api.logout());
       setUser(null);
       navigate('/login');

@@ -92,6 +92,10 @@ SCHEMA_PAIRS = {
     "changePassword": ("PasswordChange", None),
     "getPublicSettings": (None, "PublicSettings"),
     "getHealth": (None, "Status"),
+    "verifyClientCode": (None, "ClientCodeCheck"),
+    "listTailors": (None, "TailorListingPage"),
+    "issueDirectoryCode": (None, "DirectoryCodeIssued"),
+    "listDirectoryClients": (None, "DirectoryClientPage"),
 }
 
 

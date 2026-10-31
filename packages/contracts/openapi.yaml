@@ -85,6 +85,47 @@ paths:
           description: The code exists
           content: { application/json: { schema: { $ref: '#/components/schemas/ClientCodeCheck' } } }
         '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /tailors:
+    get:
+      operationId: listTailors
+      tags: [public]
+      summary: Browse the tailors who chose to be listed
+      description: >
+        Active tailors who opted in, and only what they chose to publish. Never an email, a user
+        id, a client count or anything about clients. Off in production builds until D27's flag is on.
+      x-rate-limit: 60 per minute
+      parameters:
+        - { name: search, in: query, schema: { type: string, maxLength: 60 } }
+        - { name: area, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: specialty, in: query, schema: { $ref: '#/components/schemas/Specialty' } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: One page of listed tailors
+          content: { application/json: { schema: { $ref: '#/components/schemas/TailorListingPage' } } }
+        '422': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /tailors/{listing_id}/codes:
+    post:
+      operationId: issueDirectoryCode
+      tags: [public]
+      summary: Get a new client code under the chosen tailor
+      description: >
+        Each call creates a new client with its own code, at once and without tailor approval (D27).
+        It takes no name or phone. A tailor who is not listed, or not active, answers 404.
+      x-audit: code_issue
+      x-rate-limit: 10 per hour, 30 per day
+      parameters:
+        - { name: listing_id, in: path, required: true, schema: { type: string, format: uuid, maxLength: 36 } }
+      responses:
+        '201':
+          description: The new code
+          content: { application/json: { schema: { $ref: '#/components/schemas/DirectoryCodeIssued' } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
         '429': { $ref: '#/components/responses/RateLimited' }
   /profiles:
     post:
@@ -272,6 +313,23 @@ paths:
         '403': { $ref: '#/components/responses/Problem' }
         '422': { $ref: '#/components/responses/Problem' }
 
+  /me/directory-clients:
+    get:
+      operationId: listDirectoryClients
+      tags: [clients]
+      summary: The signed-in tailor's clients who got their code from the directory
+      x-roles: [tailor]
+      x-ownership: own clients only
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: One page of directory clients, newest first
+          content: { application/json: { schema: { $ref: '#/components/schemas/DirectoryClientPage' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
   /clients:
     get:
       operationId: listClients
@@ -1667,6 +1725,10 @@ components:
         phone: { type: string, maxLength: 16 }
         area: { type: string, maxLength: 120 }
         measurer_code: { type: string, maxLength: 4 }
+        directory_listed: { type: boolean }
+        directory_show_phone: { type: boolean }
+        directory_specialties: { type: array, maxItems: 8, uniqueItems: true, items: { $ref: '#/components/schemas/Specialty' } }
+        directory_description: { type: [string, 'null'], maxLength: 240 }
     UserUpdate:
       type: object
       additionalProperties: false
@@ -1676,6 +1738,10 @@ components:
         area: { type: string, maxLength: 120 }
         locale: { $ref: '#/components/schemas/Locale' }
         unit_pref: { $ref: '#/components/schemas/Unit' }
+        directory_listed: { type: boolean }
+        directory_show_phone: { type: boolean }
+        directory_specialties: { type: array, maxItems: 8, uniqueItems: true, items: { $ref: '#/components/schemas/Specialty' } }
+        directory_description: { type: [string, 'null'], maxLength: 240 }
     PasswordChange:
       type: object
       additionalProperties: false
@@ -1684,6 +1750,59 @@ components:
         current_password: { type: string, maxLength: 256 }
         new_password: { type: string, minLength: 10, maxLength: 256 }
 
+    ClientSource: { type: string, enum: [tailor, directory] }
+    Specialty:
+      type: string
+      enum: [kitenge, suits, dresses, modest, uniforms, alterations, traditional, casual]
+    TailorListing:
+      type: object
+      additionalProperties: false
+      required: [listing_id, business_name, area, specialties, description, phone]
+      properties:
+        listing_id: { type: string, format: uuid, maxLength: 36 }
+        business_name: { type: string, maxLength: 120 }
+        area: { type: string, maxLength: 120 }
+        specialties: { type: array, maxItems: 8, items: { $ref: '#/components/schemas/Specialty' } }
+        description: { type: [string, 'null'], maxLength: 240 }
+        phone: { type: [string, 'null'], maxLength: 16 }
+    TailorListingPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, page_size, total, areas]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/TailorListing' } }
+        page: { type: integer, minimum: 1 }
+        page_size: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+        areas:
+          type: array
+          description: Every area with a listed tailor, for the area filter
+          items: { type: string, maxLength: 120 }
+    DirectoryCodeIssued:
+      type: object
+      additionalProperties: false
+      required: [client_code, tailor_business_name]
+      properties:
+        client_code: { $ref: '#/components/schemas/ClientCode' }
+        tailor_business_name: { type: string, maxLength: 120 }
+    DirectoryClient:
+      type: object
+      additionalProperties: false
+      required: [client_id, client_code, created_at, has_profile]
+      properties:
+        client_id: { type: string, format: uuid, maxLength: 36 }
+        client_code: { $ref: '#/components/schemas/ClientCode' }
+        created_at: { type: string, format: date-time, maxLength: 32 }
+        has_profile: { type: boolean }
+    DirectoryClientPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, page_size, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/DirectoryClient' } }
+        page: { type: integer, minimum: 1 }
+        page_size: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
     ClientInput:
       type: object
       additionalProperties: false
@@ -1707,11 +1826,12 @@ components:
     ClientSummary:
       type: object
       additionalProperties: false
-      required: [client_id, client_code, display_name, last_capture_at, flag_counts, open_orders, has_new, has_conflict]
+      required: [client_id, client_code, display_name, source, last_capture_at, flag_counts, open_orders, has_new, has_conflict]
       properties:
         client_id: { type: string, format: uuid, maxLength: 36 }
         client_code: { $ref: '#/components/schemas/ClientCode' }
         display_name: { type: [string, 'null'], maxLength: 60 }
+        source: { $ref: '#/components/schemas/ClientSource' }
         last_capture_at: { type: [string, 'null'], format: date-time, maxLength: 32 }
         flag_counts:
           oneOf:
@@ -1723,7 +1843,7 @@ components:
     ClientDetail:
       type: object
       additionalProperties: false
-      required: [client_id, client_code, tailor_id, display_name, height_mm, created_at, deletion_requested]
+      required: [client_id, client_code, tailor_id, display_name, height_mm, created_at, deletion_requested, source]
       properties:
         client_id: { type: string, format: uuid, maxLength: 36 }
         client_code: { $ref: '#/components/schemas/ClientCode' }
@@ -1732,6 +1852,7 @@ components:
         height_mm: { type: [integer, 'null'], minimum: 1200, maximum: 2200 }
         created_at: { type: string, format: date-time, maxLength: 32 }
         deletion_requested: { type: boolean }
+        source: { $ref: '#/components/schemas/ClientSource' }
 
     OrderItemInput:
       type: object

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useI18n } from '../../i18n';
 import { api } from '../../api/client';
+import { apiClient } from '../../api/instance';
 import { UserAccount } from '../../types/api';
 import { Button } from '../../components/ui/Button';
 import { Lock, Mail, Eye, EyeOff, Scissors, Shield, ArrowRight } from 'lucide-react';
@@ -26,6 +27,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onNavigate
 
     try {
       const user = await api.login(email, password);
+      // Bridge until M9: the prototype sign-in has no token, and the directory panel needs one.
+      await apiClient
+        .post('/auth/login', { body: { email, password } })
+        .then((reply) => apiClient.auth.setToken(reply.access_token, reply.expires_at))
+        .catch(() => undefined);
       onLoginSuccess(user);
     } catch (err: any) {
       setErrorMsg(err.message || 'Login failed');

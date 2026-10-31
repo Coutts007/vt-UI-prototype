@@ -32,6 +32,10 @@ This explains `packages/contracts/openapi.yaml`, which is the source of truth. I
 | `GET /rules/current` | Gives the phone the current measurement rules. Until the owner freezes a version, these are clearly marked `draft` |
 | `GET /rules/{version}` | Gives one specific version of the rules |
 | `GET /client-codes/{code}` | Checks a client code. Returns the tailor's business name and any height the tailor entered. Limited to 10 tries a minute and 100 a day, so codes cannot be guessed |
+| `GET /tailors` | Lists active tailors who chose to be listed, with search, area, specialty and paging. Shows only the business name, area, specialties, short description and, if the tailor chose it, phone. Never an email, a user id or anything about clients. Limited to 60 requests a minute |
+| `POST /tailors/{listing_id}/codes` | **Get code.** Creates a new client with a new code under that tailor at once, with no approval. Takes no name or phone. Answers 404 if the tailor is not listed or not active. Limited to 10 an hour and 30 a day from one address. Audited |
+
+The tailor directory (D27) is behind the web switch `VITE_FEATURE_DIRECTORY`, off in production builds until the client flow runs on the real API. Tailors opt in through `PATCH /me` (`directory_listed`, off by default; `directory_show_phone`, `directory_specialties`, `directory_description`). Each client carries a `source` of `tailor` or `directory`.
 
 ## Client sending and controlling data
 
@@ -58,6 +62,7 @@ This explains `packages/contracts/openapi.yaml`, which is the source of truth. I
 |---|---|
 | `GET /clients` | Lists clients with search, sort and filters (new captures, flags, no profiles) |
 | `POST /clients` | Creates a client and issues a new code with a link to send over WhatsApp. A display name is optional. Audited |
+| `GET /me/directory-clients` | The signed-in tailor's clients who got their code from the directory, so they can spot and remove abuse |
 | `GET /clients/{client_id}` | Reads one client |
 | `PATCH /clients/{client_id}` | Changes the display name or height. Audited |
 | `DELETE /clients/{client_id}` | Marks the client for deletion at once, and a nightly job removes the rows. Refused while active orders exist. Audited |
@@ -134,6 +139,6 @@ This explains `packages/contracts/openapi.yaml`, which is the source of truth. I
 
 ## Left out on purpose
 
-- **Tailor directory.** Clients reach a tailor through a per-client code, and any directory stays behind a switch that is off (D27).
+- **Shared business codes.** Every Get code tap makes its own per-client code (D27).
 - **Client accounts, emails and phone numbers.** Clients stay pseudonymous.
 - **Any upload endpoint.**

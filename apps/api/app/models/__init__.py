@@ -79,8 +79,27 @@ class UserAccount(Base):
     last_login_at: Mapped[datetime | None] = stamp()
 
 
+SPECIALTIES = (
+    "kitenge",
+    "suits",
+    "dresses",
+    "modest",
+    "uniforms",
+    "alterations",
+    "traditional",
+    "casual",
+)
+_SPECIALTY_ARRAY = ", ".join(f"'{item}'" for item in SPECIALTIES)
+
+
 class Tailor(Base):
     __tablename__ = "tailor"
+    __table_args__ = (
+        CheckConstraint(
+            f"directory_specialties <@ ARRAY[{_SPECIALTY_ARRAY}]::varchar[]",
+            name="directory_specialties_allowed",
+        ),
+    )
     tailor_id: Mapped[uuid.UUID] = pk()
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("user_account.user_id"), unique=True
@@ -89,6 +108,14 @@ class Tailor(Base):
     phone_e164: Mapped[str] = mapped_column(String(16))
     area: Mapped[str] = mapped_column(String(120))
     created_at: Mapped[datetime] = now()
+    # The public directory (D27). listing_id is the only identifier a listing shows.
+    listing_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), unique=True, server_default=func.gen_random_uuid()
+    )
+    directory_listed: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    directory_show_phone: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    directory_specialties: Mapped[list[str]] = mapped_column(ARRAY(String(20)), server_default="{}")
+    directory_description: Mapped[str | None] = mapped_column(String(240))
 
 
 class Measurer(Base):
@@ -106,6 +133,7 @@ class Client(Base):
     __table_args__ = (
         CheckConstraint("client_code ~ '^[A-Z]{2}[0-9]{4}$'", name="client_code_format"),
         CheckConstraint("height_mm BETWEEN 1200 AND 2200", name="height_range"),
+        one_of("source", "tailor", "directory"),
         Index("ix_client_tailor_deleted", "tailor_id", "deleted_at"),
         Index(
             "ix_client_display_name_trgm",
@@ -124,6 +152,7 @@ class Client(Base):
     created_at: Mapped[datetime] = now()
     deleted_at: Mapped[datetime | None] = stamp()
     previous_code: Mapped[str | None] = mapped_column(String(6))
+    source: Mapped[str] = mapped_column(String(10), server_default="tailor")
 
 
 class Consent(Base):

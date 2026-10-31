@@ -95,6 +95,26 @@ def build_users() -> list[dict[str, Any]]:
     ]  # fmt: skip
 
 
+def build_directory_listings() -> list[dict[str, Any]]:
+    """D27. The pending tailor opted in on purpose: not listed until they are active."""
+    rows = [
+        ("wanjiru", True, False, ["kitenge", "dresses"], "Kitenge dresses and wedding wear."),
+        ("otieno", True, True, ["suits"], "Suits and shirts cut to measure in the CBD."),
+        ("pending", True, True, ["casual"], "Waiting for approval."),
+    ]
+    return [
+        {
+            "tailor_id": uid(f"user:{key}"),
+            "listing_id": uid(f"listing:{key}"),
+            "listed": listed,
+            "show_phone": show_phone,
+            "specialties": specialties,
+            "description": description,
+        }
+        for key, listed, show_phone, specialties, description in rows
+    ]
+
+
 def build_clients() -> list[dict[str, Any]]:
     return [
         {
@@ -105,6 +125,7 @@ def build_clients() -> list[dict[str, Any]]:
             "height_mm": height,
             "created_at": at(-90 + i),
             "deletion_requested": False,
+            "source": "tailor",
         }
         for i, (key, owner, code, name, height) in enumerate(CLIENTS)
     ]
@@ -448,6 +469,7 @@ def build_seed() -> dict[str, Any]:
         "anchor_date": ANCHOR.isoformat(),
         "demo_password": "vt-demo-2026",
         "users": users,
+        "directory_listings": build_directory_listings(),
         "clients": build_clients(),
         "profiles": list(profiles.values()),
         "conflicts": [build_conflict(profiles)],
