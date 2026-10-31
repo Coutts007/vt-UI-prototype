@@ -2,6 +2,10 @@
 
 The newest entry comes first. Every change or improvement adds a line in the same commit.
 
+## 2026-10-31: M5 consent save timing
+
+- The app moved on from the consent screen before the answer reached phone storage, so a reload straight afterwards asked for consent again. It now waits for the save. This was failing one browser test on CI.
+
 ## 2026-10-31: M5 client capture flow on fake vision
 
 - After the review, capture: a production build now says measuring is not available yet and stops before capture. Stopping a retake returns to the reviewed result. Retake works after a failed save. The spoken record counts only clips that really played, so 14 browser tests now run in real time and the suite takes about 11 minutes. Screen readers now hear each check's state, and browser tests read the stored data itself.

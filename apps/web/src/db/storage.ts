@@ -307,12 +307,15 @@ class VTStorage {
     return true;
   }
 
-  saveDraft(draft: ClientDraftSettings): void {
+  /** Memory changes at once. Await the result before leaving a screen whose answer must survive a reload. */
+  async saveDraft(draft: ClientDraftSettings): Promise<void> {
     assertNoImages(draft, 'draft');
     this.draft = draft;
-    void this.db.settings.put({ key: DRAFT_ROW, value: draft }).catch(() => {
+    try {
+      await this.db.settings.put({ key: DRAFT_ROW, value: draft });
+    } catch {
       // The draft stays in memory if the database cannot be written.
-    });
+    }
   }
 
   /** The draft in memory. Call loadDraft first after a reload. */

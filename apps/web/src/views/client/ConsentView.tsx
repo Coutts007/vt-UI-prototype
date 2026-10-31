@@ -36,9 +36,10 @@ export const ConsentView: React.FC<{ onNavigate: (path: string) => void }> = ({ 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const agree = () => {
+  const agree = async () => {
     if (!allAgreed) return;
-    vtStorage.saveDraft({
+    // Consent must be on disk first: a reload straight after would otherwise ask for it again.
+    await vtStorage.saveDraft({
       ...vtStorage.getDraft(),
       consent: {
         consent_version: CONSENT_VERSION,
