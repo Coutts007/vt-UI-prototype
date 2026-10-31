@@ -34,6 +34,15 @@ export const StartView: React.FC<{ onNavigate: (path: string) => void; initialCo
   const [sexError, setSexError] = useState<string | null>(null);
   const [fit, setFit] = useState<Fit>('fitted');
   const asked = useRef('');
+  const consentFor = useRef<string | undefined>(undefined);
+
+  // Consent was given for one tailor's code, so a different complete code leaves it behind for good.
+  // While a code is half typed nothing is decided: retyping the same code keeps the consent.
+  const draftFor = (next: string) => {
+    const { consent, ...draft } = vtStorage.getDraft();
+    if (!consent || (CODE.test(next) && next !== consentFor.current)) return draft;
+    return { ...draft, consent };
+  };
 
   const verify = async (candidate: string) => {
     if (!CODE.test(candidate) || asked.current === candidate) return;
@@ -71,6 +80,7 @@ export const StartView: React.FC<{ onNavigate: (path: string) => void; initialCo
     let live = true;
     void vtStorage.loadDraft().then((draft) => {
       if (!live) return;
+      consentFor.current = draft.client_code;
       const saved = initialCode || draft.client_code || '';
       if (saved) {
         setCode(saved);
@@ -93,7 +103,7 @@ export const StartView: React.FC<{ onNavigate: (path: string) => void; initialCo
   useEffect(() => {
     if (!restored) return;
     vtStorage.saveDraft({
-      ...vtStorage.getDraft(),
+      ...draftFor(code),
       client_code: CODE.test(code) ? code : undefined,
       height_mm: height > 0 ? height * 10 : undefined,
       sex: sex || undefined,
@@ -101,7 +111,7 @@ export const StartView: React.FC<{ onNavigate: (path: string) => void; initialCo
     });
   }, [restored, code, height, sex, fit]);
 
-  const submit = (event: React.FormEvent) => {
+  const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     let ok = true;
     if (!CODE.test(code) || codeState === 'unknown') {
@@ -117,8 +127,9 @@ export const StartView: React.FC<{ onNavigate: (path: string) => void; initialCo
       ok = false;
     }
     if (!ok || !sex) return;
-    vtStorage.saveDraft({
-      ...vtStorage.getDraft(),
+    // On disk first: a reload straight after must not bring back consent for the old code.
+    await vtStorage.saveDraft({
+      ...draftFor(code),
       client_code: code,
       code_verified: codeState === 'verified',
       height_mm: height * 10,
@@ -132,7 +143,7 @@ export const StartView: React.FC<{ onNavigate: (path: string) => void; initialCo
     <div className="max-w-xl mx-auto px-4 py-6 flex flex-col gap-5">
       <ProgressSteps current={0} />
       <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">{t('detailsTitle')}</h1>
-      <form onSubmit={submit} noValidate className="flex flex-col gap-6">
+      <form onSubmit={(event) => void submit(event)} noValidate className="flex flex-col gap-6">
         <div>
           <p className="font-semibold">{t('clientCodeLabel')}</p>
           <p className="text-sm text-[var(--vt-ink-muted)] mb-2">{t('clientCodeHint')}</p>
