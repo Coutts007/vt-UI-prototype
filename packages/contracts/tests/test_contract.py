@@ -73,7 +73,8 @@ def test_error_codes_are_well_formed():
 
 def test_every_error_status_is_declared_somewhere():
     used = {int(s) for _, _, op in operations() for s in op["responses"] if s[0] == "4"}
-    assert {e["status"] for e in ERRORS.values()} <= used
+    # Any endpoint can fail with a 500, so operations do not each declare it.
+    assert {e["status"] for e in ERRORS.values() if e["status"] != 500} <= used
 
 
 def walk(node, path=""):

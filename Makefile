@@ -20,7 +20,7 @@ down:
 	$(COMPOSE) down
 
 seed:
-	@echo "make seed arrives in M4"
+	$(COMPOSE) exec api vt seed demo
 
 lint:
 	pnpm format:check

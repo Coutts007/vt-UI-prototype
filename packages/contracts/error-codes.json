@@ -1,5 +1,6 @@
 {
   "account_disabled": { "status": 403, "title": "This account is disabled" },
+  "account_locked": { "status": 429, "title": "Too many failed sign-ins. Try again later" },
   "account_pending": { "status": 403, "title": "This account is waiting for approval" },
   "account_rejected": { "status": 403, "title": "This account was not approved" },
   "approvals_missing": { "status": 409, "title": "Study approvals are missing" },
@@ -19,6 +20,7 @@
   "reading_locked": { "status": 409, "title": "This reading is already saved" },
   "rules_not_frozen": { "status": 409, "title": "These rules are not frozen" },
   "rules_version_unknown": { "status": 404, "title": "Unknown rules version" },
+  "server_error": { "status": 500, "title": "Something went wrong on the server" },
   "stale_app_version": { "status": 409, "title": "This app version is too old" },
   "study_mode_off": { "status": 409, "title": "Study mode is off" },
   "token_expired": { "status": 401, "title": "Your session has ended" },

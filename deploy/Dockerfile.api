@@ -4,8 +4,12 @@ WORKDIR /repo
 COPY pyproject.toml uv.lock ./
 COPY apps/api apps/api
 COPY packages/py packages/py
+COPY packages/contracts/error-codes.json packages/contracts/error-codes.json
+COPY packages/seed/seed.json packages/seed/seed.json
+COPY packages/rules packages/rules
 RUN uv sync --frozen --no-dev --package vt-api
 USER nobody
 ENV UV_CACHE_DIR=/tmp/uv
 # Access logs stay off: request paths can carry client codes (backend-spec 2.1 item 7).
+ENV PATH=/repo/.venv/bin:$PATH
 CMD [".venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]

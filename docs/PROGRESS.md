@@ -2,6 +2,15 @@
 
 The newest entry comes first. Every change or improvement adds a line in the same commit.
 
+## 2026-10-31: M4 backend foundation
+
+- Added all database tables as a reversible migration, with limited database roles and triggers that keep the audit log, reference readings and their corrections from being changed.
+- Added register, sign-in, sign-out, `/me` and password change: Argon2id passwords, 24-hour tokens that can be revoked, and a 15-minute lockout after 5 wrong passwords.
+- Added role and ownership checks, the audit service, rate limits, standard error replies from the shared error codes, and `vt seed demo`, which production refuses.
+- `make up` now applies migrations first, and the API connects with the limited role. `make seed` loads the demo data, and `wanjiru@vt.test` can sign in through the API docs page in a development build.
+- After an independent review: database errors can no longer print submitted values into logs, and crashes log only the error type. NUL characters are refused. Added the limit of 300 requests a minute per user, a limit and audit on guessing the current password, and the same lockout reply for unknown emails. Attempts on a locked account are now audited. Replies are now tested against the contract, and new tests cover role and ownership checks through real routes, proxy address handling and the register limit. The API role can no longer delete clients directly, since that would delete their profiles. Study sessions in the seed now link to their participant.
+- **Carried forward:** database checks on `sex`, `clothing_fit`, `lighting`, `age_band`, `consent.language` and the sheet locale and unit come with their endpoints (M8 to M11). The retention role's narrower rights come with the jobs (M11). HSTS and the frontend permissions header come with M12. The development API docs page loads its assets from a CDN; production has no docs page.
+
 ## 2026-10-31: M3 web foundation
 
 - Every URL in the route map now has a screen, with sign-in and role checks. A wrong role sees a 403 page, an unknown URL a 404 page, and study pages stay hidden when study mode is off.
