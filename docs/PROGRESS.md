@@ -4,6 +4,7 @@ The newest entry comes first. Every change or improvement adds a line in the sam
 
 ## 2026-10-31: M5 client capture flow on fake vision
 
+- Added a fake vision worker that replays each check state, selectable at `/dev/capture-tuning`, and the runner that drives capture.
 - Added the typed capture state machine with a test per transition, thresholds in one config file, and the checks, burst and phone-check logic.
 
 ## 2026-10-31: M4 backend foundation
