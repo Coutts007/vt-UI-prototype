@@ -155,7 +155,7 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
           ) : (
             <div className="w-5 h-5 rounded-full border-2 border-slate-300 shrink-0" />
           )}
-          <span className={`text-sm font-semibold ${currentStep >= 1 ? 'text-[var(--vt-ink,#1F1C18)]' : 'text-slate-400'}`}>
+          <span className={`text-sm font-semibold ${currentStep >= 1 ? 'text-[var(--vt-ink,#1F1C18)]' : 'text-slate-600'}`}>
             {t('stepReadingOutline')}
           </span>
         </div>
@@ -166,7 +166,7 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
           ) : (
             <div className="w-5 h-5 rounded-full border-2 border-slate-300 shrink-0" />
           )}
-          <span className={`text-sm font-semibold ${currentStep >= 2 ? 'text-[var(--vt-ink,#1F1C18)]' : 'text-slate-400'}`}>
+          <span className={`text-sm font-semibold ${currentStep >= 2 ? 'text-[var(--vt-ink,#1F1C18)]' : 'text-slate-600'}`}>
             {t('stepUsingSheet')}
           </span>
         </div>
@@ -177,7 +177,7 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
           ) : (
             <div className="w-5 h-5 rounded-full border-2 border-slate-300 shrink-0" />
           )}
-          <span className={`text-sm font-semibold ${currentStep >= 3 ? 'text-[var(--vt-ink,#1F1C18)]' : 'text-slate-400'}`}>
+          <span className={`text-sm font-semibold ${currentStep >= 3 ? 'text-[var(--vt-ink,#1F1C18)]' : 'text-slate-600'}`}>
             {t('stepCalculatingGirths')}
           </span>
         </div>

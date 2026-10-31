@@ -63,9 +63,9 @@ export const AuditView: React.FC<AuditViewProps> = ({ onNavigate }) => {
       {/* Entries List */}
       <div className="rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white divide-y divide-[var(--vt-line,#DDD5C8)]/50 shadow-2xs overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-sm text-slate-400">Loading audit records…</div>
+          <div className="p-8 text-center text-sm text-slate-600">Loading audit records…</div>
         ) : filtered.length === 0 ? (
-          <div className="p-8 text-center text-xs text-slate-400">No audit entries found.</div>
+          <div className="p-8 text-center text-xs text-slate-600">No audit entries found.</div>
         ) : (
           filtered.map((item) => (
             <div key={item.log_id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-[#FAF8F5]">

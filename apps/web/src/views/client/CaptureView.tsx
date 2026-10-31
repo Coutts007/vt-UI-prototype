@@ -254,7 +254,7 @@ export const CaptureView: React.FC<CaptureViewProps> = ({
         {/* Fallback Simulation Canvas / Backdrop */}
         {useSimulation && (
           <div className="absolute inset-0 w-full h-full bg-linear-to-b from-slate-950 via-slate-900 to-black flex items-center justify-center opacity-90 z-0">
-            <div className="text-center text-slate-500 text-xs">
+            <div className="text-center text-slate-600 text-xs">
               <span>Interactive Synthetic Vision Simulation</span>
             </div>
           </div>
@@ -299,7 +299,7 @@ export const CaptureView: React.FC<CaptureViewProps> = ({
 
         {/* 3. Live 7-Check Overlay (Left Edge) */}
         <div className="absolute left-3 sm:left-6 top-16 z-20 flex flex-col gap-1.5 p-3 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-xs">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-0.5">
             Capture Checks
           </span>
           {checks.map((chk) => (
@@ -345,7 +345,7 @@ export const CaptureView: React.FC<CaptureViewProps> = ({
           <div className="absolute inset-0 z-40 bg-black/80 flex flex-col items-center justify-center text-center p-6">
             <div className="w-16 h-16 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin mb-4" />
             <span className="text-2xl font-bold text-white tracking-tight">{t('holdStill')}</span>
-            <span className="text-xs text-slate-400 mt-2">Computing 5-frame median pose on device</span>
+            <span className="text-xs text-slate-600 mt-2">Computing 5-frame median pose on device</span>
           </div>
         )}
 
@@ -408,7 +408,7 @@ export const CaptureView: React.FC<CaptureViewProps> = ({
         {/* Simulation preset buttons (For quick evaluation of all 9 checks on desktop) */}
         {useSimulation && (
           <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1 text-[11px]">
-            <span className="text-slate-400 mr-1">Simulate checks:</span>
+            <span className="text-slate-600 mr-1">Simulate checks:</span>
             {[
               { id: 'good', label: 'All Pass' },
               { id: 'arms_tucked', label: 'Arms Tucked' },
@@ -439,7 +439,7 @@ export const CaptureView: React.FC<CaptureViewProps> = ({
           </div>
         )}
 
-        <div className="text-center text-[10px] text-slate-400">
+        <div className="text-center text-[10px] text-slate-600">
           Photos stay on this phone. Nothing is uploaded.
         </div>
       </div>

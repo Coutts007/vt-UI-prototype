@@ -8,7 +8,16 @@ dependencies = [
   "pydantic-settings>=2.6",
   "structlog>=24.4",
   "uvicorn>=0.32",
+  "alembic>=1.14",
+  "argon2-cffi>=23.1",
+  "asyncpg>=0.30",
+  "pyjwt>=2.10",
+  "sqlalchemy[asyncio]>=2.0.36",
+  "typer>=0.15",
 ]
+
+[project.scripts]
+vt = "app.cli:main"
 
 [build-system]
 requires = ["hatchling"]

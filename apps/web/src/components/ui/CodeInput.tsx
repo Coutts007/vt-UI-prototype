@@ -73,7 +73,7 @@ export const CodeInput: React.FC<CodeInputProps> = ({
               } ${error ? 'border-rose-400' : ''}`}
             >
               <span>{isFilled ? char : ''}</span>
-              <span className="text-[9px] font-sans font-normal text-[var(--vt-ink-muted,#5C554C)] tracking-tighter -mt-1 opacity-60">
+              <span className="text-[9px] font-sans font-normal text-[var(--vt-ink-muted,#5C554C)] tracking-tighter -mt-1">
                 {isLetterBox ? 'letter' : 'digit'}
               </span>
             </div>

@@ -64,11 +64,14 @@ export const NewOrderView: React.FC<NewOrderViewProps> = ({
   };
 
   useEffect(() => {
-    api.getClients().then((list) => {
+    void (async () => {
+      const list = await api.getClients();
       setClients(list);
-      if (list.length > 0) setSelectedClientId(list[0].client_id);
-    });
-  }, []);
+      const chosen = initialProfileId ? await api.getProfileById(initialProfileId) : null;
+      const owner = list.find((c) => c.client_code === chosen?.client_code);
+      if (owner ?? list[0]) setSelectedClientId((owner ?? list[0]).client_id);
+    })();
+  }, [initialProfileId]);
 
   useEffect(() => {
     if (selectedClientId) {
@@ -190,13 +193,13 @@ export const NewOrderView: React.FC<NewOrderViewProps> = ({
       {/* Client and Profile Selector */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-5 rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white shadow-2xs">
         <div>
-          <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+          <label htmlFor="neworderview-1" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
             Client
           </label>
-          <select
+          <select id="neworderview-1"
             value={selectedClientId}
             onChange={(e) => setSelectedClientId(e.target.value)}
-            className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-white text-sm font-semibold text-[var(--vt-ink,#1F1C18)]"
+            className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-white text-sm font-semibold text-[var(--vt-ink,#1F1C18)]"
           >
             {clients.map((c) => (
               <option key={c.client_id} value={c.client_id}>
@@ -207,16 +210,16 @@ export const NewOrderView: React.FC<NewOrderViewProps> = ({
         </div>
 
         <div>
-          <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+          <label htmlFor="neworderview-2" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
             Measurement Profile
           </label>
-          <select
+          <select id="neworderview-2"
             value={selectedProfile?.profile_id || ''}
             onChange={(e) => {
               const p = profiles.find((x) => x.profile_id === e.target.value);
               if (p) setSelectedProfile(p);
             }}
-            className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-white text-sm font-semibold text-[var(--vt-ink,#1F1C18)]"
+            className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-white text-sm font-semibold text-[var(--vt-ink,#1F1C18)]"
           >
             {profiles.map((p) => (
               <option key={p.profile_id} value={p.profile_id}>
@@ -230,13 +233,13 @@ export const NewOrderView: React.FC<NewOrderViewProps> = ({
       {/* Garment Selection & Due Date */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-5 rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white shadow-2xs">
         <div>
-          <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+          <label htmlFor="neworderview-3" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
             Garment Type
           </label>
-          <select
+          <select id="neworderview-3"
             value={garmentType}
             onChange={(e) => setGarmentType(e.target.value as GarmentType)}
-            className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-white text-sm font-semibold text-[var(--vt-ink,#1F1C18)] capitalize"
+            className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-white text-sm font-semibold text-[var(--vt-ink,#1F1C18)] capitalize"
           >
             <option value="shirt">Shirt</option>
             <option value="dress">Dress</option>
@@ -248,14 +251,14 @@ export const NewOrderView: React.FC<NewOrderViewProps> = ({
         </div>
 
         <div>
-          <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+          <label htmlFor="neworderview-4" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
             Target Due Date
           </label>
-          <input
+          <input id="neworderview-4"
             type="date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
-            className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-white text-sm font-semibold text-[var(--vt-ink,#1F1C18)]"
+            className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-white text-sm font-semibold text-[var(--vt-ink,#1F1C18)]"
           />
         </div>
 
@@ -331,7 +334,7 @@ export const NewOrderView: React.FC<NewOrderViewProps> = ({
                             setOverrideValCm(item.body_mm ? item.body_mm / 10 : 90);
                             setOverrideReason('');
                           }}
-                          className="p-1 rounded text-slate-400 hover:text-[var(--vt-thread,#2E3A87)] hover:bg-black/5 cursor-pointer"
+                          className="p-1 rounded text-slate-600 hover:text-[var(--vt-thread,#2E3A87)] hover:bg-black/5 cursor-pointer"
                           title="Override Body Measurement"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
@@ -343,6 +346,7 @@ export const NewOrderView: React.FC<NewOrderViewProps> = ({
                     <td className="p-3.5">
                       <div className="flex items-center gap-1.5">
                         <input
+                          aria-label={`${t('easeForSite')}: ${item.site_code}`}
                           type="number"
                           step="0.5"
                           min="0"
@@ -450,19 +454,19 @@ export const NewOrderView: React.FC<NewOrderViewProps> = ({
 
             <div className="space-y-3 mb-6">
               <div>
-                <label className="text-xs font-semibold block mb-1">New Size (cm)</label>
-                <input
+                <label htmlFor="neworderview-5" className="text-xs font-semibold block mb-1">New Size (cm)</label>
+                <input id="neworderview-5"
                   type="number"
                   step="0.1"
                   value={overrideValCm}
                   onChange={(e) => setOverrideValCm(parseFloat(e.target.value) || 0)}
-                  className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] font-mono text-base font-bold"
+                  className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] font-mono text-base font-bold"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold block mb-1">Reason for Override</label>
-                <input
+                <label htmlFor="neworderview-6" className="text-xs font-semibold block mb-1">Reason for Override</label>
+                <input id="neworderview-6"
                   type="text"
                   value={overrideReason}
                   onChange={(e) => setOverrideReason(e.target.value)}

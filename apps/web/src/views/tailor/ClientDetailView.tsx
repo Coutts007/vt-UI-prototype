@@ -54,7 +54,7 @@ export const ClientDetailView: React.FC<ClientDetailViewProps> = ({ clientId, on
   };
 
   if (loading || !client) {
-    return <div className="p-8 text-center text-sm text-slate-400">Loading client details…</div>;
+    return <div className="p-8 text-center text-sm text-slate-600">Loading client details…</div>;
   }
 
   const latestProfile = profiles[0];
@@ -144,7 +144,7 @@ export const ClientDetailView: React.FC<ClientDetailViewProps> = ({ clientId, on
 
                   <div className="flex items-center gap-3">
                     <SyncBadge status={p.sync_status} />
-                    <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-[var(--vt-thread,#2E3A87)]" />
+                    <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-[var(--vt-thread,#2E3A87)]" />
                   </div>
                 </div>
               );
@@ -182,7 +182,7 @@ export const ClientDetailView: React.FC<ClientDetailViewProps> = ({ clientId, on
                     Due: {ord.due_date} · Status: <strong>{ord.status.toUpperCase()}</strong>
                   </span>
                 </div>
-                <ChevronRight className="w-5 h-5 text-slate-400" />
+                <ChevronRight className="w-5 h-5 text-slate-600" />
               </div>
             ))}
           </div>

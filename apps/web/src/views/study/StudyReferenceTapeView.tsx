@@ -114,14 +114,14 @@ export const StudyReferenceTapeView: React.FC<StudyReferenceTapeViewProps> = ({
           {/* Participant code and reading selector */}
           <div className="grid grid-cols-2 gap-4 p-5 rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white shadow-2xs">
             <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+              <label htmlFor="studyreferencetapeview-1" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
                 Participant Code
               </label>
-              <input
+              <input id="studyreferencetapeview-1"
                 type="text"
                 value={participantCode}
                 onChange={(e) => setParticipantCode(e.target.value.toUpperCase())}
-                className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] font-mono font-bold text-base"
+                className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] font-mono font-bold text-base"
               />
             </div>
 
@@ -135,7 +135,7 @@ export const StudyReferenceTapeView: React.FC<StudyReferenceTapeViewProps> = ({
                     key={num}
                     type="button"
                     onClick={() => setReadingNo(num as any)}
-                    className={`h-11 rounded-xl border text-xs font-bold cursor-pointer ${
+                    className={`h-12 rounded-xl border text-xs font-bold cursor-pointer ${
                       readingNo === num
                         ? 'bg-[var(--vt-thread,#2E3A87)] text-white'
                         : 'border-[var(--vt-line,#DDD5C8)] hover:bg-[#FAF8F5]'

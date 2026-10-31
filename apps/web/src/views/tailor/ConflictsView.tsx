@@ -75,7 +75,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({ onNavigate }) => {
               <span className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
                 Server Version (v1)
               </span>
-              <span className="text-xs text-slate-500 block mb-3">Captured 20 Sep 2026</span>
+              <span className="text-xs text-slate-600 block mb-3">Captured 20 Sep 2026</span>
               <ul className="text-xs space-y-1.5 font-mono">
                 <li>Shoulder: 39.5 cm</li>
                 <li>Chest: 91.0 cm</li>
@@ -97,7 +97,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({ onNavigate }) => {
               <span className="text-xs font-bold uppercase tracking-wider text-[var(--vt-thread,#2E3A87)] block mb-1">
                 Newer Client Version (v2)
               </span>
-              <span className="text-xs text-slate-500 block mb-3">Captured 10 Oct 2026</span>
+              <span className="text-xs text-slate-600 block mb-3">Captured 10 Oct 2026</span>
               <ul className="text-xs space-y-1.5 font-mono">
                 <li>Shoulder: 39.8 cm</li>
                 <li>Chest: 92.2 cm</li>

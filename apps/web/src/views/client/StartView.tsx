@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { FEATURE_DIRECTORY } from '../../config/features';
 import { useI18n } from '../../i18n';
 import { Button } from '../../components/ui/Button';
 import { CodeInput } from '../../components/ui/CodeInput';
@@ -161,22 +162,25 @@ export const StartView: React.FC<StartViewProps> = ({ onNavigate, initialCode })
                   {t('codeFromTailor')}: <strong>{tailorName}</strong>
                 </span>
               </div>
-              <button
+              {FEATURE_DIRECTORY && (
+<button
                 type="button"
                 onClick={() => onNavigate('/tailors')}
                 className="text-[11px] text-emerald-700 hover:text-emerald-900 underline font-semibold ml-2 shrink-0 cursor-pointer"
               >
                 Change Tailor
               </button>
+)}
             </div>
           )}
 
           {/* Directory helper link */}
           <div className="mt-3 pt-3 border-t border-[var(--vt-line,#DDD5C8)]/60 flex items-center justify-between text-xs">
-            <span className="text-[var(--vt-ink-muted,#5C554C)]">
-              Don't have a tailor code yet?
-            </span>
-            <button
+            {FEATURE_DIRECTORY && (
+              <span className="text-[var(--vt-ink-muted,#5C554C)]">Don't have a tailor code yet?</span>
+            )}
+            {FEATURE_DIRECTORY && (
+<button
               type="button"
               onClick={() => onNavigate('/tailors')}
               className="text-[var(--vt-thread,#2E3A87)] font-bold hover:underline inline-flex items-center gap-1 cursor-pointer"
@@ -184,13 +188,14 @@ export const StartView: React.FC<StartViewProps> = ({ onNavigate, initialCode })
               <Sparkles className="w-3.5 h-3.5" />
               <span>Browse tailors &amp; get code</span>
             </button>
+)}
           </div>
         </div>
 
         {/* 2. Height */}
         <div className="p-5 rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white shadow-2xs">
           <div className="flex items-center justify-between mb-1">
-            <label className="text-sm font-bold text-[var(--vt-ink,#1F1C18)]">
+            <label htmlFor="start-height" className="text-sm font-bold text-[var(--vt-ink,#1F1C18)]">
               {t('heightLabel')}
             </label>
             {heightPreFilled && (
@@ -204,6 +209,7 @@ export const StartView: React.FC<StartViewProps> = ({ onNavigate, initialCode })
           </span>
 
           <NumberInput
+            id="start-height"
             value={height}
             onChange={(val) => {
               setHeight(val);

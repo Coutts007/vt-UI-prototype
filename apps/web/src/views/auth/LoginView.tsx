@@ -60,38 +60,39 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onNavigate
 
       <form onSubmit={handleSubmit} className="p-6 rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white shadow-2xs space-y-4 mb-6">
         <div>
-          <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+          <label htmlFor="loginview-1" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
             Email Address
           </label>
           <div className="relative">
-            <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
+            <Mail className="w-4 h-4 text-slate-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input id="loginview-1"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full h-11 pl-10 pr-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-white text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)]"
+              className="w-full h-12 pl-10 pr-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-white text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)]"
             />
           </div>
         </div>
 
         <div>
-          <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+          <label htmlFor="loginview-2" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
             Password
           </label>
           <div className="relative">
-            <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
+            <Lock className="w-4 h-4 text-slate-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input id="loginview-2"
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full h-11 pl-10 pr-10 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-white text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)]"
+              className="w-full h-12 pl-10 pr-10 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-white text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)]"
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+              aria-label={t(showPassword ? 'hidePassword' : 'showPassword')}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-600 cursor-pointer"
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
@@ -115,7 +116,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onNavigate
             className="p-2 rounded-lg bg-white border border-[var(--vt-line,#DDD5C8)] text-left hover:border-[var(--vt-thread,#2E3A87)] cursor-pointer"
           >
             <strong>Wanjiru (Tailor)</strong>
-            <span className="block text-[10px] text-slate-500">Mama Wanjiru Tailors</span>
+            <span className="block text-[10px] text-slate-600">Mama Wanjiru Tailors</span>
           </button>
           <button
             type="button"
@@ -123,7 +124,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onNavigate
             className="p-2 rounded-lg bg-white border border-[var(--vt-line,#DDD5C8)] text-left hover:border-[var(--vt-thread,#2E3A87)] cursor-pointer"
           >
             <strong>Otieno (Tailor)</strong>
-            <span className="block text-[10px] text-slate-500">Otieno Bespoke</span>
+            <span className="block text-[10px] text-slate-600">Otieno Bespoke</span>
           </button>
           <button
             type="button"
@@ -131,7 +132,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onNavigate
             className="p-2 rounded-lg bg-white border border-[var(--vt-line,#DDD5C8)] text-left hover:border-[var(--vt-thread,#2E3A87)] cursor-pointer"
           >
             <strong>Admin (Researcher)</strong>
-            <span className="block text-[10px] text-slate-500">System Admin</span>
+            <span className="block text-[10px] text-slate-600">System Admin</span>
           </button>
           <button
             type="button"
@@ -139,7 +140,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onNavigate
             className="p-2 rounded-lg bg-white border border-[var(--vt-line,#DDD5C8)] text-left hover:border-[var(--vt-thread,#2E3A87)] cursor-pointer"
           >
             <strong>Measurer A</strong>
-            <span className="block text-[10px] text-slate-500">Validation Study</span>
+            <span className="block text-[10px] text-slate-600">Validation Study</span>
           </button>
         </div>
       </div>

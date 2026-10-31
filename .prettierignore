@@ -6,3 +6,4 @@ uv.lock
 dist/
 coverage/
 apps/web/src/
+apps/web/public/mockServiceWorker.js

@@ -48,7 +48,7 @@ export const ProfileDetailView: React.FC<ProfileDetailViewProps> = ({
   };
 
   if (loading || !profile) {
-    return <div className="p-8 text-center text-sm text-slate-400">Loading profile data…</div>;
+    return <div className="p-8 text-center text-sm text-slate-600">Loading profile data…</div>;
   }
 
   const formatValue = (valMm: number | null) => {

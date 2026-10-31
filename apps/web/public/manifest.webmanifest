@@ -1,0 +1,9 @@
+{
+  "name": "Virtual Tailor",
+  "short_name": "VT",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F7F3EC",
+  "theme_color": "#1F3A5F",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

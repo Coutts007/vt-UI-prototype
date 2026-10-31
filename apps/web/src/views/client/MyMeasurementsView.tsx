@@ -160,7 +160,7 @@ export const MyMeasurementsView: React.FC<MyMeasurementsViewProps> = ({
                   </div>
                 </div>
 
-                <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-[var(--vt-thread,#2E3A87)] transition-colors" />
+                <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-[var(--vt-thread,#2E3A87)] transition-colors" />
               </div>
             );
           })}

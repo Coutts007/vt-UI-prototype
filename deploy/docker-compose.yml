@@ -15,6 +15,21 @@ services:
       timeout: 3s
       retries: 20
 
+  migrate:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    command: ['.venv/bin/vt', 'db', 'upgrade']
+    environment:
+      ENV: ${ENV:-development}
+      MIGRATION_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-vt}:${POSTGRES_PASSWORD:-vt-dev-only}@db:5432/${POSTGRES_DB:-vt}
+      VT_APP_DB_PASSWORD: ${VT_APP_DB_PASSWORD:-vt-app-dev-only}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-me-0123456789}
+      IP_PEPPER: ${IP_PEPPER:-dev-only-ip-pepper}
+    depends_on:
+      db:
+        condition: service_healthy
+
   api:
     build:
       context: ..
@@ -22,10 +37,15 @@ services:
     environment:
       ENV: ${ENV:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-vt}:${POSTGRES_PASSWORD:-vt-dev-only}@db:5432/${POSTGRES_DB:-vt}
+      # The API connects as the limited role, so the database itself enforces the audit rules.
+      DATABASE_URL: postgresql+asyncpg://vt_app:${VT_APP_DB_PASSWORD:-vt-app-dev-only}@db:5432/${POSTGRES_DB:-vt}
+      VT_APP_DB_PASSWORD: ${VT_APP_DB_PASSWORD:-vt-app-dev-only}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-me-0123456789}
+      IP_PEPPER: ${IP_PEPPER:-dev-only-ip-pepper}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12,192.168.0.0/16}
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test:
         - CMD

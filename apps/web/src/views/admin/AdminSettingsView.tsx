@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useI18n } from '../../i18n';
 import { api } from '../../api/client';
 import { Button } from '../../components/ui/Button';
 import { Settings, Shield, Beaker, Check } from 'lucide-react';
@@ -8,6 +9,7 @@ interface AdminSettingsViewProps {
 }
 
 export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({ onNavigate }) => {
+  const { t } = useI18n();
   const [retentionMonths, setRetentionMonths] = useState<number>(24);
   const [studyMode, setStudyMode] = useState<boolean>(true);
   const [savedNotice, setSavedNotice] = useState(false);
@@ -49,12 +51,13 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({ onNavigate
         </p>
         <div className="flex items-center gap-3">
           <input
+            aria-label={t('retentionMonthsLabel')}
             type="number"
             value={retentionMonths}
             onChange={(e) => setRetentionMonths(parseInt(e.target.value) || 24)}
             min={1}
             max={60}
-            className="w-28 h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm font-bold font-mono"
+            className="w-28 h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm font-bold font-mono"
           />
           <span className="text-sm text-[var(--vt-ink-muted,#5C554C)]">months</span>
         </div>

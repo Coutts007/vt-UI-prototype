@@ -65,14 +65,14 @@ export const StudyCaptureView: React.FC<StudyCaptureViewProps> = ({
         {/* Participant & Set */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+            <label htmlFor="studycaptureview-1" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
               Participant Code
             </label>
-            <input
+            <input id="studycaptureview-1"
               type="text"
               value={participantCode}
               onChange={(e) => setParticipantCode(e.target.value.toUpperCase())}
-              className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] font-mono font-bold text-base"
+              className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] font-mono font-bold text-base"
             />
           </div>
 
@@ -86,7 +86,7 @@ export const StudyCaptureView: React.FC<StudyCaptureViewProps> = ({
                   key={num}
                   type="button"
                   onClick={() => setSetNo(num as any)}
-                  className={`h-11 rounded-xl border text-xs font-bold cursor-pointer ${
+                  className={`h-12 rounded-xl border text-xs font-bold cursor-pointer ${
                     setNo === num
                       ? 'bg-[var(--vt-thread,#2E3A87)] text-white'
                       : 'border-[var(--vt-line,#DDD5C8)] hover:bg-[#FAF8F5]'
@@ -102,14 +102,14 @@ export const StudyCaptureView: React.FC<StudyCaptureViewProps> = ({
         {/* Height & Clothing Fit */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+            <label htmlFor="studycaptureview-2" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
               Measured Stature (cm)
             </label>
-            <input
+            <input id="studycaptureview-2"
               type="number"
               value={heightCm}
               onChange={(e) => setHeightCm(parseFloat(e.target.value) || 170)}
-              className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] font-mono text-sm"
+              className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] font-mono text-sm"
             />
           </div>
 
@@ -123,7 +123,7 @@ export const StudyCaptureView: React.FC<StudyCaptureViewProps> = ({
                   key={fit}
                   type="button"
                   onClick={() => setClothingFit(fit)}
-                  className={`h-11 rounded-xl border text-xs font-bold capitalize cursor-pointer ${
+                  className={`h-12 rounded-xl border text-xs font-bold capitalize cursor-pointer ${
                     clothingFit === fit
                       ? 'bg-[var(--vt-thread,#2E3A87)] text-white'
                       : 'border-[var(--vt-line,#DDD5C8)] hover:bg-[#FAF8F5]'
@@ -139,13 +139,13 @@ export const StudyCaptureView: React.FC<StudyCaptureViewProps> = ({
         {/* Environmental Covariates (Lighting & Distance) */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+            <label htmlFor="studycaptureview-3" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
               Ambient Lighting
             </label>
-            <select
+            <select id="studycaptureview-3"
               value={lighting}
               onChange={(e) => setLighting(e.target.value as any)}
-              className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-xs font-semibold"
+              className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-xs font-semibold"
             >
               <option value="window">Natural Window Light</option>
               <option value="lamp">Indoor Bulb / Lamp</option>
@@ -154,15 +154,15 @@ export const StudyCaptureView: React.FC<StudyCaptureViewProps> = ({
           </div>
 
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+            <label htmlFor="studycaptureview-4" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
               Distance Wall-to-Phone (m)
             </label>
-            <input
+            <input id="studycaptureview-4"
               type="number"
               step="0.1"
               value={distanceM}
               onChange={(e) => setDistanceM(parseFloat(e.target.value) || 2.2)}
-              className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm font-mono"
+              className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm font-mono"
             />
           </div>
         </div>

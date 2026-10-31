@@ -54,7 +54,7 @@ export const OrderDetailView: React.FC<OrderDetailViewProps> = ({
   };
 
   if (loading || !order) {
-    return <div className="p-8 text-center text-sm text-slate-400">Loading order details…</div>;
+    return <div className="p-8 text-center text-sm text-slate-600">Loading order details…</div>;
   }
 
   const statusSteps: OrderStatus[] = ['new', 'cutting', 'fitting', 'ready', 'collected'];

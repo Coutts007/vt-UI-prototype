@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { FEATURE_DIRECTORY } from '../../config/features';
 import { useI18n } from '../../i18n';
 import { UserAccount } from '../../types/api';
 import { api } from '../../api/client';
@@ -154,7 +155,8 @@ export const TailorSettingsView: React.FC<TailorSettingsViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
+            {FEATURE_DIRECTORY && (
+<button
               type="button"
               onClick={() => onNavigate('/tailors')}
               className="text-xs font-semibold text-[var(--vt-thread,#2E3A87)] hover:underline flex items-center gap-1 cursor-pointer"
@@ -162,6 +164,7 @@ export const TailorSettingsView: React.FC<TailorSettingsViewProps> = ({
               <span>Preview Directory</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </button>
+)}
           </div>
         </div>
 
@@ -209,7 +212,7 @@ export const TailorSettingsView: React.FC<TailorSettingsViewProps> = ({
                   </>
                 ) : (
                   <>
-                    <EyeOff className="w-3.5 h-3.5 text-slate-500" />
+                    <EyeOff className="w-3.5 h-3.5 text-slate-600" />
                     <span>Hidden</span>
                   </>
                 )}
@@ -221,10 +224,10 @@ export const TailorSettingsView: React.FC<TailorSettingsViewProps> = ({
         {/* Directory Fields */}
         <div className="space-y-4 pt-2">
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+            <label htmlFor="tailorsettingsview-1" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
               Workshop Bio / Description
             </label>
-            <textarea
+            <textarea id="tailorsettingsview-1"
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -261,13 +264,13 @@ export const TailorSettingsView: React.FC<TailorSettingsViewProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+              <label htmlFor="tailorsettingsview-2" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
                 Typical Turnaround Time
               </label>
-              <select
+              <select id="tailorsettingsview-2"
                 value={turnaroundDays}
                 onChange={(e) => setTurnaroundDays(e.target.value)}
-                className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm bg-white"
+                className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm bg-white"
               >
                 <option value="2-3 days">2-3 days (Express)</option>
                 <option value="3-5 days">3-5 days (Standard)</option>
@@ -277,13 +280,13 @@ export const TailorSettingsView: React.FC<TailorSettingsViewProps> = ({
             </div>
 
             <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+              <label htmlFor="tailorsettingsview-3" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
                 Pricing Tier
               </label>
-              <select
+              <select id="tailorsettingsview-3"
                 value={pricingTier}
                 onChange={(e) => setPricingTier(e.target.value as any)}
-                className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm bg-white"
+                className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm bg-white"
               >
                 <option value="Affordable">Affordable (Budget-friendly)</option>
                 <option value="Mid-Range">Mid-Range (Standard quality)</option>
@@ -302,54 +305,54 @@ export const TailorSettingsView: React.FC<TailorSettingsViewProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+            <label htmlFor="tailorsettingsview-4" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
               Business Name
             </label>
-            <input
+            <input id="tailorsettingsview-4"
               type="text"
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
-              className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm"
+              className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm"
             />
           </div>
 
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+            <label htmlFor="tailorsettingsview-5" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
               Contact Phone / WhatsApp
             </label>
-            <input
+            <input id="tailorsettingsview-5"
               type="text"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm"
+              className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+            <label htmlFor="tailorsettingsview-6" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
               Location / Area
             </label>
-            <input
+            <input id="tailorsettingsview-6"
               type="text"
               value={area}
               onChange={(e) => setArea(e.target.value)}
               placeholder="e.g. Gikomba, Nairobi"
-              className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm"
+              className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm"
             />
           </div>
 
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+            <label htmlFor="tailorsettingsview-7" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
               Stall / Building Address
             </label>
-            <input
+            <input id="tailorsettingsview-7"
               type="text"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               placeholder="e.g. Stall 42B, Ground Floor"
-              className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm"
+              className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm"
             />
           </div>
         </div>

@@ -91,7 +91,7 @@ export const OrderQueueView: React.FC<OrderQueueViewProps> = ({ onNavigate }) =>
 
       {/* Orders List */}
       {loading ? (
-        <div className="p-12 text-center text-sm text-slate-400">Loading orders queue…</div>
+        <div className="p-12 text-center text-sm text-slate-600">Loading orders queue…</div>
       ) : orders.length === 0 ? (
         <div className="p-12 text-center rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white">
           <ClipboardList className="w-10 h-10 text-slate-300 mx-auto mb-2" />
@@ -132,7 +132,7 @@ export const OrderQueueView: React.FC<OrderQueueViewProps> = ({ onNavigate }) =>
 
                   <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--vt-ink-muted,#5C554C)]">
                     <span className="flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                      <Calendar className="w-3.5 h-3.5 text-slate-600" />
                       <span>Due: {ord.due_date}</span>
                     </span>
 
@@ -155,7 +155,7 @@ export const OrderQueueView: React.FC<OrderQueueViewProps> = ({ onNavigate }) =>
                   <span className="text-xs uppercase font-bold tracking-wider px-3 py-1 rounded-lg bg-[#FAF8F5] border border-[var(--vt-line,#DDD5C8)] text-[var(--vt-ink,#1F1C18)]">
                     {ord.status}
                   </span>
-                  <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-[var(--vt-thread,#2E3A87)] transition-colors" />
+                  <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-[var(--vt-thread,#2E3A87)] transition-colors" />
                 </div>
               </div>
             );
