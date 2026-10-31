@@ -91,6 +91,14 @@ for (const [name, actual, limit] of checks) {
   if (actual > limit) failures.push(`${name} is over budget`);
 }
 
+// The directory (D27) loads on demand from its own route, so it is outside the client flow's count.
+// Reported, not hidden: a person who opens it downloads this on top.
+const directory = files.filter((f) => /^BusinessDirectoryView-.*\.js$/.test(f));
+if (directory.length) {
+  const own = [...closure(directory)].filter((f) => !client.has(f));
+  console.log(`directory screen JS, on demand: ${(total(own) / KB).toFixed(1)} KB gzip`);
+}
+
 let firstLoad = 0;
 const walk = (dir) => {
   for (const name of readdirSync(dir)) {

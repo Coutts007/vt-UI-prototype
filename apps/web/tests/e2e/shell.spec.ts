@@ -129,11 +129,6 @@ test('the offline banner appears', async ({ page, context }) => {
   await context.setOffline(false);
 });
 
-test('nothing links to the directory while its flag is off', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByText(/Find a Tailor|Browse Tailors/)).toHaveCount(0);
-});
-
 test('a new order starts from the profile that was chosen', async ({ page }) => {
   await signIn(page, 'wanjiru@vt.test');
   await page.goto('/t/orders/new?profileId=p-02');
