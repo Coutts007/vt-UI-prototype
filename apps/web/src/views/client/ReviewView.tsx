@@ -1,225 +1,143 @@
-import React, { useState } from 'react';
-import { useI18n } from '../../i18n';
-import { MeasurementProfile, SiteCode } from '../../types/api';
-import { Silhouette } from '../../components/ui/Silhouette';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
+import { RotateCcw, Send, Trash2 } from 'lucide-react';
+import { captureSession } from '../../capture/session';
 import { Button } from '../../components/ui/Button';
-import { FlagBadge } from '../../components/ui/FlagBadge';
+import { ProgressSteps } from '../../components/ui/data';
+import { Banner, Dialog } from '../../components/ui/feedback';
 import { vtStorage } from '../../db/storage';
-import { api } from '../../api/client';
-import {
-  Ruler,
-  RotateCcw,
-  Send,
-  Trash2,
-  CheckCircle2,
-  AlertTriangle,
-  Info,
-  ChevronDown,
-} from 'lucide-react';
+import { useI18n } from '../../i18n';
+import { MeasurementSummary, SITE_VIEW, useSiteName } from './MeasurementSummary';
 
-interface ReviewViewProps {
-  profile: MeasurementProfile;
-  onRetake: (view: 'front' | 'side') => void;
-  onSaved: (synced: boolean) => void;
-  onDiscard: () => void;
-}
-
-export const ReviewView: React.FC<ReviewViewProps> = ({
-  profile,
-  onRetake,
-  onSaved,
-  onDiscard,
-}) => {
+export const ReviewView: React.FC<{ onNavigate: (path: string) => void }> = ({ onNavigate }) => {
   const { t } = useI18n();
+  const machine = useSyncExternalStore(captureSession.subscribe, captureSession.getMachine);
+  const [saving, setSaving] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const { profile } = captureSession;
+  const usable = profile && ['review', 'error'].includes(machine.state.name);
 
-  const [isSaving, setIsSaving] = useState(false);
-  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
-  const [selectedSiteDetail, setSelectedSiteDetail] = useState<SiteCode | null>(null);
+  useEffect(() => {
+    if (!usable) onNavigate('/');
+    // Only on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const enteredHeightCm = (profile.covariates.height_mm_entered / 10).toFixed(1);
-  const estimatedHeight = profile.measurements.find((m) => m.site_code === 'stature');
-  const estimatedHeightCm = estimatedHeight?.value_mm
-    ? (estimatedHeight.value_mm / 10).toFixed(1)
-    : '—';
+  if (!usable || !profile) return null;
 
-  const scaleDisagreed = profile.session.scale_disagreement_pct > 4.0;
-
-  // Handle Save & Send
-  const handleSaveAndSend = async () => {
-    setIsSaving(true);
-    let synced = false;
-
-    try {
-      // 1. Save locally in IndexedDB first (guarantees offline safety NFR-08)
-      await vtStorage.saveProfile(profile);
-
-      // 2. Attempt sync against API
-      try {
-        await api.submitProfile(profile);
-        await vtStorage.updateProfileSyncStatus(profile.profile_id, 'synced');
-        synced = true;
-      } catch {
-        // If offline or network error, remains 'pending'
-        await vtStorage.updateProfileSyncStatus(profile.profile_id, 'pending');
-        synced = false;
-      }
-    } catch {
-      // ignore
-    } finally {
-      setIsSaving(false);
-      onSaved(synced);
-    }
-  };
-
-  const nonPassMeasurements = profile.measurements.filter(
-    (m) => m.confidence_flag !== 'pass' && m.site_code !== 'stature'
-  );
+  const failedSave = machine.state.name === 'error';
+  const worst = profile.measurements.find((m) => m.confidence_flag === 'fail') ??
+    profile.measurements.find((m) => m.confidence_flag === 'check');
+  const worstView = worst ? SITE_VIEW[worst.site_code] : 'both';
+  const scaleView = machine.context.scaleDisagree;
+  const highlight = scaleView ?? (worstView === 'both' ? null : worstView);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--vt-ink,#1F1C18)] tracking-tight">
-            {t('reviewTitle')}
-          </h1>
-          <p className="text-sm text-[var(--vt-ink-muted,#5C554C)] mt-0.5">
-            Client {profile.client_code} · Measured on this phone
-          </p>
-        </div>
-
-        {/* Height Verification Strip */}
-        <div className="flex items-center gap-2 p-3 rounded-xl bg-white border border-[var(--vt-line,#DDD5C8)] text-xs text-[var(--vt-ink,#1F1C18)] shadow-2xs">
-          <Ruler className="w-4 h-4 text-[var(--vt-thread,#2E3A87)] shrink-0" />
-          <span>
-            Height entered: <strong>{enteredHeightCm} cm</strong> · Estimated:{' '}
-            <strong>{estimatedHeightCm} cm</strong>
-          </span>
-          {scaleDisagreed ? (
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-          ) : (
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-          )}
-        </div>
-      </div>
-
-      {/* Flag Warning Strip if non-pass flags exist */}
-      {nonPassMeasurements.length > 0 && (
-        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 mb-6 flex flex-col gap-1.5 shadow-2xs">
-          <div className="flex items-center gap-2 font-bold text-sm">
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-            <span>Measurements requiring fitting confirmation:</span>
-          </div>
-          {nonPassMeasurements.map((m) => (
-            <div key={m.site_code} className="ml-6 list-item">
-              <strong className="capitalize">{m.site_code}</strong>:{' '}
-              {m.flag_reasons.join(', ') || 'Scale check notice'}. Your tailor will verify this during fitting.
-            </div>
-          ))}
-        </div>
+    <div className="max-w-3xl mx-auto px-4 py-6 flex flex-col gap-5">
+      <ProgressSteps current={5} />
+      <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">{t('reviewTitle')}</h1>
+      <p className="text-[var(--vt-ink-muted)]">{t('reviewSubtitle')}</p>
+      {scaleView && (
+        <Banner tone="warn">
+          {t('scaleBanner', { view: t(scaleView === 'front' ? 'viewFront' : 'viewSide') })}
+        </Banner>
       )}
+      {failedSave && <Banner tone="warn">{t('saveFailed')}</Banner>}
 
-      {/* Interactive Silhouette with 8 leader lines */}
-      <div className="mb-8">
-        <Silhouette
-          measurements={profile.measurements}
-          sex={profile.covariates.sex}
-          unit="cm"
-          onSelectSite={(site) => setSelectedSiteDetail(site)}
-        />
-      </div>
+      <MeasurementSummary profile={profile} />
 
-      {/* Retake Views Row */}
-      <div className="p-4 rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white mb-8 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-2xs">
-        <div>
-          <span className="text-xs font-bold text-[var(--vt-ink,#1F1C18)] uppercase tracking-wider block">
-            Retake an angle if needed
-          </span>
-          <span className="text-xs text-[var(--vt-ink-muted,#5C554C)]">
-            A retake replaces only that photo and recalculates automatically.
-          </span>
-        </div>
+      <RetakeRow
+        highlight={highlight}
+        reason={!scaleView && worst && highlight ? { site: worst.site_code } : null}
+        onRetake={(view) => {
+          captureSession.send({ type: 'RETAKE', view });
+          captureSession.send({ type: 'BEGIN_RETAKE' });
+          onNavigate(`/capture/${view}`);
+        }}
+      />
 
-        <div className="flex items-center gap-2.5 w-full sm:w-auto">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onRetake('front')}
-            icon={<RotateCcw className="w-3.5 h-3.5" />}
-            className="flex-1 sm:flex-initial"
-          >
-            {t('retakeFront')}
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onRetake('side')}
-            icon={<RotateCcw className="w-3.5 h-3.5" />}
-            className="flex-1 sm:flex-initial"
-          >
-            {t('retakeSide')}
-          </Button>
-        </div>
-      </div>
-
-      {/* Primary Actions: Save & Send / Discard */}
       <div className="flex flex-col sm:flex-row items-center gap-3">
         <Button
-          onClick={handleSaveAndSend}
-          loading={isSaving}
           size="xl"
-          icon={<Send className="w-5 h-5" />}
+          loading={saving}
+          icon={<Send aria-hidden="true" className="w-5 h-5" />}
           className="w-full sm:flex-1"
+          onClick={async () => {
+            setSaving(true);
+            if (failedSave) captureSession.send({ type: 'RETRY' });
+            try {
+              const version = await vtStorage.nextVersion(profile.client_code);
+              // Written before "Saved" is shown (NFR-08).
+              await vtStorage.saveProfile({ ...profile, version });
+              captureSession.savedProfileId = profile.profile_id;
+              captureSession.send({ type: 'SAVE' });
+              const { syncNow } = await import('../../db/sync');
+              void syncNow();
+              onNavigate('/saved');
+            } catch {
+              captureSession.send({ type: 'SAVE_FAILED' });
+            } finally {
+              setSaving(false);
+            }
+          }}
         >
           {t('saveAndSend')}
         </Button>
-
-        <Button
-          variant="text"
-          size="lg"
-          onClick={() => setShowDiscardConfirm(true)}
-          icon={<Trash2 className="w-4 h-4 text-rose-600" />}
-          className="text-xs text-rose-700"
-        >
+        <Button variant="text" size="lg" icon={<Trash2 aria-hidden="true" className="w-4 h-4" />} onClick={() => setConfirm(true)}>
           {t('discard')}
         </Button>
       </div>
+      <p className="text-sm text-center text-[var(--vt-ink-muted)]">{t('reviewFooter')}</p>
 
-      {/* Discard Confirmation Modal */}
-      {showDiscardConfirm && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-[var(--vt-line,#DDD5C8)]">
-            <h3 className="text-base font-bold text-[var(--vt-ink,#1F1C18)] mb-2">
-              Discard measurements?
-            </h3>
-            <p className="text-xs text-[var(--vt-ink-muted,#5C554C)] mb-6 leading-relaxed">
-              {t('discardConfirm')}
-            </p>
-            <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowDiscardConfirm(false)}
-                className="flex-1"
-              >
-                {t('cancel')}
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => {
-                  setShowDiscardConfirm(false);
-                  onDiscard();
-                }}
-                className="flex-1"
-              >
-                {t('discard')}
-              </Button>
-            </div>
-          </div>
+      <Dialog title={t('discard')} open={confirm} onClose={() => setConfirm(false)}>
+        <p className="mb-4">{t('discardConfirm')}</p>
+        <div className="flex gap-3">
+          <Button variant="outline" className="flex-1" onClick={() => setConfirm(false)}>
+            {t('cancel')}
+          </Button>
+          <Button
+            variant="danger"
+            className="flex-1"
+            onClick={() => {
+              captureSession.send({ type: 'DISCARD' });
+              captureSession.clear();
+              onNavigate('/');
+            }}
+          >
+            {t('discard')}
+          </Button>
         </div>
-      )}
+      </Dialog>
     </div>
+  );
+};
+
+const RetakeRow: React.FC<{
+  highlight: 'front' | 'side' | null;
+  reason: { site: Parameters<ReturnType<typeof useSiteName>>[0] } | null;
+  onRetake: (view: 'front' | 'side') => void;
+}> = ({ highlight, reason, onRetake }) => {
+  const { t } = useI18n();
+  const name = useSiteName(captureSession.profile!);
+  return (
+    <section className="p-4 rounded-2xl border border-[var(--vt-line)] bg-white flex flex-col gap-3">
+      <p className="text-sm">{t('retakeHint')}</p>
+      {reason && highlight && (
+        <p data-testid="retake-reason" className="text-sm font-semibold">
+          {t('retakeReason', { site: name(reason.site), view: t(highlight === 'front' ? 'viewFront' : 'viewSide') })}
+        </p>
+      )}
+      <div className="grid grid-cols-2 gap-3">
+        {(['front', 'side'] as const).map((view) => (
+          <Button
+            key={view}
+            variant={highlight === view ? 'primary' : 'outline'}
+            icon={<RotateCcw aria-hidden="true" className="w-4 h-4" />}
+            onClick={() => onRetake(view)}
+          >
+            {t(view === 'front' ? 'retakeFront' : 'retakeSide')}
+          </Button>
+        ))}
+      </div>
+    </section>
   );
 };

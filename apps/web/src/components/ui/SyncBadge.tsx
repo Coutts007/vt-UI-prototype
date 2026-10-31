@@ -1,4 +1,5 @@
 import React from 'react';
+import { useI18n } from '../../i18n';
 import { Cloud, Check, AlertCircle, RefreshCw } from 'lucide-react';
 
 interface SyncBadgeProps {
@@ -7,24 +8,25 @@ interface SyncBadgeProps {
 }
 
 export const SyncBadge: React.FC<SyncBadgeProps> = ({ status, className = '' }) => {
+  const { t } = useI18n();
   const configs = {
     synced: {
-      label: 'Synced',
+      label: t('syncSynced'),
       bg: 'bg-emerald-50 text-emerald-800 border-emerald-200',
       icon: <Check className="w-3 h-3 stroke-[2.5]" />,
     },
     pending: {
-      label: 'Pending online sync',
+      label: t('syncPending'),
       bg: 'bg-sky-50 text-sky-800 border-sky-200',
       icon: <Cloud className="w-3 h-3 stroke-[2]" />,
     },
     conflict: {
-      label: 'Version conflict',
+      label: t('syncConflict'),
       bg: 'bg-amber-50 text-amber-800 border-amber-300',
       icon: <RefreshCw className="w-3 h-3 stroke-[2]" />,
     },
     rejected: {
-      label: 'Code not found',
+      label: t('syncRejected'),
       bg: 'bg-rose-50 text-rose-800 border-rose-200',
       icon: <AlertCircle className="w-3 h-3 stroke-[2]" />,
     },

@@ -1,8 +1,27 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { en, TranslationKey } from './en';
-import { sw } from './sw';
+import type { TranslationKey } from './en';
 
 export type Locale = 'en' | 'sw';
+
+// Each client downloads one language: this is what keeps the flow under its budget (D35).
+type Dictionary = Record<TranslationKey, string>;
+const loaded: Partial<Record<Locale, Dictionary>> = {};
+
+export async function loadLocale(locale: Locale): Promise<void> {
+  if (loaded[locale]) return;
+  loaded[locale] =
+    locale === 'sw' ? (await import('./sw')).sw : (await import('./en')).en;
+}
+
+export function savedLocale(): Locale {
+  try {
+    const saved = localStorage.getItem('vt_language');
+    if (saved === 'sw' || saved === 'en') return saved;
+  } catch {
+    // ignore
+  }
+  return 'en';
+}
 
 interface I18nContextType {
   locale: Locale;
@@ -13,24 +32,18 @@ interface I18nContextType {
 const I18nContext = createContext<I18nContextType | null>(null);
 
 export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [locale, setLocaleState] = useState<Locale>(() => {
-    try {
-      const saved = localStorage.getItem('vt_language');
-      if (saved === 'sw' || saved === 'en') return saved;
-    } catch {
-      // ignore
-    }
-    return 'en';
-  });
+  const [locale, setLocaleState] = useState<Locale>(savedLocale);
 
   const setLocale = (newLocale: Locale) => {
-    setLocaleState(newLocale);
-    try {
-      localStorage.setItem('vt_language', newLocale);
-      document.documentElement.lang = newLocale;
-    } catch {
-      // ignore
-    }
+    // Stays on the current language if the other one cannot be fetched.
+    void loadLocale(newLocale).then(() => {
+      setLocaleState(newLocale);
+      try {
+        localStorage.setItem('vt_language', newLocale);
+      } catch {
+        // ignore
+      }
+    }, () => {});
   };
 
   useEffect(() => {
@@ -38,8 +51,7 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [locale]);
 
   const t = (key: TranslationKey, params?: Record<string, string | number>): string => {
-    const dict = locale === 'sw' ? sw : en;
-    let text = dict[key] || en[key] || key;
+    let text: string = loaded[locale]?.[key] ?? key;
     if (params) {
       Object.entries(params).forEach(([paramKey, val]) => {
         text = text.replace(new RegExp(`\\{${paramKey}\\}`, 'g'), String(val));

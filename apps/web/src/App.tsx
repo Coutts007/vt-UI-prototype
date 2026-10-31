@@ -1,13 +1,16 @@
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
-import { api } from './api/client';
+import { apiClient } from './api/instance';
+import { readSessionUser } from './api/session';
 import { Header } from './components/ui/Header';
 import { Banner, Skeleton, Toast } from './components/ui/feedback';
 import { I18nProvider, useI18n } from './i18n';
 import { FEATURE_DIRECTORY } from './config/features';
 import { guard, homeFor, matchRoute, ROUTES, RouteDef, safeNext } from './router/routes';
-import { Burst, VIEWS, ViewContext } from './router/views';
+import { VIEWS, ViewContext } from './router/views';
+import './sw/install';
 import { registerServiceWorker } from './sw/register';
-import type { MeasurementProfile, UserAccount } from './types/api';
+import type { UserAccount } from './types/api';
+import type { TranslationKey } from './i18n/en';
 import { ErrorBoundary, ErrorPage } from './views/ErrorPage';
 
 const DIRECTORY: RouteDef = { pattern: '/tailors', area: 'client' };
@@ -23,15 +26,12 @@ function Shell() {
     pathname: window.location.pathname,
     search: window.location.search,
   }));
-  const [user, setUser] = useState<UserAccount | null>(() => api.getCurrentUser());
+  const [user, setUser] = useState<UserAccount | null>(readSessionUser);
   const [studyMode, setStudyMode] = useState<boolean | null>(null);
   const [online, setOnline] = useState(() => navigator.onLine);
   const [applyUpdate, setApplyUpdate] = useState<(() => void) | null>(null);
   const [initialCode, setInitialCode] = useState(() => codeFrom(window.location.search));
-  const [front, setFront] = useState<Burst | null>(null);
-  const [side, setSide] = useState<Burst | null>(null);
-  const [profile, setProfile] = useState<MeasurementProfile | null>(null);
-  const [synced, setSynced] = useState(true);
+  const [syncNotice, setSyncNotice] = useState<TranslationKey | null>(null);
 
   const navigate = (path: string) => {
     const url = new URL(path, window.location.origin);
@@ -49,8 +49,8 @@ function Shell() {
     window.addEventListener('popstate', onPop);
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
-    void api
-      .getPublicSettings()
+    void apiClient
+      .get('/settings/public')
       .then((settings) => setStudyMode(settings.study_mode))
       .catch(() => setStudyMode(false));
     registerServiceWorker((apply) => setApplyUpdate(() => apply));
@@ -88,12 +88,48 @@ function Shell() {
       navigate(safeNext(wanted, window.location.origin) ?? homeFor(next.role));
     },
     onLogout: () => {
-      api.logout();
+      sessionStorage.removeItem('vt_session_user');
+      void import('./api/client').then(({ api }) => api.logout());
       setUser(null);
       navigate('/login');
     },
-    capture: { front, side, profile, synced, setFront, setSide, setProfile, setSynced },
   };
+
+  // Client pages only, loaded after the first paint so it never counts against the first screen.
+  const clientArea = match?.route.area === 'client';
+  useEffect(() => {
+    if (!clientArea) return;
+    let stop: (() => void) | undefined;
+    let cancelled = false;
+    void import('./db/sync').then(async ({ startSyncLoop, onSyncChange, readNotice }) => {
+      if (cancelled) return;
+      const refresh = async () => {
+        const notice = await readNotice();
+        const persisted = (await navigator.storage?.persisted?.()) ?? true;
+        setSyncNotice(
+          notice.needsHelp
+            ? 'syncNeedsHelp'
+            : notice.overdue
+              ? 'syncOverdue'
+              : notice.unsent && !persisted
+                ? 'storageWarning'
+                : null,
+        );
+      };
+      void navigator.storage?.persist?.().catch(() => false);
+      const offChange = onSyncChange(() => void refresh());
+      const offLoop = startSyncLoop(apiClient);
+      stop = () => {
+        offChange();
+        offLoop();
+      };
+      await refresh();
+    });
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, [clientArea]);
 
   const home = () => navigate(user?.status === 'active' ? homeFor(user.role) : '/');
 
@@ -124,6 +160,7 @@ function Shell() {
         />
       )}
       {!online && <Banner tone="warn">{t('offlineBanner')}</Banner>}
+      {clientArea && syncNotice && !match?.route.fullscreen && <Banner tone="warn">{t(syncNotice)}</Banner>}
       <div id="content" className="flex-1 flex flex-col">
         <ErrorBoundary
           key={location.pathname}

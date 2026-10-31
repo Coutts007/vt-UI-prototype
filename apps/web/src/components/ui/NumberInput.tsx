@@ -1,4 +1,5 @@
 import React from 'react';
+import { useI18n } from '../../i18n';
 
 interface NumberInputProps {
   value: number | string;
@@ -27,6 +28,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   onOfferConvert,
   id,
 }) => {
+  const { t } = useI18n();
   const numVal = typeof value === 'number' ? value : parseFloat(value) || 0;
 
   // Detect likely feet entry: e.g. 5.7 -> 5ft 7in = 170 cm
@@ -63,7 +65,11 @@ export const NumberInput: React.FC<NumberInputProps> = ({
           onClick={() => onOfferConvert(suggestedCm)}
           className="text-left text-xs text-[var(--vt-thread,#2E3A87)] hover:underline mt-0.5 bg-indigo-50/60 p-2 rounded-lg border border-indigo-100 cursor-pointer"
         >
-          Did you mean {Math.floor(numVal)} ft {Math.round((numVal - Math.floor(numVal)) * 10)} in? Tap to convert to <strong>{suggestedCm} cm</strong>
+          {t('feetDetectedOffer', {
+            ft: Math.floor(numVal),
+            inch: Math.round((numVal - Math.floor(numVal)) * 10),
+            cm: suggestedCm,
+          })}
         </button>
       )}
 

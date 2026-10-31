@@ -1,192 +1,112 @@
-import React, { useState, useEffect } from 'react';
-import { useI18n } from '../../i18n';
-import { Landmark, MarkerObs, MeasurementProfile } from '../../types/api';
-import { computeMeasurements } from '../../measure/engine';
+import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { CheckCircle2, Cpu, ShieldCheck } from 'lucide-react';
+import { buildProfile, disagreeingView } from '../../capture/compute';
+import { currentHost, stopRunner } from '../../capture/runnerHost';
+import { captureSession } from '../../capture/session';
+import { Button } from '../../components/ui/Button';
 import { vtStorage } from '../../db/storage';
-import { CheckCircle2, ShieldCheck, Cpu } from 'lucide-react';
+import { useI18n } from '../../i18n';
 
-interface ProcessingViewProps {
-  frontData: { landmarks: Landmark[]; marker: MarkerObs };
-  sideData: { landmarks: Landmark[]; marker: MarkerObs };
-  onComplete: (profile: MeasurementProfile) => void;
-}
+const STEPS = ['stepReadingOutline', 'stepUsingSheet', 'stepCalculatingGirths'] as const;
+const STEP_MS = 500;
 
-export const ProcessingView: React.FC<ProcessingViewProps> = ({
-  frontData,
-  sideData,
-  onComplete,
-}) => {
+export const ProcessingView: React.FC<{ onNavigate: (path: string) => void }> = ({ onNavigate }) => {
   const { t } = useI18n();
-
-  const [currentStep, setCurrentStep] = useState<number>(1);
-  const [elapsedSec, setElapsedSec] = useState<number>(0);
+  const machine = useSyncExternalStore(captureSession.subscribe, captureSession.getMachine);
+  const [step, setStep] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+  const started = useRef(Date.now());
+  const running = useRef(false);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setElapsedSec((prev) => prev + 1);
-    }, 1000);
-    return () => clearInterval(timer);
+    const clock = setInterval(() => setElapsed(Math.round((Date.now() - started.current) / 1000)), 1000);
+    return () => clearInterval(clock);
   }, []);
 
   useEffect(() => {
-    const draft = vtStorage.getDraft();
-
-    // Step 1: Reading outline (0 - 1.2s)
-    const t1 = setTimeout(() => setCurrentStep(2), 1200);
-
-    // Step 2: Using sheet for real scale (1.2s - 2.5s)
-    const t2 = setTimeout(() => setCurrentStep(3), 2500);
-
-    // Step 3: Run deterministic measurement engine (at 3.8s)
-    const t3 = setTimeout(() => {
-      const output = computeMeasurements({
-        landmarks_front: frontData.landmarks,
-        landmarks_side: sideData.landmarks,
-        marker_front: frontData.marker,
-        marker_side: sideData.marker,
-        height_mm_entered: draft.height_mm || 1700,
-        sex: draft.sex || 'female',
-        clothing_fit: draft.clothing_fit || 'fitted',
-        level_unchecked: false,
-      });
-
-      const profileId = 'prof-' + Math.random().toString(36).substring(2, 9);
-      const sessionId = 'sess-' + Math.random().toString(36).substring(2, 9);
-
-      const profile: MeasurementProfile = {
-        profile_id: profileId,
-        client_code: draft.client_code || 'AB1234',
-        version: 1,
-        captured_at: new Date().toISOString(),
-        status: 'final',
-        sync_status: 'pending',
-        rules_version: output.rules_version,
-        covariates: {
-          height_mm_entered: draft.height_mm || 1700,
-          sex: draft.sex || 'female',
-          clothing_fit: draft.clothing_fit || 'fitted',
-          code_verified: true,
-        },
-        consent: draft.consent || {
-          consent_version: '1.0',
-          language: 'en',
-          scope: ['measure', 'measurements_only', 'retention'],
-          given_at: new Date().toISOString(),
-        },
-        session: {
-          session_id: sessionId,
-          started_at: new Date().toISOString(),
-          capture_mode: draft.capture_mode || 'self',
-          device_model: 'Android WebAssembly Browser',
-          os: 'Mobile Web',
-          browser: 'HTML5 PWA',
-          memory_gb: 4,
-          model_variant: 'lite',
-          stream_w: 1080,
-          stream_h: 1920,
-          still_source: 'canvas',
-          level_unchecked: false,
-          capture_fallback: false,
-          front_checks: {
-            level: 'pass',
-            frame: 'pass',
-            distance: 'pass',
-            symmetry: 'pass',
-            arms: 'pass',
-            marker: 'pass',
-            light: 'pass',
-            sharpness: 'pass',
-          },
-          side_checks: {
-            level: 'pass',
-            frame: 'pass',
-            distance: 'pass',
-            symmetry: 'pass',
-            arms: 'pass',
-            marker: 'pass',
-            light: 'pass',
-            sharpness: 'pass',
-          },
-          scale_front_mm_px: output.scale_front_mm_px,
-          scale_side_mm_px: output.scale_side_mm_px,
-          scale_stature_mm_px: output.scale_stature_mm_px,
-          scale_disagreement_pct: output.scale_disagreement_pct,
-          processing_ms: 3800,
-          retake_count: 0,
-          config_hash: 'c8d4e2f1',
-        },
-        landmarks_front: frontData.landmarks,
-        landmarks_side: sideData.landmarks,
-        marker_front: frontData.marker,
-        marker_side: sideData.marker,
-        measurements: output.measurements,
-      };
-
-      // Invariant 2: Release frame bitmaps and intermediate buffers
-      // No images are held.
-      onComplete(profile);
-    }, 3800);
-
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
+    if (machine.state.name === 'error') return;
+    if (machine.state.name !== 'computing') {
+      onNavigate(machine.state.name === 'review' ? '/review' : '/');
+      return;
+    }
+    if (running.current) return;
+    running.current = true;
+    const run = async () => {
+      const host = await currentHost();
+      const speed = host?.speed ?? 1;
+      for (let i = 1; i <= STEPS.length; i++) {
+        await new Promise((resolve) => setTimeout(resolve, STEP_MS * speed));
+        setStep(i);
+      }
+      try {
+        await host?.vision.compute();
+      } catch {
+        running.current = false;
+        captureSession.send({ type: 'WORKER_CRASH' });
+        // Still computing after the first crash: run again from the stored burst (9.9).
+        if (captureSession.machine.state.name === 'computing') {
+          void run();
+        } else {
+          stopRunner();
+        }
+        return;
+      }
+      const draft = await vtStorage.loadDraft();
+      const profile = buildProfile(captureSession, draft, Date.now() - started.current);
+      captureSession.profile = profile;
+      stopRunner();
+      captureSession.send({ type: 'COMPUTED' });
+      const view = disagreeingView(captureSession, profile.session.scale_disagreement_pct);
+      captureSession.send(view ? { type: 'SCALE_DISAGREE', view } : { type: 'SCALE_OK' });
+      onNavigate('/review');
     };
-  }, [frontData, sideData, onComplete]);
+    void run();
+    // Runs for the computing state only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [machine.state.name]);
+
+  if (machine.state.name === 'error') {
+    const retake = (view: 'front' | 'side') => {
+      captureSession.send({ type: 'RETAKE', view });
+      captureSession.send({ type: 'BEGIN_RETAKE' });
+      onNavigate(`/capture/${view}`);
+    };
+    return (
+      <div className="min-h-[80vh] flex flex-col items-center justify-center max-w-md mx-auto px-4 text-center gap-4">
+        <h1 className="text-2xl font-extrabold">{t('processingFailed')}</h1>
+        <div className="grid grid-cols-2 gap-3 w-full">
+          <Button variant="outline" onClick={() => retake('front')}>
+            {t('retakeFront')}
+          </Button>
+          <Button variant="outline" onClick={() => retake('side')}>
+            {t('retakeSide')}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[80vh] flex flex-col items-center justify-center max-w-md mx-auto px-4 py-8 text-center">
-      <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-200 text-[var(--vt-thread,#2E3A87)] flex items-center justify-center mb-6 shadow-sm">
-        <Cpu className="w-8 h-8 animate-pulse" />
-      </div>
-
-      <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--vt-ink,#1F1C18)] tracking-tight mb-2">
-        {t('processingTitle')}
-      </h1>
-      <p className="text-xs text-[var(--vt-ink-muted,#5C554C)] mb-8">
-        Time elapsed: <span className="font-mono font-bold">{elapsedSec}s</span> (Target: under 20s)
-      </p>
-
-      {/* 3 Progress Steps */}
-      <div className="w-full bg-white rounded-2xl border border-[var(--vt-line,#DDD5C8)] p-6 shadow-xs flex flex-col gap-4 text-left mb-8">
-        <div className="flex items-center gap-3">
-          {currentStep >= 1 ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-          ) : (
-            <div className="w-5 h-5 rounded-full border-2 border-slate-300 shrink-0" />
-          )}
-          <span className={`text-sm font-semibold ${currentStep >= 1 ? 'text-[var(--vt-ink,#1F1C18)]' : 'text-slate-600'}`}>
-            {t('stepReadingOutline')}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {currentStep >= 2 ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-          ) : (
-            <div className="w-5 h-5 rounded-full border-2 border-slate-300 shrink-0" />
-          )}
-          <span className={`text-sm font-semibold ${currentStep >= 2 ? 'text-[var(--vt-ink,#1F1C18)]' : 'text-slate-600'}`}>
-            {t('stepUsingSheet')}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {currentStep >= 3 ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-          ) : (
-            <div className="w-5 h-5 rounded-full border-2 border-slate-300 shrink-0" />
-          )}
-          <span className={`text-sm font-semibold ${currentStep >= 3 ? 'text-[var(--vt-ink,#1F1C18)]' : 'text-slate-600'}`}>
-            {t('stepCalculatingGirths')}
-          </span>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2 text-xs text-emerald-800 bg-emerald-50 px-4 py-2 rounded-full border border-emerald-200">
-        <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+      <Cpu aria-hidden="true" className="w-12 h-12 text-[var(--vt-thread)] mb-5" />
+      <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-2">{t('processingTitle')}</h1>
+      <p className="text-sm mb-6 tabular-nums">{t('processingElapsed', { n: elapsed })}</p>
+      <ol className="w-full bg-white rounded-2xl border border-[var(--vt-line)] p-5 flex flex-col gap-3 text-left mb-6">
+        {STEPS.map((key, index) => (
+          <li key={key} className="flex items-center gap-3 font-semibold">
+            {step > index ? (
+              <CheckCircle2 aria-hidden="true" className="w-5 h-5 text-emerald-700 shrink-0" />
+            ) : (
+              <span aria-hidden="true" className="w-5 h-5 rounded-full border-2 border-slate-400 shrink-0" />
+            )}
+            <span>{t(key)}</span>
+          </li>
+        ))}
+      </ol>
+      <p className="flex items-center gap-2 text-sm text-emerald-900">
+        <ShieldCheck aria-hidden="true" className="w-4 h-4 shrink-0" />
         <span>{t('processingTargetNotice')}</span>
-      </div>
+      </p>
     </div>
   );
 };

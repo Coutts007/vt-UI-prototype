@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
-import { Measurement, SiteCode } from '../../types/api';
+import type { components } from '@vt/contracts';
+import type { TranslationKey } from '../../i18n/en';
 import { FlagBadge } from './FlagBadge';
 import { useI18n } from '../../i18n';
+
+type Measurement = components['schemas']['Measurement'];
+type SiteCode = components['schemas']['SiteCode'];
 
 interface SilhouetteProps {
   measurements: Measurement[];
@@ -33,17 +37,8 @@ export const Silhouette: React.FC<SilhouetteProps> = ({
     return `${(valMm / 10).toFixed(1)} cm`;
   };
 
-  const isoTerms: Record<SiteCode, string> = {
-    stature: 'stature, ISO 8559-1:2017 §3.1',
-    shoulder: 'across shoulder, ISO 8559-1 §3.14',
-    chest: sex === 'female' ? 'bust girth, ISO 8559-1 §3.6' : 'chest girth, ISO 8559-1 §3.7',
-    waist: 'waist girth, ISO 8559-1 §3.9',
-    hip: 'hip girth, ISO 8559-1 §3.11',
-    sleeve: 'sleeve length, ISO 8559-1 §3.16',
-    outleg: 'outside leg length, ISO 8559-1 §3.19',
-    inleg: 'inside leg length (inseam), ISO 8559-1 §3.20',
-    neck: 'neck girth, ISO 8559-1 §3.4',
-  };
+  const isoTerm = (code: SiteCode) =>
+    t((code === 'chest' && sex === 'female' ? 'iso_bust' : `iso_${code}`) as TranslationKey);
 
   const handleSiteClick = (code: SiteCode) => {
     setSelectedSite(code);
@@ -86,7 +81,7 @@ export const Silhouette: React.FC<SilhouetteProps> = ({
                   {formatValue(m?.value_mm ?? null)}
                 </div>
                 <div className="text-[10px] text-[var(--vt-ink-muted,#5C554C)] opacity-75 font-mono truncate">
-                  {isoTerms[code]}
+                  {isoTerm(code)}
                 </div>
               </button>
             );
@@ -98,7 +93,7 @@ export const Silhouette: React.FC<SilhouetteProps> = ({
           <svg
             viewBox="0 0 200 440"
             className="w-48 sm:w-56 h-auto drop-shadow-sm select-none"
-            aria-label="Neutral human body silhouette showing measurement levels"
+            aria-label={t('silhouetteLabel')}
           >
             {/* Background Subtle Silhouette */}
             <path
@@ -201,7 +196,7 @@ export const Silhouette: React.FC<SilhouetteProps> = ({
                   {formatValue(m?.value_mm ?? null)}
                 </div>
                 <div className="text-[10px] text-[var(--vt-ink-muted,#5C554C)] opacity-75 font-mono truncate">
-                  {isoTerms[code]}
+                  {isoTerm(code)}
                 </div>
               </button>
             );

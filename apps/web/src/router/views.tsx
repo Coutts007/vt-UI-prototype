@@ -1,6 +1,6 @@
 // Every screen loads on demand, so the client flow never downloads tailor, admin or study code.
 import React, { lazy } from 'react';
-import type { Landmark, MarkerObs, MeasurementProfile, UserAccount } from '../types/api';
+import type { UserAccount } from '../types/api';
 
 function view<T extends string>(load: () => Promise<Record<T, React.ComponentType<any>>>, name: T) {
   return lazy(() => load().then((module) => ({ default: module[name] })));
@@ -55,8 +55,6 @@ const study = {
 };
 const Placeholder = lazy(() => import('../views/PlaceholderView'));
 
-export type Burst = { landmarks: Landmark[]; marker: MarkerObs };
-
 export interface ViewContext {
   params: Record<string, string>;
   query: URLSearchParams;
@@ -65,22 +63,7 @@ export interface ViewContext {
   onLogin: (user: UserAccount) => void;
   onLogout: () => void;
   initialCode: string;
-  capture: {
-    front: Burst | null;
-    side: Burst | null;
-    profile: MeasurementProfile | null;
-    synced: boolean;
-    setFront: (burst: Burst) => void;
-    setSide: (burst: Burst) => void;
-    setProfile: (profile: MeasurementProfile) => void;
-    setSynced: (synced: boolean) => void;
-  };
 }
-
-const EMPTY_BURST: Burst = {
-  landmarks: [],
-  marker: { corners: [], image_w: 1080, image_h: 1920, side_px: 110, confidence: 0.98 },
-};
 
 type Render = (c: ViewContext) => React.ReactElement;
 
@@ -101,61 +84,13 @@ export const VIEWS: Record<string, Render> = {
   '/check': (c) => <client.Check onNavigate={c.navigate} />,
   '/sheet': (c) => <client.Sheet onNavigate={c.navigate} />,
   '/setup': (c) => <client.Setup onNavigate={c.navigate} />,
-  '/capture/front': (c) => (
-    <client.Capture
-      view="front"
-      onCompleteView={(data: Burst) => {
-        c.capture.setFront(data);
-        c.navigate('/capture/side');
-      }}
-      onCancel={() => c.navigate('/setup')}
-      onNavigate={c.navigate}
-    />
-  ),
-  '/capture/side': (c) => (
-    <client.Capture
-      view="side"
-      onCompleteView={(data: Burst) => {
-        c.capture.setSide(data);
-        c.navigate('/processing');
-      }}
-      onCancel={() => c.navigate('/setup')}
-      onNavigate={c.navigate}
-    />
-  ),
-  '/processing': (c) => (
-    <client.Processing
-      frontData={c.capture.front ?? EMPTY_BURST}
-      sideData={c.capture.side ?? EMPTY_BURST}
-      onComplete={(profile: MeasurementProfile) => {
-        c.capture.setProfile(profile);
-        c.navigate('/review');
-      }}
-    />
-  ),
-  '/review': (c) =>
-    c.capture.profile ? (
-      <client.Review
-        profile={c.capture.profile}
-        onRetake={(v: string) => c.navigate(v === 'front' ? '/capture/front' : '/capture/side')}
-        onSaved={(synced: boolean) => {
-          c.capture.setSynced(synced);
-          c.navigate('/saved');
-        }}
-        onDiscard={() => c.navigate('/')}
-      />
-    ) : (
-      <client.Welcome onNavigate={c.navigate} />
-    ),
-  '/saved': (c) => (
-    <client.Saved
-      synced={c.capture.synced}
-      clientCode={c.capture.profile?.client_code ?? c.initialCode}
-      onNavigate={c.navigate}
-    />
-  ),
+  '/capture/front': (c) => <client.Capture view="front" onNavigate={c.navigate} />,
+  '/capture/side': (c) => <client.Capture view="side" onNavigate={c.navigate} />,
+  '/processing': (c) => <client.Processing onNavigate={c.navigate} />,
+  '/review': (c) => <client.Review onNavigate={c.navigate} />,
+  '/saved': (c) => <client.Saved onNavigate={c.navigate} />,
   '/me': (c) => <client.Me onNavigate={c.navigate} />,
-  '/me/:profileId': () => <Placeholder titleKey="savedProfileTitle" />,
+  '/me/:profileId': (c) => <client.Me onNavigate={c.navigate} profileId={c.params.profileId} />,
   '/help': (c) => <client.Help onNavigate={c.navigate} />,
   '/privacy': (c) => <client.Privacy onNavigate={c.navigate} />,
   '/declined': (c) => <client.Declined onNavigate={c.navigate} />,

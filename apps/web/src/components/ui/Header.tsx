@@ -42,7 +42,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-40 bg-[var(--vt-chalk,#F7F3EC)]/90 backdrop-blur-md border-b border-[var(--vt-line,#DDD5C8)] px-4 sm:px-6 py-3 transition-colors">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-6 sm:gap-8">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-8 min-w-0">
         {/* Zone 1: Brand Wordmark (Single text element) */}
         <button
           onClick={() => onNavigate('/')}
@@ -148,7 +148,7 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={() => onNavigate('/start')}
                 className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
               >
-                Measure
+                {t('hdrMeasure')}
               </button>
               <button
                 onClick={() => onNavigate('/sheet')}
@@ -177,7 +177,8 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Language Toggle (Bilingual EN | SW) */}
           <button
             onClick={toggleLanguage}
-            title="Switch Language"
+            title={t('hdrSwitchLang')}
+            aria-label={`EN | SW: ${t('hdrSwitchLang')}`}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--vt-line,#DDD5C8)] bg-white hover:bg-[#FAF7F2] text-xs font-semibold text-[var(--vt-ink,#1F1C18)] cursor-pointer transition-colors shadow-2xs whitespace-nowrap shrink-0"
           >
             <Globe className="w-3.5 h-3.5 text-[var(--vt-ink-muted,#5C554C)]" />
@@ -198,7 +199,8 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
               <button
                 onClick={onLogout}
-                title="Sign out"
+                title={t('hdrSignOut')}
+                aria-label={t('hdrSignOut')}
                 className="p-2 rounded-lg border border-[var(--vt-line,#DDD5C8)] bg-white text-[var(--vt-ink-muted,#5C554C)] hover:text-rose-600 hover:border-rose-300 transition-colors cursor-pointer"
               >
                 <LogOut className="w-4 h-4" />
@@ -207,10 +209,11 @@ export const Header: React.FC<HeaderProps> = ({
           ) : (
             <button
               onClick={() => onNavigate('/login')}
+              aria-label={t('hdrTailorLogin')}
               className="px-3.5 py-1.5 rounded-lg bg-[var(--vt-thread,#2E3A87)] text-white text-xs font-semibold hover:bg-[#232c69] transition-colors whitespace-nowrap shrink-0 shadow-xs cursor-pointer flex items-center gap-1.5"
             >
-              <Scissors className="w-3.5 h-3.5" />
-              <span>Tailor Login</span>
+              <Scissors aria-hidden="true" className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{t('hdrTailorLogin')}</span>
             </button>
           )}
 
@@ -219,7 +222,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={() => setMenuOpen(!menuOpen)}
               className="p-2 rounded-lg border border-[var(--vt-line,#DDD5C8)] bg-white text-[var(--vt-ink-muted,#5C554C)] hover:text-[var(--vt-ink,#1F1C18)] transition-colors cursor-pointer"
-              aria-label="More options"
+              aria-label={t('hdrMenu')}
             >
               <MoreVertical className="w-4 h-4" />
             </button>
@@ -254,7 +257,7 @@ export const Header: React.FC<HeaderProps> = ({
                     className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#F7F3EC] flex items-center gap-2 cursor-pointer"
                   >
                     <Scissors className="w-4 h-4 text-[var(--vt-thread,#2E3A87)]" />
-                    <span>Client Capture App</span>
+                    <span>{t('hdrMeasure')}</span>
                   </button>
                   <button
                     onClick={() => {
@@ -264,7 +267,7 @@ export const Header: React.FC<HeaderProps> = ({
                     className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#F7F3EC] flex items-center gap-2 cursor-pointer"
                   >
                     <Layers className="w-4 h-4 text-emerald-600" />
-                    <span>My Saved Profiles</span>
+                    <span>{t('hdrMine')}</span>
                   </button>
                   <button
                     onClick={() => {
@@ -274,7 +277,7 @@ export const Header: React.FC<HeaderProps> = ({
                     className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#F7F3EC] flex items-center gap-2 cursor-pointer"
                   >
                     <BookOpen className="w-4 h-4 text-indigo-600" />
-                    <span>Get Measuring Sheet</span>
+                    <span>{t('hdrSheet')}</span>
                   </button>
                   <button
                     onClick={() => {
@@ -284,7 +287,7 @@ export const Header: React.FC<HeaderProps> = ({
                     className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#F7F3EC] flex items-center gap-2 cursor-pointer"
                   >
                     <BookOpen className="w-4 h-4 text-amber-600" />
-                    <span>How to Measure Guide</span>
+                    <span>{t('hdrHelp')}</span>
                   </button>
                   <button
                     onClick={() => {
@@ -294,7 +297,7 @@ export const Header: React.FC<HeaderProps> = ({
                     className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#F7F3EC] flex items-center gap-2 cursor-pointer"
                   >
                     <Shield className="w-4 h-4 text-slate-600" />
-                    <span>Privacy &amp; DPA Rights</span>
+                    <span>{t('hdrPrivacy')}</span>
                   </button>
 
                   {(import.meta.env.DEV || import.meta.env.MODE === 'mock') && (
