@@ -432,7 +432,7 @@
   },
   {
    "action": "login_failed",
-   "actor_type": "client",
+   "actor_type": "system",
    "entity_id": "unknown",
    "entity_type": "user",
    "log_id": "L00040",
@@ -721,7 +721,7 @@
      }
     ],
     "profile_id": "3c353cc9-23ab-5935-a0eb-1862078e3e7d",
-    "version": 2
+    "version": 3
    }
   }
  ],
@@ -1258,7 +1258,7 @@
    "order_id": "ebcef732-4cd4-5b79-84c8-2bb106803471",
    "order_no": "ORD-0008",
    "profile_id": "3c353cc9-23ab-5935-a0eb-1862078e3e7d",
-   "profile_version": 2,
+   "profile_version": 3,
    "status": "collected",
    "status_history": [
     {
@@ -1343,7 +1343,7 @@
    ],
    "notes": "",
    "order_id": "e7d8ee9b-f94d-50bf-a332-73b92debcb6a",
-   "order_no": "ORD-0009",
+   "order_no": "ORD-0001",
    "profile_id": "9b652c26-c038-50fe-8e48-bd70b1ea0651",
    "profile_version": 1,
    "status": "ready",
@@ -1418,7 +1418,7 @@
    ],
    "notes": "",
    "order_id": "20786cfc-f23a-5585-83d9-be45375df2cb",
-   "order_no": "ORD-0010",
+   "order_no": "ORD-0002",
    "profile_id": "ed05664c-e11d-53bc-97eb-e572ee4a5ba8",
    "profile_version": 1,
    "status": "collected",
@@ -8749,7 +8749,7 @@
     "samples": 101
    },
    "status": "final",
-   "version": 2
+   "version": 3
   },
   {
    "captured_at": "2026-10-27T09:00:00Z",
@@ -14641,7 +14641,7 @@
    "approvals_confirmed_by",
    "confirmed_at"
   ],
-  "audit_retention_months": 36,
+  "audit_retention_months": 24,
   "consent_version": "1.0",
   "current_rules_version": "0.1-uncalibrated",
   "earliest_collection_date": null,

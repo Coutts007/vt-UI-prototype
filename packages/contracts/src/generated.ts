@@ -889,9 +889,18 @@ export interface components {
                 field: string;
                 code: string;
             }[];
-            server_version?: number;
+        };
+        ProfileVersionConflict: {
+            type: string;
+            title: string;
+            /** @constant */
+            status: 409;
+            /** @constant */
+            code: "profile_version_conflict";
+            detail?: string;
+            server_version: number;
             /** Format: uuid */
-            conflict_id?: string;
+            conflict_id: string;
         };
         Status: {
             /** @enum {string} */
@@ -926,8 +935,6 @@ export interface components {
         GarmentType: "shirt" | "dress" | "trousers" | "suit_jacket" | "skirt" | "other";
         /** @enum {string} */
         OrderStatus: "new" | "cutting" | "fitting" | "ready" | "collected";
-        /** @enum {string} */
-        SyncStatus: "pending" | "synced" | "conflict" | "rejected";
         /** @enum {string} */
         ProfileStatus: "final" | "conflict" | "superseded" | "deleted";
         /** @enum {string} */
@@ -1098,7 +1105,7 @@ export interface components {
             site_code: components["schemas"]["SiteCode"] | null;
             /** @description Machine-readable numbers. The UI builds the words in the reader's language. */
             detail: {
-                [key: string]: number | string;
+                [key: string]: number | string | null;
             };
         };
         ProfileAccepted: {
@@ -1486,7 +1493,7 @@ export interface components {
             /** Format: date */
             earliest_collection_date: string | null;
         };
-        /** @description The full artifact is defined by packages/rules/schema.json. */
+        /** @description The API also validates the whole artifact against packages/rules/schema.json, which allows no free-form content. */
         RulesArtifact: {
             rules_version: components["schemas"]["RulesVersion"];
             /** @enum {string} */
@@ -1633,6 +1640,26 @@ export interface components {
             };
             content: {
                 "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description Too many requests */
+        RateLimited: {
+            headers: {
+                /** @description Seconds to wait before trying again */
+                "Retry-After": number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description The profile was kept as a conflict for the tailor, or the app is too old */
+        ProfileConflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProfileVersionConflict"] | components["schemas"]["Problem"];
             };
         };
     };
@@ -1782,7 +1809,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
         };
     };
     syncProfile: {
@@ -1811,11 +1838,11 @@ export interface operations {
                 };
             };
             404: components["responses"]["Problem"];
-            409: components["responses"]["Problem"];
+            409: components["responses"]["ProfileConflict"];
             413: components["responses"]["Problem"];
             415: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
         };
     };
     requestDeletion: {
@@ -1841,7 +1868,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
         };
     };
     requestDataAccess: {
@@ -1867,7 +1894,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
         };
     };
     register: {
@@ -1893,7 +1920,7 @@ export interface operations {
                 };
             };
             422: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
         };
     };
     login: {
@@ -1920,7 +1947,7 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
         };
     };
     logout: {

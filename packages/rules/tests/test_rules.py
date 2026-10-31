@@ -55,3 +55,14 @@ def test_uncalibrated_rules_are_a_draft_with_no_correction():
 def test_only_the_owner_freezes():
     """Nothing in frozen/ until the owner freezes a version."""
     assert [p.name for p in (ROOT / "frozen").iterdir() if p.name != ".gitkeep"] == []
+
+
+@pytest.mark.parametrize("field", ["anomaly", "fit.loo", "fit.bootstrap_ci", "girth_model.extra"])
+def test_free_form_fields_cannot_carry_long_content(field):
+    artifact = load(ROOT / "rules-0.1-uncalibrated.json")
+    target = artifact
+    *parents, last = field.split(".")
+    for key in parents:
+        target = target[key]
+    target[last] = {"note": "x" * 257} if last != "extra" else "x" * 257
+    assert list(Draft202012Validator(SCHEMA).iter_errors(artifact))

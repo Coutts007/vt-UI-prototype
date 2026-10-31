@@ -10,7 +10,8 @@ This explains `packages/contracts/openapi.yaml`, which is the source of truth. I
 - Requests are JSON only. **No endpoint accepts a photo, and the server has nowhere to store one.**
 - Errors share one format with a stable `code`, listed in `packages/contracts/error-codes.json`. The app turns the code into English or Kiswahili.
 - "Audited" means the action writes a row to the audit log, which cannot be edited.
-- Unknown fields are refused, so a mistake cannot slip extra data into the server.
+- Unknown fields are refused, so a mistake cannot slip extra data into the server. Rules files are checked against their own schema, which holds numbers and short notes only.
+- When a rate limit is reached, the reply says how many seconds to wait.
 
 ## Who can do what
 
@@ -36,8 +37,8 @@ This explains `packages/contracts/openapi.yaml`, which is the source of truth. I
 
 | Endpoint | What it does |
 |---|---|
-| `POST /profiles` | Sends a saved profile from the phone: numbers, body outlines as number lists, consent and capture details. Sending the same one twice is safe. If a newer version already exists, the reply reports a conflict. Audited |
-| `POST /deletion-requests` | Deletes a client's data or withdraws consent. The client proves ownership with the code and their profile IDs. Audited |
+| `POST /profiles` | Sends a saved profile from the phone: numbers, body outlines as number lists, consent and capture details. Sending the same one twice is safe. If the server already holds the same or a higher version number, the profile is kept as a conflict for the tailor to resolve. Audited |
+| `POST /deletion-requests` | Asks to delete a client's data or withdraw consent. The client proves ownership with the code and their profile IDs. Unused profiles go first. A profile used by an order stays until 30 days after that order is collected (D10). Audited |
 | `POST /data-requests/access` | Gives the client a copy of their stored data, with the same proof. Audited |
 
 ## Signing in
@@ -71,7 +72,7 @@ This explains `packages/contracts/openapi.yaml`, which is the source of truth. I
 | Endpoint | What it does |
 |---|---|
 | `GET /orders` | The order queue, by status or due date |
-| `POST /orders` | Creates an order from a profile. Finished size = body + ease. A flagged row must be confirmed, and a failed row is left for the fitting. Audited |
+| `POST /orders` | Creates an order from a profile. Finished size = body + ease. A flagged row must be confirmed, and a failed row is either left for the fitting or overridden with a reason. Audited |
 | `GET /orders/{order_id}` | Reads one order |
 | `PATCH /orders/{order_id}` | Changes status, due date, notes or items. Overriding a measurement needs a reason. Audited |
 | `DELETE /orders/{order_id}` | Deletes an order that is still new. Audited |
@@ -79,7 +80,7 @@ This explains `packages/contracts/openapi.yaml`, which is the source of truth. I
 | `GET /me/ease-presets` | Reads the tailor's saved ease values |
 | `PUT /me/ease-presets` | Replaces the tailor's saved ease values. Audited |
 | `POST /orders/{order_id}/sheets` | Creates a PDF and PNG specification sheet. The client's name is left off unless asked for. Audited |
-| `GET /files/sheets/{sheet_file}` | Downloads a sheet through a signed link that lasts 10 minutes. These generated sheets are the only files the API serves |
+| `GET /files/sheets/{sheet_file}` | Downloads a sheet through a signed link that lasts 10 minutes. Apart from the admin's CSV exports, these generated sheets are the only files the API serves |
 | `POST /sheets/{sheet_id}/shares` | Records that a sheet was shared and how. Audited |
 
 ## Audit

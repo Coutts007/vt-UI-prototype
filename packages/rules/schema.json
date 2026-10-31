@@ -4,49 +4,151 @@
   "title": "Virtual Tailor rules artifact",
   "type": "object",
   "additionalProperties": false,
-  "required": ["rules_version", "status", "parent", "created_at", "created_by", "marker", "scale", "levels", "offsets_mm", "girth_model", "plausible_mm", "flags", "anomaly", "fit", "checksum"],
+  "required": [
+    "rules_version",
+    "status",
+    "parent",
+    "created_at",
+    "created_by",
+    "marker",
+    "scale",
+    "levels",
+    "offsets_mm",
+    "girth_model",
+    "plausible_mm",
+    "flags",
+    "anomaly",
+    "fit",
+    "checksum"
+  ],
   "$defs": {
-    "fraction": { "type": "number", "minimum": 0, "maximum": 1 },
+    "fraction": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
     "range": {
       "type": "array",
       "minItems": 2,
       "maxItems": 2,
-      "items": { "type": "number", "minimum": 0 }
+      "items": {
+        "type": "number",
+        "minimum": 0
+      }
     },
-    "factor": { "type": "number", "exclusiveMinimum": 0 }
+    "factor": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "data": {
+      "description": "Numbers and short notes only, so a rules file cannot carry other content.",
+      "type": [
+        "object",
+        "array",
+        "number",
+        "string",
+        "boolean",
+        "null"
+      ],
+      "maxLength": 256,
+      "maxProperties": 64,
+      "maxItems": 256,
+      "additionalProperties": {
+        "$ref": "#/$defs/data"
+      },
+      "items": {
+        "$ref": "#/$defs/data"
+      }
+    }
   },
   "properties": {
-    "rules_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+-[a-z0-9-]+$", "maxLength": 40 },
-    "status": { "enum": ["draft", "frozen", "retired"] },
-    "parent": { "type": ["string", "null"], "maxLength": 40 },
-    "created_at": { "type": "string", "format": "date-time" },
-    "created_by": { "type": "string", "maxLength": 80 },
+    "rules_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+-[a-z0-9-]+$",
+      "maxLength": 40
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "frozen",
+        "retired"
+      ]
+    },
+    "parent": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 40
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "created_by": {
+      "type": "string",
+      "maxLength": 80
+    },
     "marker": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["dictionary", "id", "side_mm", "max_corner_aspect"],
+      "required": [
+        "dictionary",
+        "id",
+        "side_mm",
+        "max_corner_aspect"
+      ],
       "properties": {
-        "dictionary": { "const": "DICT_4X4_50" },
-        "id": { "type": "integer", "minimum": 0, "maximum": 49 },
-        "side_mm": { "type": "number", "exclusiveMinimum": 0 },
-        "max_corner_aspect": { "type": "number", "minimum": 1 }
+        "dictionary": {
+          "const": "DICT_4X4_50"
+        },
+        "id": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 49
+        },
+        "side_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "max_corner_aspect": {
+          "type": "number",
+          "minimum": 1
+        }
       }
     },
     "scale": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["stature_disagree_check_pct", "stature_disagree_retake_pct", "depth_correction_mm"],
+      "required": [
+        "stature_disagree_check_pct",
+        "stature_disagree_retake_pct",
+        "depth_correction_mm"
+      ],
       "properties": {
-        "stature_disagree_check_pct": { "type": "number", "minimum": 0 },
-        "stature_disagree_retake_pct": { "type": "number", "minimum": 0 },
+        "stature_disagree_check_pct": {
+          "type": "number",
+          "minimum": 0
+        },
+        "stature_disagree_retake_pct": {
+          "type": "number",
+          "minimum": 0
+        },
         "depth_correction_mm": {
           "description": "A14. Distance from the sheet's plane to the body's plane in each view. 0 means no correction.",
           "type": "object",
           "additionalProperties": false,
-          "required": ["front", "side"],
+          "required": [
+            "front",
+            "side"
+          ],
           "properties": {
-            "front": { "type": "number" },
-            "side": { "type": "number" }
+            "front": {
+              "type": "number"
+            },
+            "side": {
+              "type": "number"
+            }
           }
         }
       }
@@ -54,96 +156,239 @@
     "levels": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["chest", "waist", "waist_check_band", "waist_check_tol", "hip_band_knee_fraction", "neck_above_shoulder_frac"],
+      "required": [
+        "chest",
+        "waist",
+        "waist_check_band",
+        "waist_check_tol",
+        "hip_band_knee_fraction",
+        "neck_above_shoulder_frac"
+      ],
       "properties": {
         "chest": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["female", "male", "unspecified"],
+          "required": [
+            "female",
+            "male",
+            "unspecified"
+          ],
           "properties": {
-            "female": { "$ref": "#/$defs/fraction" },
-            "male": { "$ref": "#/$defs/fraction" },
-            "unspecified": { "$ref": "#/$defs/fraction" }
+            "female": {
+              "$ref": "#/$defs/fraction"
+            },
+            "male": {
+              "$ref": "#/$defs/fraction"
+            },
+            "unspecified": {
+              "$ref": "#/$defs/fraction"
+            }
           }
         },
-        "waist": { "$ref": "#/$defs/fraction" },
-        "waist_check_band": { "$ref": "#/$defs/range" },
-        "waist_check_tol": { "$ref": "#/$defs/fraction" },
-        "hip_band_knee_fraction": { "$ref": "#/$defs/fraction" },
-        "neck_above_shoulder_frac": { "$ref": "#/$defs/fraction" }
+        "waist": {
+          "$ref": "#/$defs/fraction"
+        },
+        "waist_check_band": {
+          "$ref": "#/$defs/range"
+        },
+        "waist_check_tol": {
+          "$ref": "#/$defs/fraction"
+        },
+        "hip_band_knee_fraction": {
+          "$ref": "#/$defs/fraction"
+        },
+        "neck_above_shoulder_frac": {
+          "$ref": "#/$defs/fraction"
+        }
       }
     },
     "offsets_mm": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["acromion", "shoulder", "sleeve", "outleg", "inleg"],
+      "required": [
+        "acromion",
+        "shoulder",
+        "sleeve",
+        "outleg",
+        "inleg"
+      ],
       "properties": {
-        "acromion": { "type": "number" },
-        "shoulder": { "type": "number" },
-        "sleeve": { "type": "number" },
-        "outleg": { "type": "number" },
-        "inleg": { "type": "number" }
+        "acromion": {
+          "type": "number"
+        },
+        "shoulder": {
+          "type": "number"
+        },
+        "sleeve": {
+          "type": "number"
+        },
+        "outleg": {
+          "type": "number"
+        },
+        "inleg": {
+          "type": "number"
+        }
       }
     },
     "girth_model": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
-        "type": { "enum": ["ellipse_cf", "ridge"] },
+        "type": {
+          "enum": [
+            "ellipse_cf",
+            "ridge"
+          ]
+        },
         "correction_factors": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["chest", "waist", "hip", "neck"],
+          "required": [
+            "chest",
+            "waist",
+            "hip",
+            "neck"
+          ],
           "properties": {
-            "chest": { "$ref": "#/$defs/factor" },
-            "waist": { "$ref": "#/$defs/factor" },
-            "hip": { "$ref": "#/$defs/factor" },
-            "neck": { "$ref": "#/$defs/factor" }
+            "chest": {
+              "$ref": "#/$defs/factor"
+            },
+            "waist": {
+              "$ref": "#/$defs/factor"
+            },
+            "hip": {
+              "$ref": "#/$defs/factor"
+            },
+            "neck": {
+              "$ref": "#/$defs/factor"
+            }
           }
         }
+      },
+      "maxProperties": 8,
+      "additionalProperties": {
+        "$ref": "#/$defs/data"
       }
     },
     "plausible_mm": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["stature", "shoulder", "chest", "waist", "hip", "sleeve", "outleg", "inleg", "neck"],
+      "required": [
+        "stature",
+        "shoulder",
+        "chest",
+        "waist",
+        "hip",
+        "sleeve",
+        "outleg",
+        "inleg",
+        "neck"
+      ],
       "properties": {
-        "stature": { "$ref": "#/$defs/range" },
-        "shoulder": { "$ref": "#/$defs/range" },
-        "chest": { "$ref": "#/$defs/range" },
-        "waist": { "$ref": "#/$defs/range" },
-        "hip": { "$ref": "#/$defs/range" },
-        "sleeve": { "$ref": "#/$defs/range" },
-        "outleg": { "$ref": "#/$defs/range" },
-        "inleg": { "$ref": "#/$defs/range" },
-        "neck": { "$ref": "#/$defs/range" }
+        "stature": {
+          "$ref": "#/$defs/range"
+        },
+        "shoulder": {
+          "$ref": "#/$defs/range"
+        },
+        "chest": {
+          "$ref": "#/$defs/range"
+        },
+        "waist": {
+          "$ref": "#/$defs/range"
+        },
+        "hip": {
+          "$ref": "#/$defs/range"
+        },
+        "sleeve": {
+          "$ref": "#/$defs/range"
+        },
+        "outleg": {
+          "$ref": "#/$defs/range"
+        },
+        "inleg": {
+          "$ref": "#/$defs/range"
+        },
+        "neck": {
+          "$ref": "#/$defs/range"
+        }
       }
     },
     "flags": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["visibility_fail", "visibility_check", "marker_conf_check"],
+      "required": [
+        "visibility_fail",
+        "visibility_check",
+        "marker_conf_check"
+      ],
       "properties": {
-        "visibility_fail": { "$ref": "#/$defs/fraction" },
-        "visibility_check": { "$ref": "#/$defs/fraction" },
-        "marker_conf_check": { "$ref": "#/$defs/fraction" }
+        "visibility_fail": {
+          "$ref": "#/$defs/fraction"
+        },
+        "visibility_check": {
+          "$ref": "#/$defs/fraction"
+        },
+        "marker_conf_check": {
+          "$ref": "#/$defs/fraction"
+        }
       }
     },
-    "anomaly": { "type": "object" },
+    "anomaly": {
+      "$ref": "#/$defs/data"
+    },
     "fit": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["cohort", "n_participants", "n_capture_sets", "cohort_hash", "loo", "bootstrap_ci", "notes"],
+      "required": [
+        "cohort",
+        "n_participants",
+        "n_capture_sets",
+        "cohort_hash",
+        "loo",
+        "bootstrap_ci",
+        "notes"
+      ],
       "properties": {
-        "cohort": { "enum": ["calibration", "literature", "bodym"] },
-        "n_participants": { "type": "integer", "minimum": 0 },
-        "n_capture_sets": { "type": "integer", "minimum": 0 },
-        "cohort_hash": { "type": ["string", "null"] },
-        "loo": { "type": "object" },
-        "bootstrap_ci": { "type": "object" },
-        "notes": { "type": "string", "maxLength": 500 }
+        "cohort": {
+          "enum": [
+            "calibration",
+            "literature",
+            "bodym"
+          ]
+        },
+        "n_participants": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "n_capture_sets": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cohort_hash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "loo": {
+          "$ref": "#/$defs/data"
+        },
+        "bootstrap_ci": {
+          "$ref": "#/$defs/data"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500
+        }
       }
     },
-    "checksum": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+    "checksum": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
   }
 }

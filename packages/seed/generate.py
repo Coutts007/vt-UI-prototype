@@ -285,7 +285,7 @@ PROFILES = [
     ("p04", "W3", 1, "d", -10, "final", "inleg_fail"),
     ("p05", "W4", 1, "b", -9, "final", "level_unchecked"),
     ("p06", "W5", 1, "a", -8, "final", "loose"),
-    ("p07", "W6", 2, "c", -7, "final", "all_pass"),
+    ("p07", "W6", 3, "c", -7, "final", "all_pass"),
     ("p08", "W6", 3, "c", -6, "conflict", "all_pass"),
     ("p09", "W7", 1, "d", -20, "final", "assisted"),
     ("p10", "O1", 1, "b", -22, "final", "all_pass"),
@@ -459,7 +459,8 @@ STATUS_ORDER = ["new", "cutting", "fitting", "ready", "collected"]
 
 
 def build_order(entry: tuple, profiles: dict[str, dict]) -> dict[str, Any]:
-    no, profile_key, _tailor, garment, status, due, scenario = entry
+    no, profile_key, tailor, garment, status, due, scenario = entry
+    number = sum(1 for o in ORDERS if o[2] == tailor and o[0] <= no)
     profile = profiles[profile_key]
     client = CLIENT_BY_KEY[next(c[0] for c in CLIENTS if c[2] == profile["client_code"])]
     rows = {m["site_code"]: m for m in profile["measurements"]}
@@ -495,7 +496,7 @@ def build_order(entry: tuple, profiles: dict[str, dict]) -> dict[str, Any]:
     ]
     return {
         "order_id": uid(f"order:{no}"),
-        "order_no": f"ORD-{no:04d}",
+        "order_no": f"ORD-{number:04d}",
         "client_id": profile["client_id"],
         "client_code": profile["client_code"],
         "display_name": client[3],
@@ -552,7 +553,9 @@ def build_audit(users: list[dict], orders: list[dict]) -> list[dict[str, Any]]:
             {
                 "log_id": f"L{i + 1:05d}",
                 "occurred_at": at(-60 + i),
-                "actor_type": "user" if user else "client",
+                "actor_type": "user"
+                if user
+                else ("system" if action == "login_failed" else "client"),
                 "user_email": user["email"] if user else None,
                 "role": user["role"] if user else None,
                 "action": action,
@@ -636,7 +639,7 @@ def build_seed() -> dict[str, Any]:
         "deletion_requests": [],
         "settings": {
             "retention_months": 24,
-            "audit_retention_months": 36,
+            "audit_retention_months": 24,
             "study_mode": True,
             "study_collection_end": None,
             "current_rules_version": RULES_VERSION,

@@ -1,6 +1,7 @@
 {
   "account_disabled": { "status": 403, "title": "This account is disabled" },
   "account_pending": { "status": 403, "title": "This account is waiting for approval" },
+  "account_rejected": { "status": 403, "title": "This account was not approved" },
   "approvals_missing": { "status": 409, "title": "Study approvals are missing" },
   "client_has_orders": { "status": 409, "title": "This client has active orders" },
   "code_not_found": { "status": 404, "title": "Client code not found" },

@@ -76,6 +76,67 @@ def test_every_error_status_is_declared_somewhere():
     assert {e["status"] for e in ERRORS.values()} <= used
 
 
+def walk(node, path=""):
+    if isinstance(node, dict):
+        yield path, node
+        for key, value in node.items():
+            yield from walk(value, f"{path}/{key}")
+    elif isinstance(node, list):
+        for i, value in enumerate(node):
+            yield from walk(value, f"{path}/{i}")
+
+
+def types_of(node):
+    kind = node.get("type")
+    if isinstance(kind, dict):  # a "properties" map with a field called type
+        return set()
+    return set(kind) if isinstance(kind, list) else {kind}
+
+
+def test_every_string_field_is_bounded():
+    """The privacy guard's 9.2 limit: no field can hold an encoded image."""
+    for path, node in walk(DOC["components"]["schemas"]):
+        if "string" in types_of(node):
+            assert {"maxLength", "pattern", "enum", "const"} & set(node), path
+
+
+def resolve_closure(name, seen):
+    if name in seen:
+        return
+    seen.add(name)
+    for _, node in walk(DOC["components"]["schemas"][name]):
+        ref = node.get("$ref")
+        if ref:
+            resolve_closure(ref.rsplit("/", 1)[1], seen)
+
+
+def test_every_number_a_phone_sends_is_bounded():
+    names = set()
+    resolve_closure("MeasurementProfilePayload", names)
+    for name in names:
+        for path, node in walk(DOC["components"]["schemas"][name]):
+            if types_of(node) & {"number", "integer"}:
+                assert {"maximum", "const", "enum"} & set(node), (name, path)
+            if "array" in types_of(node):
+                assert "maxItems" in node, (name, path)
+
+
+def test_rate_limits_say_when_to_retry():
+    for path, method, op in operations():
+        if "429" in op["responses"]:
+            assert op["responses"]["429"]["$ref"].endswith("/RateLimited"), (path, method)
+    headers = DOC["components"]["responses"]["RateLimited"]["headers"]
+    assert headers["Retry-After"]["required"] is True
+
+
+def test_profile_conflict_guarantees_the_conflict_details():
+    schema = DOC["components"]["schemas"]["ProfileVersionConflict"]
+    assert {"server_version", "conflict_id"} <= set(schema["required"])
+    assert DOC["paths"]["/profiles"]["post"]["responses"]["409"]["$ref"].endswith(
+        "/ProfileConflict"
+    )
+
+
 def test_a14_a3_f2_session_fields_present():
     required = DOC["components"]["schemas"]["CaptureSession"]["required"]
     for field in ("free_arm", "guidance_mode", "camera_facing", "app_version"):

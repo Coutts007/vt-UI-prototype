@@ -122,10 +122,11 @@ def test_value_is_null_only_when_failed():
             assert (row["value_mm"] is None) == (row["confidence_flag"] == "fail")
 
 
-def test_conflict_pair_is_v2_server_v3_device():
+def test_conflict_pair_follows_the_ingest_rule():
+    """An incoming version only conflicts if it does not exceed the server's."""
     conflict = SEED["conflicts"][0]
-    assert conflict["server_profile"]["version"] == 2
-    assert conflict["incoming_profile"]["version"] == 3
+    assert conflict["incoming_profile"]["version"] <= conflict["server_profile"]["version"]
+    assert conflict["incoming_profile"]["captured_at"] > conflict["server_profile"]["captured_at"]
 
 
 def test_silhouette_mm_values_stay_within_limits():
@@ -174,14 +175,21 @@ def test_orders():
             assert item["finished_mm"] == item["body_mm"] + item["ease_mm"]
 
 
+def test_order_numbers_restart_per_tailor():
+    numbers = [o["order_no"] for o in SEED["orders"]]
+    assert numbers.count("ORD-0001") == 2 and numbers.count("ORD-0002") == 2
+
+
 def test_order_links_resolve():
     profiles = {p["profile_id"]: p for p in SEED["profiles"]}
     for order in SEED["orders"]:
         assert profiles[order["profile_id"]]["client_id"] == order["client_id"]
 
 
-def test_audit_has_40_rows_with_contract_actions():
+def test_audit_has_40_rows_and_retention_follows_d20():
     assert len(SEED["audit"]) == 40
+    assert SEED["settings"]["audit_retention_months"] == 24
+    assert all(r["actor_type"] != "client" for r in SEED["audit"] if r["action"] == "login_failed")
 
 
 def test_study_is_on_with_partial_readings_across_cohorts():
