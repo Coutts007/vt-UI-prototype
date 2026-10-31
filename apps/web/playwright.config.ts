@@ -5,7 +5,8 @@ export default defineConfig({
   use: { baseURL: 'http://localhost:4173' },
   projects: [{ name: 'chromium', use: { ...devices['Pixel 7'] } }],
   webServer: {
-    command: 'pnpm build && pnpm preview',
+    command: 'pnpm build --mode mock && pnpm preview',
+    env: { VITE_API_MODE: 'mock' },
     url: 'http://localhost:4173',
     reuseExistingServer: !process.env.CI,
   },

@@ -65,7 +65,7 @@ export const OrderSheetView: React.FC<OrderSheetViewProps> = ({ orderId, onNavig
   };
 
   if (loading || !order) {
-    return <div className="p-8 text-center text-sm text-slate-400">Loading specification sheet…</div>;
+    return <div className="p-8 text-center text-sm text-slate-600">Loading specification sheet…</div>;
   }
 
   return (

@@ -62,22 +62,22 @@ export const AdminAuditView: React.FC<AdminAuditViewProps> = ({ onNavigate }) =>
 
       {/* Search Input */}
       <div className="relative w-full">
-        <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <Search className="w-4 h-4 text-slate-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Filter audit entries by user or description…"
-          className="w-full h-11 pl-10 pr-4 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-white text-sm outline-none"
+          className="w-full h-12 pl-10 pr-4 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-white text-sm outline-none"
         />
       </div>
 
       {/* Audit Log Table */}
       <div className="rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white divide-y divide-[var(--vt-line,#DDD5C8)]/50 shadow-2xs overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-sm text-slate-400">Loading audit records…</div>
+          <div className="p-8 text-center text-sm text-slate-600">Loading audit records…</div>
         ) : filtered.length === 0 ? (
-          <div className="p-8 text-center text-xs text-slate-400">No records match the filter.</div>
+          <div className="p-8 text-center text-xs text-slate-600">No records match the filter.</div>
         ) : (
           filtered.map((item) => (
             <div key={item.log_id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-[#FAF8F5]">

@@ -1,4 +1,5 @@
 import React from 'react';
+import { FEATURE_DIRECTORY } from '../../config/features';
 import { useI18n, Locale } from '../../i18n';
 import { Button } from '../../components/ui/Button';
 import { ShieldCheck, Ruler, ArrowRight, BookOpen, Layers } from 'lucide-react';
@@ -85,7 +86,8 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onNavigate, initialCod
 
       {/* Tailor Directory & Direct Start Options */}
       <div className="w-full flex flex-col sm:flex-row items-center gap-3 mb-8">
-        <button
+        {FEATURE_DIRECTORY && (
+<button
           type="button"
           onClick={() => onNavigate('/tailors')}
           className="w-full sm:flex-1 p-4 rounded-xl border border-[var(--vt-thread,#2E3A87)] bg-indigo-50/80 hover:bg-indigo-100/80 transition-all flex items-center justify-between text-left cursor-pointer shadow-2xs group"
@@ -100,18 +102,21 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onNavigate, initialCod
           </div>
           <ArrowRight className="w-5 h-5 text-[var(--vt-thread,#2E3A87)] group-hover:translate-x-0.5 transition-transform shrink-0" />
         </button>
+)}
       </div>
 
       {/* Secondary Actions */}
       <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
-        <button
+        {FEATURE_DIRECTORY && (
+<button
           onClick={() => onNavigate('/tailors')}
           className="text-[var(--vt-thread,#2E3A87)] font-semibold flex items-center gap-1.5 py-1.5 px-3 rounded-lg hover:bg-black/5 cursor-pointer"
         >
           <span>Find a Tailor</span>
         </button>
+)}
 
-        <span className="text-[var(--vt-line,#DDD5C8)]">·</span>
+        {FEATURE_DIRECTORY && <span className="text-[var(--vt-line,#DDD5C8)]">·</span>}
 
         <button
           onClick={() => onNavigate('/me')}
@@ -121,7 +126,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onNavigate, initialCod
           <span>{t('iHaveMeasurements')}</span>
         </button>
 
-        <span className="text-[var(--vt-line,#DDD5C8)]">·</span>
+        {FEATURE_DIRECTORY && <span className="text-[var(--vt-line,#DDD5C8)]">·</span>}
 
         <button
           onClick={() => onNavigate('/help')}
@@ -131,7 +136,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onNavigate, initialCod
           <span>{t('howItWorks')}</span>
         </button>
 
-        <span className="text-[var(--vt-line,#DDD5C8)]">·</span>
+        {FEATURE_DIRECTORY && <span className="text-[var(--vt-line,#DDD5C8)]">·</span>}
 
         <button
           onClick={() => onNavigate('/register')}

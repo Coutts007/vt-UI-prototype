@@ -70,9 +70,9 @@ export const AdminStudyParticipantsView: React.FC<AdminStudyParticipantsViewProp
       {/* Participants List */}
       <div className="rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white divide-y divide-[var(--vt-line,#DDD5C8)]/50 shadow-2xs overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-sm text-slate-400">Loading participant records…</div>
+          <div className="p-8 text-center text-sm text-slate-600">Loading participant records…</div>
         ) : participants.length === 0 ? (
-          <div className="p-8 text-center text-xs text-slate-400">No participants enrolled yet.</div>
+          <div className="p-8 text-center text-xs text-slate-600">No participants enrolled yet.</div>
         ) : (
           participants.map((p) => (
             <div
@@ -124,8 +124,8 @@ export const AdminStudyParticipantsView: React.FC<AdminStudyParticipantsViewProp
             </p>
 
             <div>
-              <label className="text-xs font-bold block mb-1">Sex</label>
-              <select
+              <label htmlFor="adminstudyparticipantsview-1" className="text-xs font-bold block mb-1">Sex</label>
+              <select id="adminstudyparticipantsview-1"
                 value={sex}
                 onChange={(e) => setSex(e.target.value as any)}
                 className="w-full h-10 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-xs font-semibold"
@@ -137,8 +137,8 @@ export const AdminStudyParticipantsView: React.FC<AdminStudyParticipantsViewProp
             </div>
 
             <div>
-              <label className="text-xs font-bold block mb-1">Age Band</label>
-              <select
+              <label htmlFor="adminstudyparticipantsview-2" className="text-xs font-bold block mb-1">Age Band</label>
+              <select id="adminstudyparticipantsview-2"
                 value={ageBand}
                 onChange={(e) => setAgeBand(e.target.value as any)}
                 className="w-full h-10 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-xs font-semibold"
@@ -152,8 +152,8 @@ export const AdminStudyParticipantsView: React.FC<AdminStudyParticipantsViewProp
             </div>
 
             <div>
-              <label className="text-xs font-bold block mb-1">Study Venue</label>
-              <input
+              <label htmlFor="adminstudyparticipantsview-3" className="text-xs font-bold block mb-1">Study Venue</label>
+              <input id="adminstudyparticipantsview-3"
                 type="text"
                 value={venue}
                 onChange={(e) => setVenue(e.target.value)}

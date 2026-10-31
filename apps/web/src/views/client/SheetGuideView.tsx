@@ -183,7 +183,7 @@ export const SheetGuideView: React.FC<SheetGuideViewProps> = ({ onNavigate }) =>
 
             {/* Visual Sheet Simulation */}
             <div className="aspect-[1/1.414] border-2 border-slate-300 rounded-lg p-4 flex flex-col items-center justify-between bg-white shadow-inner mb-4">
-              <span className="text-[9px] font-bold tracking-wider text-slate-400">
+              <span className="text-[9px] font-bold tracking-wider text-slate-600">
                 VIRTUAL TAILOR · A4 MEASURING SHEET
               </span>
 
@@ -211,7 +211,7 @@ export const SheetGuideView: React.FC<SheetGuideViewProps> = ({ onNavigate }) =>
 
               <div className="w-full text-center">
                 <div className="h-2 w-3/4 mx-auto bg-slate-800 rounded-xs mb-1" />
-                <span className="text-[8px] font-mono text-slate-500">
+                <span className="text-[8px] font-mono text-slate-600">
                   100 mm (10 cm) Verification Bar
                 </span>
               </div>

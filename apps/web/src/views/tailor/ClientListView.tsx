@@ -58,13 +58,13 @@ export const ClientListView: React.FC<ClientListViewProps> = ({ onNavigate }) =>
       {/* Search & Filter Strip */}
       <div className="flex flex-col sm:flex-row items-center gap-3">
         <div className="relative flex-1 w-full">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="w-4 h-4 text-slate-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by code (e.g. AB1234) or client name…"
-            className="w-full h-11 pl-10 pr-4 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-white text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)]"
+            className="w-full h-12 pl-10 pr-4 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-white text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)]"
           />
         </div>
 
@@ -92,7 +92,7 @@ export const ClientListView: React.FC<ClientListViewProps> = ({ onNavigate }) =>
 
       {/* Clients Table / Cards */}
       {loading ? (
-        <div className="p-12 text-center text-sm text-slate-400">Loading clients…</div>
+        <div className="p-12 text-center text-sm text-slate-600">Loading clients…</div>
       ) : clients.length === 0 ? (
         <div className="p-12 text-center rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white">
           <User className="w-10 h-10 text-slate-300 mx-auto mb-2" />
@@ -145,7 +145,7 @@ export const ClientListView: React.FC<ClientListViewProps> = ({ onNavigate }) =>
                 </div>
               </div>
 
-              <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-[var(--vt-thread,#2E3A87)] transition-colors shrink-0" />
+              <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-[var(--vt-thread,#2E3A87)] transition-colors shrink-0" />
             </div>
           ))}
         </div>

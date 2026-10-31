@@ -62,8 +62,8 @@ export const DevCaptureTuningView: React.FC = () => {
           </div>
 
           <div>
-            <label className="text-xs font-bold block mb-1">Body Pose Preset</label>
-            <select
+            <label htmlFor="devcapturetuningview-1" className="text-xs font-bold block mb-1">Body Pose Preset</label>
+            <select id="devcapturetuningview-1"
               value={modifier}
               onChange={(e) => setModifier(e.target.value as any)}
               className="w-full h-10 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-xs font-semibold"
@@ -89,8 +89,8 @@ export const DevCaptureTuningView: React.FC = () => {
           </div>
 
           <div>
-            <label className="text-xs font-bold block mb-1">Tilt Beta: {beta}° (Target: 88°–92°)</label>
-            <input
+            <label htmlFor="devcapturetuningview-2" className="text-xs font-bold block mb-1">Tilt Beta: {beta}° (Target: 88°–92°)</label>
+            <input id="devcapturetuningview-2"
               type="range"
               min="75"
               max="105"
@@ -102,8 +102,8 @@ export const DevCaptureTuningView: React.FC = () => {
           </div>
 
           <div>
-            <label className="text-xs font-bold block mb-1">Roll Gamma: {gamma}° (Target: ±2.5°)</label>
-            <input
+            <label htmlFor="devcapturetuningview-3" className="text-xs font-bold block mb-1">Roll Gamma: {gamma}° (Target: ±2.5°)</label>
+            <input id="devcapturetuningview-3"
               type="range"
               min="-10"
               max="10"
@@ -115,8 +115,8 @@ export const DevCaptureTuningView: React.FC = () => {
           </div>
 
           <div>
-            <label className="text-xs font-bold block mb-1">Luminance: {luminance} (Target: 50–235)</label>
-            <input
+            <label htmlFor="devcapturetuningview-4" className="text-xs font-bold block mb-1">Luminance: {luminance} (Target: 50–235)</label>
+            <input id="devcapturetuningview-4"
               type="range"
               min="20"
               max="255"
@@ -158,7 +158,7 @@ export const DevCaptureTuningView: React.FC = () => {
           </div>
 
           <div className="p-4 rounded-xl bg-slate-900 text-white text-center">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">
+            <span className="text-[10px] text-slate-600 uppercase tracking-wider block mb-1">
               Active 56px Correction Prompt
             </span>
             <span className="text-xl font-black text-amber-300">

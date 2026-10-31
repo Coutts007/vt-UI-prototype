@@ -128,13 +128,13 @@ export const BusinessDirectoryView: React.FC<BusinessDirectoryViewProps> = ({ on
       {/* Search and Filters Strip */}
       <div className="p-4 sm:p-5 rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white shadow-2xs mb-8 space-y-4">
         <div className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="w-4 h-4 text-slate-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search tailors by name, area (e.g. Gikomba, Westlands, Mombasa), or specialties…"
-            className="w-full h-11 pl-10 pr-4 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-[#FDFBF7] text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)] focus:bg-white transition-colors"
+            className="w-full h-12 pl-10 pr-4 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-[#FDFBF7] text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)] focus:bg-white transition-colors"
           />
         </div>
 
@@ -159,7 +159,7 @@ export const BusinessDirectoryView: React.FC<BusinessDirectoryViewProps> = ({ on
 
           {/* Location Dropdown */}
           <div className="flex items-center gap-2 shrink-0">
-            <MapPin className="w-4 h-4 text-slate-400" />
+            <MapPin className="w-4 h-4 text-slate-600" />
             <select
               value={selectedArea}
               onChange={(e) => setSelectedArea(e.target.value)}
@@ -177,7 +177,7 @@ export const BusinessDirectoryView: React.FC<BusinessDirectoryViewProps> = ({ on
 
       {/* Directory Grid */}
       {loading ? (
-        <div className="p-16 text-center text-sm text-slate-400">Loading tailoring workshops…</div>
+        <div className="p-16 text-center text-sm text-slate-600">Loading tailoring workshops…</div>
       ) : businesses.length === 0 ? (
         <div className="p-12 text-center rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white">
           <Scissors className="w-10 h-10 text-slate-300 mx-auto mb-2" />
@@ -218,7 +218,7 @@ export const BusinessDirectoryView: React.FC<BusinessDirectoryViewProps> = ({ on
                         {tailor.business_name}
                       </h2>
                       <div className="flex items-center gap-1.5 text-xs text-[var(--vt-ink-muted,#5C554C)] mt-0.5">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <MapPin className="w-3.5 h-3.5 text-slate-600 shrink-0" />
                         <span className="truncate">{tailor.area}</span>
                       </div>
                     </div>
@@ -240,7 +240,7 @@ export const BusinessDirectoryView: React.FC<BusinessDirectoryViewProps> = ({ on
                     </span>
                     <span>·</span>
                     <span className="flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      <Clock className="w-3.5 h-3.5 text-slate-600" />
                       {tailor.turnaround_days || '5-7 days'}
                     </span>
                     {tailor.pricing_tier && (
@@ -347,7 +347,7 @@ export const BusinessDirectoryView: React.FC<BusinessDirectoryViewProps> = ({ on
               <button
                 type="button"
                 onClick={() => setDetailModalTailor(null)}
-                className="p-2 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
+                className="p-2 rounded-lg text-slate-600 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>

@@ -1,7 +1,5 @@
+import Dexie, { Table } from 'dexie';
 import { MeasurementProfile, ConsentRecord } from '../types/api';
-
-const DB_NAME = 'virtual_tailor_db';
-const DB_VERSION = 1;
 
 export interface PendingSyncOp {
   op_id?: number;
@@ -26,234 +24,140 @@ export interface ClientDraftSettings {
   capture_mode?: 'self' | 'assisted';
 }
 
-/**
- * Privacy guard: strictly checks that NO image data, Blob, ImageData, ImageBitmap,
- * ArrayBuffer > 64KB, or data:image URL is ever stored.
- */
-export function assertNoImages(obj: unknown, path = 'root'): void {
-  if (!obj || typeof obj !== 'object') return;
+const MAX_BINARY_BYTES = 65536;
+const MAX_TEXT_LENGTH = 65536;
+const MAX_LIST_LENGTH = 10000;
 
-  if (typeof Blob !== 'undefined' && obj instanceof Blob) {
-    throw new Error(`Privacy Violation: Blob found at ${path}. Images must never be stored.`);
-  }
-  if (typeof ImageData !== 'undefined' && obj instanceof ImageData) {
-    throw new Error(`Privacy Violation: ImageData found at ${path}. Images must never be stored.`);
-  }
-  if (typeof ImageBitmap !== 'undefined' && obj instanceof ImageBitmap) {
-    throw new Error(`Privacy Violation: ImageBitmap found at ${path}. Images must never be stored.`);
-  }
-  if (obj instanceof ArrayBuffer && obj.byteLength > 65536) {
-    throw new Error(`Privacy Violation: Large ArrayBuffer (${obj.byteLength} bytes) found at ${path}.`);
-  }
+/** Privacy guard: throws if anything image-like is about to be stored (frontend-spec 12.1). */
+export function assertNoImages(value: unknown, path = 'root'): void {
+  walk(value, path, { binary: 0, seen: new Set() });
+}
 
-  if (Array.isArray(obj)) {
-    obj.forEach((item, index) => assertNoImages(item, `${path}[${index}]`));
+function walk(value: unknown, path: string, state: { binary: number; seen: Set<object> }): void {
+  if (typeof value === 'string') {
+    if (/^\s*data:/i.test(value)) throw new Error(`Privacy violation: data URL at ${path}`);
+    if (value.length > MAX_TEXT_LENGTH) throw new Error(`Privacy violation: long text at ${path}`);
     return;
   }
-
-  for (const [key, val] of Object.entries(obj as Record<string, unknown>)) {
-    if (typeof val === 'string' && val.startsWith('data:image')) {
-      throw new Error(`Privacy Violation: data:image string detected at ${path}.${key}.`);
+  if (!value || typeof value !== 'object' || state.seen.has(value)) return;
+  state.seen.add(value);
+  for (const [name, type] of [
+    ['Blob', typeof Blob !== 'undefined' ? Blob : null],
+    ['ImageData', typeof ImageData !== 'undefined' ? ImageData : null],
+    ['ImageBitmap', typeof ImageBitmap !== 'undefined' ? ImageBitmap : null],
+  ] as const) {
+    if (type && value instanceof type) throw new Error(`Privacy violation: ${name} at ${path}`);
+  }
+  if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
+    state.binary += value.byteLength;
+    if (state.binary > MAX_BINARY_BYTES) {
+      throw new Error(`Privacy violation: ${state.binary} bytes of binary data at ${path}`);
     }
-    assertNoImages(val, `${path}.${key}`);
+    return;
+  }
+  if (Array.isArray(value) || value instanceof Set) {
+    const items = [...value];
+    if (items.length > MAX_LIST_LENGTH) throw new Error(`Privacy violation: long list at ${path}`);
+    items.forEach((item, index) => walk(item, `${path}[${index}]`, state));
+    return;
+  }
+  if (value instanceof Map) {
+    for (const [key, item] of value) {
+      walk(key, `${path}.key`, state);
+      walk(item, `${path}.value`, state);
+    }
+    return;
+  }
+  for (const [key, item] of Object.entries(value)) walk(item, `${path}.${key}`, state);
+}
+
+class VTDatabase extends Dexie {
+  profiles!: Table<MeasurementProfile, string>;
+  pending_sync!: Table<PendingSyncOp, number>;
+  settings!: Table<{ key: string; value: unknown }, string>;
+
+  constructor() {
+    super('virtual_tailor');
+    this.version(1).stores({
+      profiles: 'profile_id, client_code, sync_status, captured_at',
+      pending_sync: '++op_id, created_at, profile_id',
+      settings: 'key',
+    });
+    // The guard sits on the tables, so no write can go around it.
+    for (const table of this.tables) {
+      table.hook('creating', (_key, row) => assertNoImages(row, table.name));
+      table.hook('updating', (changes) => {
+        assertNoImages(changes, table.name);
+      });
+    }
   }
 }
 
+const DRAFT_KEY = 'vt_client_draft';
+
 class VTStorage {
-  private dbPromise: Promise<IDBDatabase> | null = null;
+  readonly db = new VTDatabase();
 
-  private initDB(): Promise<IDBDatabase> {
-    if (this.dbPromise) return this.dbPromise;
-
-    this.dbPromise = new Promise((resolve, reject) => {
-      if (typeof indexedDB === 'undefined') {
-        reject(new Error('IndexedDB not supported'));
-        return;
-      }
-
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-      request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result;
-        if (!db.objectStoreNames.contains('profiles')) {
-          const profileStore = db.createObjectStore('profiles', { keyPath: 'profile_id' });
-          profileStore.createIndex('client_code', 'client_code', { unique: false });
-          profileStore.createIndex('sync_status', 'sync_status', { unique: false });
-          profileStore.createIndex('captured_at', 'captured_at', { unique: false });
-        }
-        if (!db.objectStoreNames.contains('pending_sync')) {
-          db.createObjectStore('pending_sync', { keyPath: 'op_id', autoIncrement: true });
-        }
-        if (!db.objectStoreNames.contains('settings')) {
-          db.createObjectStore('settings', { keyPath: 'key' });
-        }
-      };
-
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-
-    return this.dbPromise;
+  private op(profileId: string, operation: PendingSyncOp['operation']): PendingSyncOp {
+    const now = new Date().toISOString();
+    return { created_at: now, profile_id: profileId, operation, attempts: 0, next_attempt_at: now };
   }
 
   async saveProfile(profile: MeasurementProfile): Promise<void> {
     assertNoImages(profile, 'profile');
-    try {
-      const db = await this.initDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(['profiles', 'pending_sync'], 'readwrite');
-        const profilesStore = tx.objectStore('profiles');
-        profilesStore.put(profile);
-
-        if (profile.sync_status === 'pending') {
-          const pendingStore = tx.objectStore('pending_sync');
-          pendingStore.add({
-            created_at: new Date().toISOString(),
-            profile_id: profile.profile_id,
-            operation: 'create',
-            attempts: 0,
-            next_attempt_at: new Date().toISOString(),
-          });
-        }
-
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      });
-    } catch {
-      // Fallback to localStorage if IndexedDB is blocked
-      const existing = this.getProfilesFromLocalStorage();
-      const idx = existing.findIndex((p) => p.profile_id === profile.profile_id);
-      if (idx >= 0) existing[idx] = profile;
-      else existing.unshift(profile);
-      localStorage.setItem('vt_profiles', JSON.stringify(existing));
-    }
+    await this.db.transaction('rw', this.db.profiles, this.db.pending_sync, async () => {
+      await this.db.profiles.put(profile);
+      if (profile.sync_status === 'pending') {
+        await this.db.pending_sync.add(this.op(profile.profile_id, 'create'));
+      }
+    });
   }
 
   async getProfiles(): Promise<MeasurementProfile[]> {
-    try {
-      const db = await this.initDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction('profiles', 'readonly');
-        const store = tx.objectStore('profiles');
-        const req = store.getAll();
-        req.onsuccess = () => {
-          const res = (req.result || []) as MeasurementProfile[];
-          res.sort((a, b) => new Date(b.captured_at).getTime() - new Date(a.captured_at).getTime());
-          resolve(res);
-        };
-        req.onerror = () => reject(req.error);
-      });
-    } catch {
-      return this.getProfilesFromLocalStorage();
-    }
+    const rows = await this.db.profiles.orderBy('captured_at').reverse().toArray();
+    return rows;
   }
 
   async getProfileById(profileId: string): Promise<MeasurementProfile | null> {
-    try {
-      const db = await this.initDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction('profiles', 'readonly');
-        const store = tx.objectStore('profiles');
-        const req = store.get(profileId);
-        req.onsuccess = () => resolve((req.result as MeasurementProfile) || null);
-        req.onerror = () => reject(req.error);
-      });
-    } catch {
-      const all = this.getProfilesFromLocalStorage();
-      return all.find((p) => p.profile_id === profileId) || null;
-    }
+    return (await this.db.profiles.get(profileId)) ?? null;
   }
 
   async updateProfileSyncStatus(
     profileId: string,
-    syncStatus: 'pending' | 'synced' | 'conflict' | 'rejected'
+    syncStatus: 'pending' | 'synced' | 'conflict' | 'rejected',
   ): Promise<void> {
-    try {
-      const db = await this.initDB();
-      const tx = db.transaction('profiles', 'readwrite');
-      const store = tx.objectStore('profiles');
-      const req = store.get(profileId);
-      req.onsuccess = () => {
-        const profile = req.result as MeasurementProfile;
-        if (profile) {
-          profile.sync_status = syncStatus;
-          store.put(profile);
-        }
-      };
-    } catch {
-      const all = this.getProfilesFromLocalStorage();
-      const p = all.find((item) => item.profile_id === profileId);
-      if (p) {
-        p.sync_status = syncStatus;
-        localStorage.setItem('vt_profiles', JSON.stringify(all));
-      }
-    }
+    await this.db.profiles.update(profileId, { sync_status: syncStatus });
   }
 
   async deleteProfile(profileId: string): Promise<void> {
-    try {
-      const db = await this.initDB();
-      const tx = db.transaction(['profiles', 'pending_sync'], 'readwrite');
-      tx.objectStore('profiles').delete(profileId);
-      tx.objectStore('pending_sync').add({
-        created_at: new Date().toISOString(),
-        profile_id: profileId,
-        operation: 'delete',
-        attempts: 0,
-        next_attempt_at: new Date().toISOString(),
-      });
-    } catch {
-      const all = this.getProfilesFromLocalStorage().filter((p) => p.profile_id !== profileId);
-      localStorage.setItem('vt_profiles', JSON.stringify(all));
-    }
+    await this.db.transaction('rw', this.db.profiles, this.db.pending_sync, async () => {
+      await this.db.profiles.delete(profileId);
+      await this.db.pending_sync.add(this.op(profileId, 'delete'));
+    });
   }
 
   async clearAllLocalData(): Promise<void> {
-    try {
-      const db = await this.initDB();
-      const tx = db.transaction(['profiles', 'pending_sync', 'settings'], 'readwrite');
-      tx.objectStore('profiles').clear();
-      tx.objectStore('pending_sync').clear();
-      tx.objectStore('settings').clear();
-    } catch {
-      localStorage.removeItem('vt_profiles');
-      localStorage.removeItem('vt_client_draft');
+    await Promise.all([this.db.profiles.clear(), this.db.pending_sync.clear(), this.db.settings.clear()]);
+    localStorage.removeItem(DRAFT_KEY);
+    // The prototype client keeps its copies here until M9 to M11.
+    for (const key of ['users', 'clients', 'profiles', 'orders', 'audit', 'participants', 'readings']) {
+      localStorage.removeItem(`vt_api_${key}`);
     }
   }
 
   saveDraft(draft: ClientDraftSettings): void {
     assertNoImages(draft, 'draft');
-    try {
-      localStorage.setItem('vt_client_draft', JSON.stringify(draft));
-    } catch {
-      // ignore
-    }
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
   }
 
   getDraft(): ClientDraftSettings {
     try {
-      const raw = localStorage.getItem('vt_client_draft');
-      if (raw) return JSON.parse(raw);
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) return JSON.parse(raw) as ClientDraftSettings;
     } catch {
-      // ignore
+      // A damaged draft is treated as no draft.
     }
-    return {
-      capture_mode: 'self',
-      clothing_fit: 'fitted',
-      sex: 'female',
-      height_mm: 1700,
-      client_code: '',
-    };
-  }
-
-  private getProfilesFromLocalStorage(): MeasurementProfile[] {
-    try {
-      const raw = localStorage.getItem('vt_profiles');
-      if (raw) return JSON.parse(raw);
-    } catch {
-      // ignore
-    }
-    return [];
+    return { capture_mode: 'self', clothing_fit: 'fitted', sex: 'female', height_mm: 1700, client_code: '' };
   }
 }
 

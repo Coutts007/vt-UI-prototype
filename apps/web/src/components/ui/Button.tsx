@@ -22,7 +22,7 @@ export const Button: React.FC<ButtonProps> = ({
 
   const sizeClasses = {
     sm: 'text-xs h-9 px-3 gap-1.5 min-h-[44px]',
-    md: 'text-sm h-11 px-4 gap-2 min-h-[48px]',
+    md: 'text-sm h-12 px-4 gap-2 min-h-[48px]',
     lg: 'text-base h-12 px-5 gap-2.5 min-h-[48px]',
     xl: 'text-lg h-14 px-7 gap-3 min-h-[56px] font-semibold',
   }[size];

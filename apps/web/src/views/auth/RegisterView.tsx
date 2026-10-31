@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { FEATURE_DIRECTORY } from '../../config/features';
 import { api } from '../../api/client';
 import { UserAccount } from '../../types/api';
 import { Button } from '../../components/ui/Button';
@@ -166,7 +167,8 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate }) => {
             >
               Sign In to Workshop Dashboard
             </Button>
-            <Button
+            {FEATURE_DIRECTORY && (
+<Button
               variant="outline"
               size="lg"
               onClick={() => onNavigate('/tailors')}
@@ -174,6 +176,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate }) => {
             >
               View in Business Directory
             </Button>
+)}
           </div>
         </div>
       </div>
@@ -220,60 +223,60 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate }) => {
           </h2>
 
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+            <label htmlFor="registerview-1" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
               Business / Workshop Name *
             </label>
-            <input
+            <input id="registerview-1"
               type="text"
               required
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
               placeholder="e.g. Amani Couture &amp; Tailors"
-              className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)]"
+              className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)]"
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+              <label htmlFor="registerview-2" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
                 Owner Email Address *
               </label>
-              <input
+              <input id="registerview-2"
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="fundi@domain.ke"
-                className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)]"
+                className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)]"
               />
             </div>
 
             <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+              <label htmlFor="registerview-3" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
                 Phone Number (M-Pesa / WhatsApp) *
               </label>
-              <input
+              <input id="registerview-3"
                 type="text"
                 required
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="+2547XXXXXXXX"
-                className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)]"
+                className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)]"
               />
             </div>
           </div>
 
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+            <label htmlFor="registerview-4" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
               Town / Commercial Area *
             </label>
-            <input
+            <input id="registerview-4"
               type="text"
               required
               value={area}
               onChange={(e) => setArea(e.target.value)}
               placeholder="e.g. Gikomba, Nairobi"
-              className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)] mb-2"
+              className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)] mb-2"
             />
             {/* Quick Hub Badges */}
             <div className="flex flex-wrap gap-1.5 items-center">
@@ -296,15 +299,15 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate }) => {
           </div>
 
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+            <label htmlFor="registerview-5" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
               Physical Stall or Building Address (Optional)
             </label>
-            <input
+            <input id="registerview-5"
               type="text"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               placeholder="e.g. Stall 42B, Ground Floor, Biashara Plaza"
-              className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)]"
+              className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)]"
             />
           </div>
         </div>
@@ -343,10 +346,10 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate }) => {
           </div>
 
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+            <label htmlFor="registerview-6" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
               Short Description / Bio (Visible to Customers in Directory)
             </label>
-            <textarea
+            <textarea id="registerview-6"
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -357,13 +360,13 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate }) => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+              <label htmlFor="registerview-7" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
                 Typical Turnaround Time
               </label>
-              <select
+              <select id="registerview-7"
                 value={turnaroundDays}
                 onChange={(e) => setTurnaroundDays(e.target.value)}
-                className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm outline-none bg-white focus:border-[var(--vt-thread,#2E3A87)]"
+                className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm outline-none bg-white focus:border-[var(--vt-thread,#2E3A87)]"
               >
                 <option value="2-3 days">2-3 days (Express)</option>
                 <option value="3-5 days">3-5 days (Standard)</option>
@@ -373,13 +376,13 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate }) => {
             </div>
 
             <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+              <label htmlFor="registerview-8" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
                 Pricing Tier
               </label>
-              <select
+              <select id="registerview-8"
                 value={pricingTier}
                 onChange={(e) => setPricingTier(e.target.value as any)}
-                className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm outline-none bg-white focus:border-[var(--vt-thread,#2E3A87)]"
+                className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm outline-none bg-white focus:border-[var(--vt-thread,#2E3A87)]"
               >
                 <option value="Affordable">Affordable (Budget-friendly)</option>
                 <option value="Mid-Range">Mid-Range (Standard quality)</option>
@@ -397,17 +400,17 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate }) => {
           </h2>
 
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
+            <label htmlFor="registerview-9" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
               Account Password *
             </label>
-            <input
+            <input id="registerview-9"
               type="password"
               required
               minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter secure password"
-              className="w-full h-11 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)]"
+              className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)]"
             />
             <span className="text-[11px] text-[var(--vt-ink-muted,#5C554C)] mt-1 block">
               Demo master password is also accepted: <code className="bg-slate-100 px-1 py-0.5 rounded">vt-demo-2026</code>

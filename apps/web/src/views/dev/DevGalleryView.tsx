@@ -7,12 +7,20 @@ import { NumberInput } from '../../components/ui/NumberInput';
 import { LevelBubble } from '../../components/ui/LevelBubble';
 import { Silhouette } from '../../components/ui/Silhouette';
 import { Measurement } from '../../types/api';
+import { Banner, Dialog, EmptyState, ErrorState, Skeleton, Toast } from '../../components/ui/feedback';
+import { Checkbox, DatePicker, Field, LangToggle, RadioCards, Select } from '../../components/ui/forms';
+import { AuditRow, CheckList, Countdown, DataTable, ProgressSteps, QRCode, StatusChips } from '../../components/ui/data';
+import { FailurePanel } from './FailurePanel';
 
 export const DevGalleryView: React.FC = () => {
   const [testCode, setTestCode] = useState('AB1234');
   const [testNum, setTestNum] = useState(170);
   const [testBeta, setTestBeta] = useState(90);
   const [testGamma, setTestGamma] = useState(0);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [ticked, setTicked] = useState(false);
+  const [fit, setFit] = useState('fitted');
+  const [chip, setChip] = useState('new');
 
   const sampleMeasurements: Measurement[] = [
     { site_code: 'stature', value_mm: 1700, method: 'auto', confidence_flag: 'pass', flag_reasons: [] },
@@ -80,15 +88,15 @@ export const DevGalleryView: React.FC = () => {
 
       {/* Interactive Level Bubble */}
       <section className="space-y-4 p-6 rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-slate-900 text-white shadow-2xs">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-slate-600">
           Spirit Level Bubble (C1 Compliant: Beta 88°–92°, Gamma ±2.5°)
         </h2>
         <div className="flex flex-col sm:flex-row items-center gap-8">
           <LevelBubble beta={testBeta} gamma={testGamma} size="lg" />
           <div className="flex-1 space-y-3 text-xs w-full">
             <div>
-              <label className="block mb-1">Tilt (Beta: {testBeta}°)</label>
-              <input
+              <label htmlFor="devgalleryview-1" className="block mb-1">Tilt (Beta: {testBeta}°)</label>
+              <input id="devgalleryview-1"
                 type="range"
                 min="70"
                 max="110"
@@ -99,8 +107,8 @@ export const DevGalleryView: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block mb-1">Roll (Gamma: {testGamma}°)</label>
-              <input
+              <label htmlFor="devgalleryview-2" className="block mb-1">Roll (Gamma: {testGamma}°)</label>
+              <input id="devgalleryview-2"
                 type="range"
                 min="-15"
                 max="15"
@@ -120,6 +128,66 @@ export const DevGalleryView: React.FC = () => {
           Interactive SVG Silhouette (Figure 5.5)
         </h2>
         <Silhouette measurements={sampleMeasurements} sex="female" unit="cm" />
+      </section>
+      <section className="space-y-4 p-6 rounded-2xl border border-[var(--vt-line)] bg-white">
+        <h2 className="text-sm font-bold uppercase">Shell components</h2>
+        <LangToggle />
+        <ProgressSteps current={2} />
+        <Banner tone="warn">Banner</Banner>
+        <Field label="Date" hint="Hint text">
+          {(props) => <DatePicker {...props} />}
+        </Field>
+        <Field label="Select" error="An error message">
+          {(props) => (
+            <Select {...props}>
+              <option>One</option>
+            </Select>
+          )}
+        </Field>
+        <Checkbox label="Checkbox" checked={ticked} onChange={setTicked} />
+        <RadioCards
+          legend="Clothing fit"
+          value={fit}
+          onChange={setFit}
+          options={[
+            { value: 'fitted', label: 'Fitted', hint: 'Close to the body' },
+            { value: 'loose', label: 'Loose' },
+          ]}
+        />
+        <StatusChips
+          label="Status"
+          value={chip}
+          onChange={setChip}
+          options={[
+            { value: 'new', label: 'New' },
+            { value: 'ready', label: 'Ready' },
+          ]}
+        />
+        <CheckList
+          items={[
+            { key: 'a', label: 'Passed', state: 'pass' },
+            { key: 'b', label: 'Failed', state: 'fail' },
+            { key: 'c', label: 'Waiting', state: 'wait' },
+          ]}
+        />
+        <Countdown value={3} />
+        <EmptyState />
+        <ErrorState onRetry={() => undefined} />
+        <Skeleton />
+        <DataTable
+          caption="Sample"
+          columns={[{ key: 'a', header: 'Site', cell: (row: { a: string }) => row.a }]}
+          rows={[{ a: 'Chest' }]}
+          rowKey={(row) => row.a}
+        />
+        <AuditRow when="2026-01-01" action="Order created" summary="ORD-0001" who="Tailor" />
+        <QRCode text="AB1234" label="QR code for AB1234" />
+        <Button onClick={() => setDialogOpen(true)}>Open dialog</Button>
+        <Dialog title="Dialog" open={dialogOpen} onClose={() => setDialogOpen(false)}>
+          Content
+        </Dialog>
+        <Toast>Toast</Toast>
+        <FailurePanel />
       </section>
     </div>
   );

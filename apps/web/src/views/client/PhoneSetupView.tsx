@@ -178,8 +178,8 @@ export const PhoneSetupView: React.FC<PhoneSetupViewProps> = ({ onNavigate }) =>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] mb-1">Tilt (Beta: 88°–92° target)</label>
-              <input
+              <label htmlFor="phonesetupview-1" className="block text-[11px] mb-1">Tilt (Beta: 88°–92° target)</label>
+              <input id="phonesetupview-1"
                 type="range"
                 min="70"
                 max="110"
@@ -190,8 +190,8 @@ export const PhoneSetupView: React.FC<PhoneSetupViewProps> = ({ onNavigate }) =>
               />
             </div>
             <div>
-              <label className="block text-[11px] mb-1">Roll (Gamma: -2° to +2° target)</label>
-              <input
+              <label htmlFor="phonesetupview-2" className="block text-[11px] mb-1">Roll (Gamma: -2° to +2° target)</label>
+              <input id="phonesetupview-2"
                 type="range"
                 min="-20"
                 max="20"

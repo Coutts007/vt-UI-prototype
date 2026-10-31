@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { FEATURE_DIRECTORY } from '../../config/features';
 import { useI18n, Locale } from '../../i18n';
 import { UserAccount } from '../../types/api';
 import { Globe, MoreVertical, LogOut, Scissors, Shield, BookOpen, Layers, Store } from 'lucide-react';
@@ -132,7 +133,8 @@ export const Header: React.FC<HeaderProps> = ({
             </>
           ) : (
             <>
-              <button
+              {FEATURE_DIRECTORY && (
+<button
                 onClick={() => onNavigate('/tailors')}
                 className={`hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer flex items-center gap-1.5 ${
                   currentPath.startsWith('/tailors') ? 'text-[var(--vt-thread,#2E3A87)] font-semibold' : ''
@@ -141,6 +143,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <Store className="w-3.5 h-3.5" />
                 <span>Find a Tailor</span>
               </button>
+)}
               <button
                 onClick={() => onNavigate('/start')}
                 className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
@@ -231,7 +234,8 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="px-3 py-1.5 text-xs font-semibold text-[var(--vt-ink-muted,#5C554C)] uppercase tracking-wider border-b border-[var(--vt-line,#DDD5C8)]/50 mb-1">
                     Virtual Tailor Navigation
                   </div>
-                  <button
+                  {FEATURE_DIRECTORY && (
+<button
                     onClick={() => {
                       onNavigate('/tailors');
                       setMenuOpen(false);
@@ -241,6 +245,7 @@ export const Header: React.FC<HeaderProps> = ({
                     <Store className="w-4 h-4 text-[var(--vt-thread,#2E3A87)]" />
                     <span>Browse Tailor Directory</span>
                   </button>
+)}
                   <button
                     onClick={() => {
                       onNavigate('/start');
@@ -292,7 +297,9 @@ export const Header: React.FC<HeaderProps> = ({
                     <span>Privacy &amp; DPA Rights</span>
                   </button>
 
-                  <div className="my-1 border-t border-[var(--vt-line,#DDD5C8)]/50" />
+                  {(import.meta.env.DEV || import.meta.env.MODE === 'mock') && (
+<>
+<div className="my-1 border-t border-[var(--vt-line,#DDD5C8)]/50" />
 
                   <button
                     onClick={() => {
@@ -312,6 +319,8 @@ export const Header: React.FC<HeaderProps> = ({
                   >
                     Capture Tuning &amp; Simulation (/dev)
                   </button>
+</>
+)}
                 </div>
               </>
             )}

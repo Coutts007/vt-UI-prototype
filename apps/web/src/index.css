@@ -49,3 +49,31 @@ body {
     display: none !important;
   }
 }
+
+/* Focus and skip link (frontend-spec 17) */
+:focus-visible {
+  outline: 3px solid var(--vt-kitenge);
+  outline-offset: 2px;
+}
+
+.vt-skip-link {
+  position: absolute;
+  left: -9999px;
+}
+
+.vt-skip-link:focus {
+  left: 8px;
+  top: 8px;
+  z-index: 60;
+  padding: 12px 16px;
+  background: var(--vt-paper);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

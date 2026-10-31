@@ -2,6 +2,20 @@
 
 The newest entry comes first. Every change or improvement adds a line in the same commit.
 
+## 2026-10-31: M3 web foundation
+
+- Every URL in the route map now has a screen, with sign-in and role checks. A wrong role sees a 403 page, an unknown URL a 404 page, and study pages stay hidden when study mode is off.
+- Screens load on demand, and a browser test confirms the client flow downloads no tailor, admin or study code.
+- Added a typed API client (real and mock) and a mock server covering all 60 contract endpoints. A test calls each one and checks the reply against the contract, plus sign-in and role refusals.
+- Moved phone storage to Dexie, with a stronger guard that refuses image content. Removed the fallback that kept profiles in localStorage.
+- Added the service worker, which never caches `/api/`, plus the offline banner and update toast.
+- Added the shared components, the developer gallery and failure panel, which production builds leave out, and a Kiswahili review register, with every string marked unreviewed.
+- Browser tests cover the routes in English and Kiswahili at 360 and 1280 px, with no serious accessibility problems and no sideways scrolling. Fixing them meant linking about 40 form labels and darkening low-contrast text. Dynamic detail routes, such as one client or one order, are not in this sweep yet.
+- **Not met:** the whole client flow is 162 KB against the 120 KB budget (the first screen is about 94 KB). Decision D34 records why; meeting 120 KB fully would mean changing React or Dexie, which is the owner's call. The budget check stops further growth, but does not yet enforce 120 KB.
+- After an independent review: "clear this phone" now also removes the prototype's local copies; the image guard sits on every database table and catches more forms of image data; links to the switched-off tailor directory are hidden; client screens work offline after one visit; "new order from profile" opens the chosen profile; a wrong current password no longer ends the session; malformed addresses show a 404 page instead of a blank one.
+- **Carried forward, and blocks any public release:** the screens still run on the prototype's local mock client, so in a production build any password signs in, including as admin, and the new API client and mock server are not connected to the screens yet. This moves to the real API client in M9 to M11.
+- **Carried forward:** some screens still have English text in Kiswahili mode (M9 to M11), and some controls, including the header ones, are under the 48 px touch size (M16). The accessibility check does not catch either.
+
 ## 2026-10-31: M2 Python measurement core
 
 - Added `vt_measure`, which turns profile numbers into nine measurements and flags. It handles the one-handed sheet pose (A14), using the free arm for the sleeve, and warns when that arm is unknown.
