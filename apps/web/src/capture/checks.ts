@@ -1,189 +1,255 @@
-import { TranslationKey } from '../i18n/en';
-import { Landmark, MarkerObs } from '../types/api';
+// The nine capture checks in priority order (frontend-spec 10.3, A14). Numbers in, verdicts out.
+import type { TranslationKey } from '../i18n/en';
+import type { Landmark, MarkerObs, PersonMask, View, ViewChecks, VisionSample } from '../vision/types';
+import { CAPTURE_CONFIG, CaptureConfig } from './config';
 
-export interface CheckItemState {
-  id: string;
-  labelKey: TranslationKey;
-  passed: boolean;
-  correctionKey?: TranslationKey;
-}
+export const CHECK_ORDER = [
+  'level',
+  'person',
+  'frame',
+  'distance',
+  'facing',
+  'arms',
+  'sheet',
+  'light',
+  'stability',
+] as const;
+export type CheckId = (typeof CHECK_ORDER)[number];
+export type CheckResults = Record<CheckId, boolean>;
+export type FreeArm = 'left' | 'right' | null;
 
-export interface CaptureChecksContext {
-  view: 'front' | 'side';
-  beta?: number; // tilt angle (88 to 92 deg is upright portrait)
-  gamma?: number; // roll angle (-2 to +2 deg is level)
+export interface CheckInput {
+  view: View;
+  sample: VisionSample;
+  /** Tilt from the phone's sensors. Without it the sample's own tilt is used. */
+  orientation?: { beta: number; gamma: number } | null;
   levelUnchecked?: boolean;
-  landmarks: Landmark[];
-  marker: MarkerObs | null;
-  luminance?: number; // 0..255
-  sharpness?: number; // variance of Laplacian
-  stabilityScore?: number; // 0..1 (1 is very still)
+  /** Earlier samples' landmarks, oldest first, for the stability check. */
+  history?: Landmark[][];
 }
 
-/**
- * Checks evaluation in strict priority order (Section 10.3)
- * Returns list of checks and the single highest-priority correction
- */
-export function evaluateCaptureChecks(ctx: CaptureChecksContext): {
-  checks: CheckItemState[];
-  allPassed: boolean;
-  activeCorrectionKey: TranslationKey | null;
-  borderState: 'ok' | 'wait' | 'stop';
-} {
-  const { view, beta, gamma, levelUnchecked, landmarks, marker, luminance = 130, stabilityScore = 0.95 } = ctx;
+export interface CheckOutcome {
+  results: CheckResults;
+  corrections: Partial<Record<CheckId, TranslationKey>>;
+  /** Light and sharpness are one row on screen but two fields in the contract. */
+  lumaOk: boolean;
+  sharpOk: boolean;
+  freeArm: FreeArm;
+}
 
-  const checks: CheckItemState[] = [];
+export interface MaskBounds {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+}
 
-  // Check 1: Level (C1: beta in [88, 92] and |gamma| <= 2)
-  let levelOk = true;
-  if (!levelUnchecked && beta !== undefined && gamma !== undefined) {
-    levelOk = beta >= 88 && beta <= 92 && Math.abs(gamma) <= 2.5;
-  }
-  checks.push({
-    id: 'level',
-    labelKey: 'checkLevel',
-    passed: levelOk,
-    correctionKey: 'corrTilt',
-  });
-
-  // Check 2: Person found (landmarks detected with visibility >= 0.5)
-  const nose = landmarks[0];
-  const lShoulder = landmarks[11];
-  const rShoulder = landmarks[12];
-  const lHip = landmarks[23];
-  const rHip = landmarks[24];
-  const lAnkle = landmarks[27];
-  const rAnkle = landmarks[28];
-
-  const personFound =
-    view === 'front'
-      ? !!(nose && lShoulder && rShoulder && lHip && rHip && lAnkle && rAnkle &&
-          lShoulder.visibility >= 0.45 && rShoulder.visibility >= 0.45)
-      : !!(lShoulder && lHip && lAnkle && (lShoulder.visibility >= 0.45 || (rShoulder && rShoulder.visibility >= 0.45)));
-
-  checks.push({
-    id: 'person',
-    labelKey: 'checkWholeBody',
-    passed: personFound,
-    correctionKey: 'corrStepIn',
-  });
-
-  // Check 3: Whole body in frame (margins >= 3% top/bottom)
-  let wholeBodyOk = false;
-  if (personFound && nose && (lAnkle || rAnkle)) {
-    const topY = nose.y - 0.08;
-    const bottomY = Math.max(lAnkle?.y || 0.9, rAnkle?.y || 0.9);
-    wholeBodyOk = topY >= 0.02 && bottomY <= 0.98;
-  }
-  checks.push({
-    id: 'frame',
-    labelKey: 'checkWholeBody',
-    passed: wholeBodyOk,
-    correctionKey: 'corrHeadCut',
-  });
-
-  // Check 4: Distance (Person height between 31% and 63% of frame height)
-  let distanceOk = false;
-  let distanceCorrection: TranslationKey = 'corrTooFar';
-  if (personFound && nose && (lAnkle || rAnkle)) {
-    const heightNorm = (Math.max(lAnkle?.y || 0.9, rAnkle?.y || 0.9) - (nose.y - 0.08));
-    if (heightNorm < 0.31) {
-      distanceCorrection = 'corrTooFar';
-      distanceOk = false;
-    } else if (heightNorm > 0.63) {
-      distanceCorrection = 'corrTooClose';
-      distanceOk = false;
-    } else {
-      distanceOk = true;
+export function maskBounds(mask: PersonMask): MaskBounds | null {
+  let top = -1;
+  let bottom = -1;
+  let left = mask.width;
+  let right = -1;
+  for (let row = 0; row < mask.height; row++) {
+    for (let col = 0; col < mask.width; col++) {
+      if (!mask.data[row * mask.width + col]) continue;
+      if (top < 0) top = row;
+      bottom = row;
+      if (col < left) left = col;
+      if (col > right) right = col;
     }
   }
-  checks.push({
-    id: 'distance',
-    labelKey: 'checkDistance',
-    passed: distanceOk,
-    correctionKey: distanceCorrection,
-  });
-
-  // Check 5: Facing / Profile
-  let facingOk = false;
-  if (view === 'front') {
-    if (lShoulder && rShoulder && lHip && rHip) {
-      const shoulderSpread = Math.abs(rShoulder.x - lShoulder.x);
-      facingOk = shoulderSpread >= 0.12;
-    }
-  } else {
-    // Side profile: shoulders and hips aligned horizontally in depth
-    if (lShoulder && rShoulder) {
-      const shoulderXDiff = Math.abs(rShoulder.x - lShoulder.x);
-      facingOk = shoulderXDiff <= 0.08;
-    }
-  }
-  checks.push({
-    id: 'facing',
-    labelKey: 'checkFacing',
-    passed: facingOk,
-    correctionKey: view === 'front' ? 'corrTurnFace' : 'corrTurnRight',
-  });
-
-  // Check 6: Arms away from body
-  let armsOk = false;
-  const lWrist = landmarks[15];
-  const rWrist = landmarks[16];
-  if (view === 'front') {
-    if (lWrist && rWrist && lHip && rHip) {
-      const lDist = Math.abs(lWrist.x - lHip.x);
-      const rDist = Math.abs(rWrist.x - rHip.x);
-      armsOk = lDist >= 0.06 && rDist >= 0.06;
-    }
-  } else {
-    // Side view: arms hanging slightly forward
-    armsOk = true;
-  }
-  checks.push({
-    id: 'arms',
-    labelKey: 'checkArms',
-    passed: armsOk,
-    correctionKey: view === 'front' ? 'corrArmsAway' : 'corrArmsForward',
-  });
-
-  // Check 7: Sheet found (ArUco marker)
-  const markerOk = !!(marker && marker.side_px >= 40 && marker.confidence >= 0.65);
-  checks.push({
-    id: 'sheet',
-    labelKey: 'checkSheet',
-    passed: markerOk,
-    correctionKey: 'corrHoldSheetFlat',
-  });
-
-  // Check 8: Light & sharp
-  const lightOk = luminance >= 50 && luminance <= 235;
-  checks.push({
-    id: 'light',
-    labelKey: 'checkLightSharp',
-    passed: lightOk,
-    correctionKey: luminance < 50 ? 'corrTooDark' : 'corrTooBright',
-  });
-
-  // Determine first failing check for the 56px instructions
-  const firstFailing = checks.find((c) => !c.passed);
-  const allPassed = !firstFailing && stabilityScore >= 0.8;
-
-  let borderState: 'ok' | 'wait' | 'stop' = 'stop';
-  if (allPassed) {
-    borderState = 'ok';
-  } else {
-    const passedCount = checks.filter((c) => c.passed).length;
-    if (passedCount >= checks.length - 1) {
-      borderState = 'wait';
-    } else {
-      borderState = 'stop';
-    }
-  }
-
+  if (top < 0) return null;
   return {
-    checks,
-    allPassed,
-    activeCorrectionKey: firstFailing?.correctionKey || (stabilityScore < 0.8 ? 'corrHoldStill' : null),
-    borderState,
+    top: top / mask.height,
+    bottom: (bottom + 1) / mask.height,
+    left: left / mask.width,
+    right: (right + 1) / mask.width,
+  };
+}
+
+function markerCentre(marker: MarkerObs): { x: number; y: number } {
+  const n = marker.corners.length;
+  return {
+    x: marker.corners.reduce((sum, c) => sum + c[0], 0) / n,
+    y: marker.corners.reduce((sum, c) => sum + c[1], 0) / n,
+  };
+}
+
+/** A14: the free arm is the one whose wrist is farther from the marker centre. */
+export function findFreeArm(
+  landmarks: Landmark[] | null,
+  marker: MarkerObs | null,
+  config: CaptureConfig = CAPTURE_CONFIG,
+): FreeArm {
+  if (!landmarks || !marker) return null;
+  const centre = markerCentre(marker);
+  const distance = (lm: Landmark) =>
+    Math.hypot(lm.x * marker.image_w - centre.x, lm.y * marker.image_h - centre.y);
+  const left = distance(landmarks[15]);
+  const right = distance(landmarks[16]);
+  if (left >= right * config.freeArmRatio) return 'left';
+  if (right >= left * config.freeArmRatio) return 'right';
+  return null;
+}
+
+/** True when no background separates the torso and the outside of the arm on the waist row. */
+export function armMergedAtWaist(mask: PersonMask, rowFraction: number, centre: number, side: 1 | -1): boolean {
+  const row = Math.min(mask.height - 1, Math.max(0, Math.round(rowFraction * mask.height)));
+  const start = Math.round(centre * mask.width);
+  let outer = -1;
+  for (let col = start; col >= 0 && col < mask.width; col += side) {
+    if (mask.data[row * mask.width + col]) outer = col;
+  }
+  if (outer < 0) return false;
+  for (let col = start; col !== outer; col += side) {
+    if (!mask.data[row * mask.width + col]) return false;
+  }
+  return true;
+}
+
+/** The largest movement of any tracked point over the window, as a fraction of person height. */
+export function landmarkJitter(history: Landmark[][], personHeight: number): number {
+  if (history.length < 2 || personHeight <= 0) return 0;
+  let worst = 0;
+  for (const index of [0, 11, 12, 23, 24, 27, 28]) {
+    const ys = history.map((frame) => frame[index].y);
+    const xs = history.map((frame) => frame[index].x);
+    worst = Math.max(worst, Math.max(...ys) - Math.min(...ys), Math.max(...xs) - Math.min(...xs));
+  }
+  return worst / personHeight;
+}
+
+const VISIBLE_FRONT = [0, 11, 12, 23, 24, 27, 28];
+const VISIBLE_SIDE = [12, 24, 26, 28, 30];
+
+export function evaluateChecks(input: CheckInput, config: CaptureConfig = CAPTURE_CONFIG): CheckOutcome {
+  const { view, sample, levelUnchecked = false, history = [] } = input;
+  const { landmarks, mask, marker, image_w: w, image_h: h } = sample;
+  const front = view === 'front';
+  const results = {} as CheckResults;
+  const corrections: CheckOutcome['corrections'] = {};
+
+  const tilt = input.orientation ?? sample.orientation;
+  results.level =
+    levelUnchecked ||
+    (!!tilt &&
+      tilt.beta >= config.level.betaMin &&
+      tilt.beta <= config.level.betaMax &&
+      Math.abs(tilt.gamma) <= config.level.gammaMax);
+  corrections.level = 'corrTilt';
+
+  const seen = (i: number) => (landmarks?.[i]?.visibility ?? 0) >= config.visibilityMin;
+  results.person =
+    !!landmarks &&
+    (front
+      ? VISIBLE_FRONT.every(seen) && (seen(29) || seen(30))
+      : VISIBLE_SIDE.every(seen));
+  corrections.person = 'corrStepIn';
+
+  const bounds = mask ? maskBounds(mask) : null;
+  const heelY = landmarks ? Math.max(landmarks[29]?.y ?? 0, landmarks[30]?.y ?? 0) : 0;
+  results.frame =
+    results.person &&
+    !!bounds &&
+    bounds.top >= config.frame.topMin &&
+    bounds.bottom <= config.frame.bottomMax &&
+    heelY <= config.frame.bottomMax &&
+    bounds.left >= config.frame.sideMargin &&
+    bounds.right <= 1 - config.frame.sideMargin;
+  corrections.frame = 'corrHeadCut';
+
+  const personHeight = bounds ? bounds.bottom - bounds.top : 0;
+  results.distance =
+    !!bounds && personHeight >= config.distance.minFrac && personHeight <= config.distance.maxFrac;
+  corrections.distance = personHeight > config.distance.maxFrac ? 'corrTooClose' : 'corrTooFar';
+
+  results.facing = false;
+  if (results.person && landmarks) {
+    const px = (a: Landmark, b: Landmark) => Math.hypot((a.x - b.x) * w, (a.y - b.y) * h);
+    if (front) {
+      const ratio = px(landmarks[11], landmarks[23]) / Math.max(px(landmarks[12], landmarks[24]), 1e-6);
+      results.facing = Math.abs(ratio - 1) <= config.facing.frontRatioTolerance;
+    } else {
+      const limit = config.facing.sideGapMax * personHeight * h;
+      results.facing =
+        Math.abs(landmarks[11].x - landmarks[12].x) * w <= limit &&
+        Math.abs(landmarks[23].x - landmarks[24].x) * w <= limit;
+    }
+  }
+  corrections.facing = front ? 'corrTurnFace' : 'corrTurnRight';
+
+  const freeArm = front ? findFreeArm(landmarks, marker, config) : null;
+  results.arms = false;
+  if (results.person && landmarks) {
+    if (front) {
+      const shoulders = Math.abs(landmarks[11].x - landmarks[12].x);
+      const need = config.arms.wristHipMinShoulders * shoulders;
+      const leftOk = Math.abs(landmarks[15].x - landmarks[23].x) >= need;
+      const rightOk = Math.abs(landmarks[16].x - landmarks[24].x) >= need;
+      const shoulderY = (landmarks[11].y + landmarks[12].y) / 2;
+      const hipY = (landmarks[23].y + landmarks[24].y) / 2;
+      const waistY = shoulderY + config.arms.waistRowFraction * (hipY - shoulderY);
+      const centre = (landmarks[11].x + landmarks[12].x) / 2;
+      const merged = (wrist: Landmark): boolean =>
+        !!mask && armMergedAtWaist(mask, waistY, centre, wrist.x >= centre ? 1 : -1);
+      // Only the free arm counts (A14). While it is unknown, one clear arm is enough (D33).
+      const left = leftOk && !merged(landmarks[15]);
+      const right = rightOk && !merged(landmarks[16]);
+      results.arms = freeArm === 'left' ? left : freeArm === 'right' ? right : left || right;
+    } else {
+      results.arms = landmarks[16].x - landmarks[24].x > config.arms.sideForwardMin;
+    }
+  }
+  corrections.arms = front ? 'corrArmsAway' : 'corrArmsForward';
+
+  results.sheet = false;
+  corrections.sheet = sample.markerOccluded ? 'corrMoveFingers' : 'corrHoldSheetFlat';
+  if (marker && marker.corners.length === 4) {
+    const sides = marker.corners.map((corner, i) => {
+      const next = marker.corners[(i + 1) % 4];
+      return Math.hypot(corner[0] - next[0], corner[1] - next[1]);
+    });
+    const longest = Math.max(...sides);
+    const shortest = Math.min(...sides);
+    const square = shortest > 0 && longest / shortest <= config.marker.squareMax;
+    const big = shortest >= config.marker.sideMinPx * (marker.image_h / 1920);
+    results.sheet = square && big;
+    if (square && !big) corrections.sheet = 'corrStepCloserSheet';
+  }
+
+  const lumaOk = sample.luminance >= config.light.lumaMin && sample.luminance <= config.light.lumaMax;
+  const sharpOk = sample.sharpness >= config.light.blurMin;
+  results.light = lumaOk && sharpOk;
+  corrections.light =
+    sample.luminance < config.light.lumaMin
+      ? 'corrTooDark'
+      : sample.luminance > config.light.lumaMax
+        ? 'corrTooBright'
+        : 'corrHoldStill';
+
+  const window = landmarks ? [...history, landmarks].slice(-config.stability.window) : [];
+  results.stability = landmarkJitter(window, personHeight) < config.stability.jitterMax;
+  corrections.stability = 'corrHoldStill';
+
+  return { results, corrections, lumaOk, sharpOk, freeArm };
+}
+
+export function firstFailing(results: CheckResults): CheckId | null {
+  return CHECK_ORDER.find((id) => !results[id]) ?? null;
+}
+
+/** The final state of each check, in the shape the contract stores. */
+export function toViewChecks(outcome: CheckOutcome, levelUnchecked: boolean): ViewChecks {
+  const state = (ok: boolean) => (ok ? ('pass' as const) : ('fail' as const));
+  const { results } = outcome;
+  return {
+    level: levelUnchecked ? 'skipped' : state(results.level),
+    frame: state(results.person && results.frame),
+    distance: state(results.distance),
+    symmetry: state(results.facing),
+    arms: state(results.arms),
+    marker: state(results.sheet),
+    light: state(outcome.lumaOk),
+    sharpness: state(outcome.sharpOk),
   };
 }

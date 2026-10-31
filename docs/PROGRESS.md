@@ -2,6 +2,10 @@
 
 The newest entry comes first. Every change or improvement adds a line in the same commit.
 
+## 2026-10-31: M5 client capture flow on fake vision
+
+- Added the typed capture state machine with a test per transition, thresholds in one config file, and the checks, burst and phone-check logic.
+
 ## 2026-10-31: M4 backend foundation
 
 - Added all database tables as a reversible migration, with limited database roles and triggers that keep the audit log, reference readings and their corrections from being changed.
