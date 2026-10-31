@@ -30,6 +30,7 @@ lint:
 
 typecheck:
 	pnpm --filter @vt/web typecheck
+	pnpm --filter @vt/contracts typecheck
 	uv run mypy apps/api/app packages/py/vt_measure/src packages/py/vt_ml/src packages/py/vt_analysis/src
 
 test: test-web test-api
@@ -38,13 +39,18 @@ test-web:
 	pnpm --filter @vt/web test
 
 test-api:
-	uv run pytest apps/api packages/py
+	uv run pytest apps/api packages/py packages/contracts packages/rules packages/seed
 
 parity:
 	@echo "make parity arrives in M2"
 
 contract:
-	@echo "make contract arrives in M1"
+	uv run python -m openapi_spec_validator packages/contracts/openapi.yaml
+	pnpm --filter @vt/contracts generate
+	pnpm --filter @vt/contracts typecheck
+	uv run python packages/seed/generate.py
+	uv run pytest packages/contracts packages/rules packages/seed
+	git diff --exit-code -- packages/contracts/src/generated.ts packages/seed/seed.json
 
 e2e:
 	pnpm --filter @vt/web e2e
