@@ -1,0 +1,130 @@
+{
+ "volume_test": {
+  "en": "This is the volume check. Can you hear me?",
+  "sw": "Hiki ni kipimo cha sauti. Unanisikia?"
+ },
+ "walk_away": {
+  "en": "Go and stand against the wall. Face the phone.",
+  "sw": "Nenda usimame karibu na ukuta. Uelekee simu."
+ },
+ "n1": {
+  "en": "One",
+  "sw": "Moja"
+ },
+ "n2": {
+  "en": "Two",
+  "sw": "Mbili"
+ },
+ "n3": {
+  "en": "Three",
+  "sw": "Tatu"
+ },
+ "n4": {
+  "en": "Four",
+  "sw": "Nne"
+ },
+ "n5": {
+  "en": "Five",
+  "sw": "Tano"
+ },
+ "good": {
+  "en": "Good",
+  "sw": "Vizuri"
+ },
+ "corr_tilt": {
+  "en": "The phone is tilted. Please straighten it.",
+  "sw": "Simu imeinama. Tafadhali inyooshe."
+ },
+ "corr_step_in": {
+  "en": "I cannot see you. Stand in front of the phone.",
+  "sw": "Sikuoni. Simama mbele ya simu."
+ },
+ "corr_head_cut": {
+  "en": "Your head or feet are cut off. Step back.",
+  "sw": "Kichwa au miguu haionekani. Rudi nyuma."
+ },
+ "corr_too_far": {
+  "en": "Too far. Step forward one step.",
+  "sw": "Uko mbali sana. Sogea mbele hatua moja."
+ },
+ "corr_too_close": {
+  "en": "Too close. Step back one step.",
+  "sw": "Uko karibu sana. Rudi nyuma hatua moja."
+ },
+ "corr_turn_face": {
+  "en": "Turn to face the phone.",
+  "sw": "Geuka uelekee simu."
+ },
+ "corr_turn_right": {
+  "en": "Turn a little more to your right.",
+  "sw": "Geuka kidogo zaidi kulia kwako."
+ },
+ "corr_arms_away": {
+  "en": "Move your arm away from your body.",
+  "sw": "Weka mkono mbali na mwili wako."
+ },
+ "corr_arms_forward": {
+  "en": "Let your arms hang a little forward.",
+  "sw": "Acha mikono ining'inie mbele kidogo."
+ },
+ "corr_sheet_flat": {
+  "en": "Hold the sheet flat, black square facing the phone.",
+  "sw": "Shika karatasi vizuri, mraba mweusi uelekee simu."
+ },
+ "corr_fingers": {
+  "en": "Move your fingers off the black square.",
+  "sw": "Toa vidole kwenye mraba mweusi."
+ },
+ "corr_step_closer": {
+  "en": "Step a little closer.",
+  "sw": "Sogea karibu kidogo."
+ },
+ "corr_too_dark": {
+  "en": "Too dark. Turn on a light or face a window.",
+  "sw": "Giza sana. Washa taa au uelekee dirisha."
+ },
+ "corr_too_bright": {
+  "en": "Too bright behind you. Move away from the window.",
+  "sw": "Mwanga mwingi nyuma yako. Ondoka dirishani."
+ },
+ "hold_still": {
+  "en": "Hold still.",
+  "sw": "Tulia."
+ },
+ "done": {
+  "en": "Done.",
+  "sw": "Imekamilika."
+ },
+ "turn_right": {
+  "en": "Turn to your right so your right shoulder faces the phone. Hold the sheet flat on your right hip.",
+  "sw": "Geuka kulia ili bega la kulia lielekee simu. Shika karatasi kwenye nyonga ya kulia."
+ },
+ "try_again": {
+  "en": "Please hold still and try again.",
+  "sw": "Tafadhali tulia ujaribu tena."
+ },
+ "finished": {
+  "en": "Finished. Walk back to the phone.",
+  "sw": "Imekwisha. Rudi kwenye simu."
+ },
+ "help_1": {
+  "en": "Wear fitted clothes. Have your measuring sheet ready.",
+  "sw": "Vaa nguo za kubana. Andaa karatasi ya kupimia."
+ },
+ "help_2": {
+  "en": "Stand the phone upright on a chair, then press start.",
+  "sw": "Simamisha simu kwenye kiti, kisha bonyeza anza."
+ },
+ "help_3": {
+  "en": "Stand three big steps away. Hold the sheet flat on your chest.",
+  "sw": "Simama hatua tatu kubwa. Shika karatasi kifuani."
+ },
+ "help_4": {
+  "en": "When asked, turn side on. Hold the sheet on your right hip.",
+  "sw": "Ukiambiwa, geuka ubavu. Shika karatasi kwenye nyonga ya kulia."
+ },
+ "help_5": {
+  "en": "Listen to the phone. It will tell you what to change.",
+  "sw": "Sikiliza simu. Itakuambia cha kubadilisha."
+ }
+}
