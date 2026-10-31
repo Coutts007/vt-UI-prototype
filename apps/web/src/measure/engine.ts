@@ -24,6 +24,8 @@ export interface ComputeInput {
   sex: 'female' | 'male' | 'unspecified';
   clothing_fit: 'fitted' | 'loose';
   level_unchecked?: boolean;
+  /** False when the front silhouette shows no gap between the legs. */
+  crotch_found?: boolean;
 }
 
 export interface ComputeOutput {
@@ -45,6 +47,7 @@ export function computeMeasurements(input: ComputeInput): ComputeOutput {
     sex,
     clothing_fit,
     level_unchecked = false,
+    crotch_found = true,
   } = input;
 
   // 1. Scale from ArUco Marker (150 mm physical size)
@@ -59,17 +62,17 @@ export function computeMeasurements(input: ComputeInput): ComputeOutput {
   const leftAnkle = landmarks_front[27] || { x: 0.45, y: 0.9, z: 0, visibility: 0.9 };
   const rightAnkle = landmarks_front[28] || { x: 0.55, y: 0.9, z: 0, visibility: 0.9 };
   const ankleY = (leftAnkle.y + rightAnkle.y) / 2;
-  const bodyHeightNorm = Math.max(ankleY - (nose.y - 0.08), 0.5); // Add head offset
+  const bodyHeightNorm = Math.max(ankleY - (nose.y - 0.08), 0.1); // Add head offset
   const bodyHeightPx = bodyHeightNorm * marker_front.image_h;
   const scale_stature_mm_px = height_mm_entered / Math.max(bodyHeightPx, 1);
 
   // Scale disagreement percentage (FR-06: 4% rule)
-  const scale_disagreement_pct =
-    (Math.abs(scale_front_mm_px - scale_stature_mm_px) / scale_front_mm_px) * 100;
+  const disagreement = (scale: number) => (Math.abs(scale - scale_stature_mm_px) / scale) * 100;
+  const scale_disagreement_pct = Math.max(disagreement(scale_front_mm_px), disagreement(scale_side_mm_px));
 
   // Common flag warnings for all sites
   const globalReasons: FlagReason[] = [];
-  if (scale_disagreement_pct >= 2.0 && scale_disagreement_pct <= 4.0) {
+  if (scale_disagreement_pct >= 2.0) {
     globalReasons.push('scale_disagree');
   }
   if (level_unchecked) {
@@ -189,18 +192,28 @@ export function computeMeasurements(input: ComputeInput): ComputeOutput {
 
   // 7. OUTSIDE LEG
   // Waist level to ankle
-  const outlegNorm = Math.max(ankleY - (shoulderMidY + torsoSpanNorm * WAIST_LEVEL_FRACTION), 0.4);
+  const outlegNorm = Math.max(ankleY - (shoulderMidY + torsoSpanNorm * WAIST_LEVEL_FRACTION), 0.05);
   const outlegPx = outlegNorm * marker_side.image_h;
   const outlegMm = outlegPx * scale_side_mm_px;
   addMeasurement('outleg', outlegMm);
 
   // 8. INSIDE LEG (Inleg / Inseam)
   // Crotch point (below hips) to ankle
-  const crotchYNorm = hipMidY + 0.08;
-  const inlegNorm = Math.max(ankleY - crotchYNorm, 0.35);
+  const crotchYNorm = hipMidY + torsoSpanNorm * 0.08;
+  const inlegNorm = Math.max(ankleY - crotchYNorm, 0.05);
   const inlegPx = inlegNorm * marker_front.image_h;
   const inlegMm = inlegPx * scale_front_mm_px;
-  addMeasurement('inleg', inlegMm);
+  if (crotch_found) {
+    addMeasurement('inleg', inlegMm);
+  } else {
+    measurements.push({
+      site_code: 'inleg',
+      value_mm: null,
+      method: 'auto',
+      confidence_flag: 'fail',
+      flag_reasons: ['crotch_not_found'],
+    });
+  }
 
   // 9. NECK GIRTH
   const neckHalfWidthPx = (shoulderDistNorm * 0.32 * marker_front.image_w) / 2;

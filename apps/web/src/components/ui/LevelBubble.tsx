@@ -1,5 +1,6 @@
 import React from 'react';
 import { Check } from 'lucide-react';
+import { CAPTURE_CONFIG } from '../../capture/config';
 
 interface LevelBubbleProps {
   beta: number; // 88..92 is level
@@ -15,7 +16,7 @@ export const LevelBubble: React.FC<LevelBubbleProps> = ({
   className = '',
 }) => {
   // Level condition per C1
-  const isLevel = beta >= 88 && beta <= 92 && Math.abs(gamma) <= 2.5;
+  const isLevel = beta >= 88 && beta <= 92 && Math.abs(gamma) <= CAPTURE_CONFIG.level.gammaMax;
 
   // Calculate pixel offset from center
   // Normal beta is 90. Delta = beta - 90
@@ -76,7 +77,7 @@ export const LevelBubble: React.FC<LevelBubbleProps> = ({
           Tilt: {beta.toFixed(1)}°
         </span>
         <span className="mx-1 text-white/40">·</span>
-        <span className={Math.abs(gamma) <= 2.5 ? 'text-emerald-400 font-bold' : 'text-amber-300'}>
+        <span className={Math.abs(gamma) <= CAPTURE_CONFIG.level.gammaMax ? 'text-emerald-400 font-bold' : 'text-amber-300'}>
           Roll: {gamma.toFixed(1)}°
         </span>
       </div>

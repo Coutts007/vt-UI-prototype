@@ -1,167 +1,181 @@
-class VTAudioService {
+// Tones, recorded clips and the speech fallback (A3). Clips first; speech only when a clip is missing.
+import { MessageKey, messageText } from './messages';
+
+type Locale = 'en' | 'sw';
+export type ToneName = 'pass' | 'chime' | 'beep' | 'beepLong' | 'stop' | 'done';
+
+const TONES: Record<ToneName, { freqs: number[]; gap: number; length: number; wave?: OscillatorType }> = {
+  pass: { freqs: [1200], gap: 0, length: 0.06 },
+  chime: { freqs: [523, 659, 784], gap: 0.08, length: 0.3 },
+  beep: { freqs: [880], gap: 0, length: 0.12 },
+  beepLong: { freqs: [1320], gap: 0, length: 0.35 },
+  stop: { freqs: [330, 220], gap: 0.12, length: 0.2, wave: 'sawtooth' },
+  done: { freqs: [659, 880, 1047], gap: 0.1, length: 0.4 },
+};
+
+const MUTE_KEY = 'vt_audio_muted';
+
+export interface AudioPort {
+  say(key: MessageKey, options?: { interrupt?: boolean }): void;
+  sayAll(keys: MessageKey[]): void;
+  tone(name: ToneName): void;
+  stop(): void;
+}
+
+/** Plays one message at a time, queues the rest, and falls back to speech when a clip fails. */
+export class VoiceGuide implements AudioPort {
   private ctx: AudioContext | null = null;
-  private isMuted = false;
+  private element: HTMLAudioElement | null = null;
+  private queue: MessageKey[] = [];
+  private playing = false;
+  private muted = false;
+  /** What was asked for, in order. Dev and tests read it to prove the flow works by ear alone. */
+  /** What really began to sound: not muted, not a missing clip with no voice to read it. */
+  readonly spoken: MessageKey[] = [];
+  private generation = 0;
+  private locale: () => Locale = () => 'en';
 
   constructor() {
     try {
-      const saved = localStorage.getItem('vt_audio_muted');
-      if (saved === 'true') this.isMuted = true;
+      this.muted = localStorage.getItem(MUTE_KEY) === 'true';
     } catch {
-      // ignore
+      // Private mode: stay unmuted.
     }
   }
 
-  private getAudioContext(): AudioContext | null {
-    if (typeof window === 'undefined') return null;
-    if (!this.ctx) {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (AudioCtx) {
-        this.ctx = new AudioCtx();
-      }
-    }
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume().catch(() => {});
-    }
-    return this.ctx;
-  }
-
-  setMuted(muted: boolean): void {
-    this.isMuted = muted;
-    try {
-      localStorage.setItem('vt_audio_muted', muted ? 'true' : 'false');
-    } catch {
-      // ignore
-    }
+  setLocaleSource(source: () => Locale): void {
+    this.locale = source;
   }
 
   getMuted(): boolean {
-    return this.isMuted;
+    return this.muted;
   }
 
-  // 1. Check Pass Tick (short high click)
-  playTick(): void {
-    if (this.isMuted) return;
-    const ctx = this.getAudioContext();
-    if (!ctx) return;
+  setMuted(muted: boolean): void {
+    this.muted = muted;
+    if (muted) this.stop();
     try {
+      localStorage.setItem(MUTE_KEY, String(muted));
+    } catch {
+      // Not saved; it still applies now.
+    }
+  }
+
+  /** Must run inside a tap (iOS autoplay rule, 10.6). */
+  unlock(): void {
+    this.audioContext();
+    this.element ??= new Audio();
+  }
+
+  private audioContext(): AudioContext | null {
+    if (typeof window === 'undefined' || !window.AudioContext) return null;
+    this.ctx ??= new window.AudioContext();
+    if (this.ctx.state === 'suspended') void this.ctx.resume().catch(() => {});
+    return this.ctx;
+  }
+
+  tone(name: ToneName): void {
+    if (this.muted) return;
+    const ctx = this.audioContext();
+    if (!ctx) return;
+    const { freqs, gap, length, wave } = TONES[name];
+    freqs.forEach((freq, index) => {
+      const start = ctx.currentTime + index * gap;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(1200, ctx.currentTime);
-      gain.gain.setValueAtTime(0.1, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+      if (wave) osc.type = wave;
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.14, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + length);
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.05);
-    } catch {
-      // ignore
+      osc.start(start);
+      osc.stop(start + length);
+    });
+  }
+
+  say(key: MessageKey, options: { interrupt?: boolean } = {}): void {
+    if (this.muted) return;
+    if (options.interrupt) this.stop();
+    this.queue.push(key);
+    this.pump();
+  }
+
+  sayAll(keys: MessageKey[]): void {
+    keys.forEach((key, index) => this.say(key, { interrupt: index === 0 }));
+  }
+
+  stop(): void {
+    this.generation += 1;
+    this.queue = [];
+    this.playing = false;
+    if (this.element) {
+      this.element.onended = null;
+      this.element.onerror = null;
+      this.element.pause();
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+  }
+
+  private pump(): void {
+    if (this.playing) return;
+    const key = this.queue.shift();
+    if (!key) return;
+    this.playing = true;
+    const locale = this.locale();
+    const next = () => {
+      this.playing = false;
+      this.pump();
+    };
+    this.element ??= new Audio();
+    const audio = this.element;
+    const generation = this.generation;
+    let fellBack = false;
+    const fallback = () => {
+      // An interrupted clip rejects too, and must not then be read aloud.
+      if (fellBack || generation !== this.generation) return;
+      fellBack = true;
+      audio.onended = null;
+      audio.onerror = null;
+      this.speak(key, locale, next);
+    };
+    audio.onended = next;
+    audio.onerror = fallback;
+    audio.src = `/audio/${locale}/${key}.mp3`;
+    const started = audio.play();
+    if (started) {
+      started.then(() => {
+        if (generation === this.generation) this.spoken.push(key);
+      }, fallback);
+    } else {
+      this.spoken.push(key);
     }
   }
 
-  // 2. All-Green Ready Chime (rising two-note chord)
-  playReadyChime(): void {
-    if (this.isMuted) return;
-    const ctx = this.getAudioContext();
-    if (!ctx) return;
-    try {
-      [523.25, 659.25, 783.99].forEach((freq, idx) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.08);
-        gain.gain.setValueAtTime(0.12, ctx.currentTime + idx * 0.08);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.08 + 0.3);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(ctx.currentTime + idx * 0.08);
-        osc.stop(ctx.currentTime + idx * 0.08 + 0.35);
-      });
-    } catch {
-      // ignore
+  /** The fallback. Without a voice for the language it stays silent and the flow carries on. */
+  private speak(key: MessageKey, locale: Locale, done: () => void): void {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      done();
+      return;
     }
-  }
-
-  // 3. Countdown Beep (num 3, 2, 1 = short beep, num 0 = higher longer beep)
-  playCountdownBeep(num: number): void {
-    if (this.isMuted) return;
-    const ctx = this.getAudioContext();
-    if (!ctx) return;
-    try {
-      const isFinal = num <= 0;
-      const freq = isFinal ? 1320 : 880;
-      const dur = isFinal ? 0.35 : 0.12;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.frequency.setValueAtTime(freq, ctx.currentTime);
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + dur);
-    } catch {
-      // ignore
+    const voices = window.speechSynthesis.getVoices();
+    const voice = voices.find((v) => v.lang.toLowerCase().startsWith(locale));
+    if (voices.length && !voice) {
+      done();
+      return;
     }
-  }
-
-  // 4. Cancel / Stop Tone (descending buzzer)
-  playStopTone(): void {
-    if (this.isMuted) return;
-    const ctx = this.getAudioContext();
-    if (!ctx) return;
-    try {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(440, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 0.25);
-      gain.gain.setValueAtTime(0.12, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.25);
-    } catch {
-      // ignore
-    }
-  }
-
-  // 5. Done Shutter Chime
-  playDoneChime(): void {
-    if (this.isMuted) return;
-    const ctx = this.getAudioContext();
-    if (!ctx) return;
-    try {
-      [659.25, 880, 1046.5].forEach((freq, idx) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.1);
-        gain.gain.setValueAtTime(0.15, ctx.currentTime + idx * 0.1);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.1 + 0.4);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(ctx.currentTime + idx * 0.1);
-        osc.stop(ctx.currentTime + idx * 0.1 + 0.45);
-      });
-    } catch {
-      // ignore
-    }
-  }
-
-  // Speech guidance
-  speak(text: string, locale: 'en' | 'sw' = 'en'): void {
-    if (this.isMuted || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-    try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      utterance.lang = locale === 'sw' ? 'sw-KE' : 'en-KE';
-      window.speechSynthesis.speak(utterance);
-    } catch {
-      // ignore
-    }
+    const utterance = new SpeechSynthesisUtterance(messageText(key, locale));
+    utterance.lang = locale === 'sw' ? 'sw-KE' : 'en-KE';
+    if (voice) utterance.voice = voice;
+    utterance.onstart = () => this.spoken.push(key);
+    utterance.onend = done;
+    utterance.onerror = done;
+    window.speechSynthesis.speak(utterance);
   }
 }
 
-export const vtAudio = new VTAudioService();
+export const voiceGuide = new VoiceGuide();
+
+if (typeof window !== 'undefined' && (import.meta.env.DEV || import.meta.env.MODE === 'mock')) {
+  (window as unknown as { __vtSpoken: MessageKey[] }).__vtSpoken = voiceGuide.spoken;
+}

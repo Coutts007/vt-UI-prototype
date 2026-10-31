@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { useI18n } from '../../i18n';
 
 interface CodeInputProps {
   value: string;
@@ -17,6 +18,7 @@ export const CodeInput: React.FC<CodeInputProps> = ({
   error,
   className = '',
 }) => {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const cleanVal = (value || '').toUpperCase().slice(0, 6);
@@ -34,7 +36,7 @@ export const CodeInput: React.FC<CodeInputProps> = ({
   const chars = cleanVal.padEnd(6, ' ').split('').slice(0, 6);
 
   return (
-    <div className={`flex flex-col gap-1.5 ${className}`}>
+    <div className={`relative flex flex-col gap-1.5 ${className}`}>
       {/* Hidden native input */}
       <input
         ref={inputRef}
@@ -48,7 +50,8 @@ export const CodeInput: React.FC<CodeInputProps> = ({
         autoComplete="off"
         spellCheck={false}
         className="sr-only"
-        aria-label="Client code 6 characters"
+        inputMode={cleanVal.length < 2 ? 'text' : 'numeric'}
+        aria-label={t('clientCodeLabel')}
       />
 
       {/* Segmented 6-box visual representation */}
@@ -74,14 +77,14 @@ export const CodeInput: React.FC<CodeInputProps> = ({
             >
               <span>{isFilled ? char : ''}</span>
               <span className="text-[9px] font-sans font-normal text-[var(--vt-ink-muted,#5C554C)] tracking-tighter -mt-1">
-                {isLetterBox ? 'letter' : 'digit'}
+                {isLetterBox ? t('codeLetter') : t('codeDigit')}
               </span>
             </div>
           );
         })}
       </div>
 
-      {error && <span className="text-xs text-rose-600 mt-1">{error}</span>}
+      {error && <span role="alert" className="text-sm text-rose-700 mt-1">{error}</span>}
     </div>
   );
 };

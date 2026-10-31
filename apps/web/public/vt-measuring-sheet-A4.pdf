@@ -1,0 +1,52 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.276 841.890] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 900 >>
+stream
+BT /F1 13 Tf 85.039 785.197 Td (Virtual Tailor measuring sheet - hold flat, square facing camera) Tj ET
+BT /F1 10 Tf 85.039 762.520 Td (Print at 100% / Actual size, not Fit to page. Do not fold through the black square.) Tj ET
+0 0 0 rg
+85.039 289.134 425.197 425.197 re f
+1 1 1 rg
+155.906 572.598 70.866 70.866 re f
+297.638 572.598 70.866 70.866 re f
+368.504 572.598 70.866 70.866 re f
+226.772 501.732 70.866 70.866 re f
+368.504 501.732 70.866 70.866 re f
+297.638 430.866 70.866 70.866 re f
+368.504 430.866 70.866 70.866 re f
+297.638 360.000 70.866 70.866 re f
+0 0 0 rg 0 0 0 RG
+1 w
+155.906 232.441 m 439.370 232.441 l S
+155.906 223.937 m 155.906 240.945 l S
+439.370 223.937 m 439.370 240.945 l S
+BT /F1 10 Tf 155.906 209.764 Td (Print check: this line must be exactly 10 cm.) Tj ET
+176.315 34.016 242.646 153.071 re S
+BT /F1 10 Tf 198.992 110.551 Td (A bank card must fit exactly in this box.) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000249 00000 n 
+0000001200 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1270
+%%EOF

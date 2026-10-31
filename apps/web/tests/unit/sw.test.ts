@@ -21,3 +21,11 @@ it('caches built assets and falls back to the shell for pages', () => {
     'network-first-shell',
   );
 });
+
+it('voice clips and the measuring sheet are served from the cache offline (A3)', () => {
+  for (const path of ['/audio/en/good.mp3', '/audio/sw/n3.mp3', '/vt-measuring-sheet-A4.pdf']) {
+    expect(strategyFor({ method: 'GET', url: `${origin}${path}`, mode: 'cors' }, origin)).toBe(
+      'cache-first',
+    );
+  }
+});

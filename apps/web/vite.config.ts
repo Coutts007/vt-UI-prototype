@@ -1,3 +1,4 @@
+import { readdirSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import tailwindcss from '@tailwindcss/vite';
@@ -31,6 +32,14 @@ function precacheList(): Plugin {
         .filter((name) => name.startsWith('assets/') && !ONLINE_ONLY.test(name))
         .sort()
         .map((name) => `/${name}`);
+      // The voice clips and the sheet must work offline (A3). Public files are not in the bundle.
+      const publicDir = resolve(import.meta.dirname, 'public');
+      for (const locale of ['en', 'sw']) {
+        for (const clip of readdirSync(resolve(publicDir, 'audio', locale)).sort()) {
+          files.push(`/audio/${locale}/${clip}`);
+        }
+      }
+      files.push('/vt-measuring-sheet-A4.pdf');
       const version = createHash('sha256').update(files.join()).digest('hex').slice(0, 12);
       const worker = bundle['sw.js'];
       if (worker?.type === 'chunk') {

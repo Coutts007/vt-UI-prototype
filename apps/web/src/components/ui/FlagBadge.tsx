@@ -1,6 +1,10 @@
 import React from 'react';
-import { Flag, FlagReason } from '../../types/api';
+import type { components } from '@vt/contracts';
+
+type Flag = components['schemas']['Flag'];
+type FlagReason = components['schemas']['FlagReason'];
 import { useI18n } from '../../i18n';
+import type { TranslationKey } from '../../i18n/en';
 import { Check, AlertTriangle, X } from 'lucide-react';
 
 interface FlagBadgeProps {
@@ -36,18 +40,6 @@ export const FlagBadge: React.FC<FlagBadgeProps> = ({
     },
   }[flag];
 
-  const reasonLabels: Record<FlagReason, string> = {
-    scale_disagree: 'Scale disagreement',
-    level_unchecked: 'Phone level unchecked',
-    loose_clothing: 'Loose clothing declared',
-    landmark_low: 'Pose confidence low',
-    mask_gap: 'Body edge indistinct',
-    out_of_range: 'Outside expected human bounds',
-    crotch_not_found: 'Crotch not clearly separated',
-    marker_weak: 'Measuring sheet corner weak',
-    waist_level_mismatch: 'Waist narrow point deviation',
-    view_failed: 'View capture incomplete',
-  };
 
   return (
     <div className={`inline-flex flex-col items-start ${className}`}>
@@ -59,7 +51,7 @@ export const FlagBadge: React.FC<FlagBadgeProps> = ({
       </span>
       {showReasonText && reasons.length > 0 && (
         <span className="text-[11px] text-[var(--vt-ink-muted,#5C554C)] mt-0.5 leading-tight">
-          {reasons.map((r) => reasonLabels[r] || r).join(', ')}
+          {reasons.map((r) => t(`reason_${r}` as TranslationKey)).join(', ')}
         </span>
       )}
     </div>

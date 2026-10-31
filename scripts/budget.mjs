@@ -73,15 +73,17 @@ const tailorScreens = [
 ];
 const firstScreen = closure([...shell, ...screen('WelcomeView')]);
 const client = closure([...shell, ...clientScreens.flatMap(screen)]);
+// Each person downloads one language (D35). Count the larger, so the figures stay honest.
+const dictionary = Math.max(...['en', 'sw'].flatMap(screen).map(size));
 const tailor = closure([...shell, ...tailorScreens.flatMap(screen)]);
 const css = files.filter((f) => f.endsWith('.css'));
 
 const checks = [
-  ['client first screen JS', total(firstScreen), 120 * KB],
+  ['client first screen JS', total(firstScreen) + dictionary, 120 * KB],
   // Known deviation D34: React plus Dexie leave too little of the 120 KB for the whole flow.
   // This limit only stops growth. Lower it as the prototype's mock client leaves the bundle.
-  ['client whole flow JS (deviation D34, target 120 KB)', total(client), 170 * KB],
-  ['tailor JS', total(tailor), 200 * KB],
+  ['client whole flow JS (deviation D34, target 120 KB)', total(client) + dictionary, 170 * KB],
+  ['tailor JS', total(tailor) + dictionary, 200 * KB],
   ['CSS', total(css), 25 * KB],
 ];
 for (const [name, actual, limit] of checks) {
