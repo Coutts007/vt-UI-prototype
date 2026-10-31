@@ -112,7 +112,10 @@ test('the client flow downloads no tailor, admin or study code', async ({ page }
 test('no request leaves the site', async ({ page }) => {
   const outside: string[] = [];
   page.on('request', (request) => {
-    if (!request.url().startsWith('http://localhost:4173') && !request.url().startsWith('data:')) {
+    if (
+      !request.url().startsWith(`http://localhost:${process.env.VT_E2E_PORT ?? 4173}`) &&
+      !request.url().startsWith('data:')
+    ) {
       outside.push(request.url());
     }
   });

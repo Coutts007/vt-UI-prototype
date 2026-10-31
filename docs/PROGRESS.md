@@ -10,6 +10,8 @@ The newest entry comes first. Every change or improvement adds a line in the sam
 - `POST /me/directory-clients/remove-unused` removes a tailor's directory clients with no profile, no orders and no participant, in one audit row with the count only. The list now reports `unused_total`.
 - Tailor Settings pages through directory clients, offers Remove unused codes with a count and a warning, and gives a measured client a separate, stronger warning and confirm button, with Cancel on each. The panel's words moved to their own lazy file, which a client's phone never downloads. New Kiswahili is unreviewed.
 - Typing or linking a different code on Start now drops consent given for the old one, and waits for that to reach phone storage before moving on. Retyping the same code keeps it.
+- A new browser test builds in production mode with the flag unset. It found a real gap: the flag was switched off at run time only, so the directory screen and panel chunks still shipped. The build now settles the flag, and those chunks are gone from a switched-off build. The client flow is 168.9 KB of the 170 KB stop.
+- A production build no longer deletes the mock worker from another build's folder when several run at once. `VT_E2E_PORT` moves the browser test ports, so two checkouts can test side by side.
 - **Carried forward to M9:** rate limit counts live in memory and reset on restart (`services/ratelimit.py`), and the client list in `ClientListView` does not show where a client came from.
 
 ## 2026-10-31: Tailor directory and Get code (D27)

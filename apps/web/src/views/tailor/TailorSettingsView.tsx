@@ -13,7 +13,7 @@ interface TailorSettingsViewProps {
 }
 
 // Loaded only when the directory is on, so a switched-off build carries none of it (D27).
-const Listing = FEATURE_DIRECTORY
+const Listing = __VT_DIRECTORY__
   ? lazy(() => import('./DirectoryListingPanel').then((m) => ({ default: m.DirectoryListingPanel })))
   : null;
 

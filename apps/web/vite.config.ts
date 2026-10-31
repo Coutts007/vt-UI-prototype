@@ -9,12 +9,17 @@ import { defineConfig } from 'vitest/config';
 
 // MSW's worker must never reach a production build.
 function dropMockWorker(mockMode: boolean): Plugin {
+  // This build's own folder: browser tests build several copies at once, some with the mock.
+  let outDir = 'dist';
   return {
     name: 'vt-drop-mock-worker',
     apply: 'build',
+    configResolved(config) {
+      outDir = config.build.outDir;
+    },
     async closeBundle() {
       if (!mockMode)
-        await rm(resolve(import.meta.dirname, 'dist/mockServiceWorker.js'), { force: true });
+        await rm(resolve(import.meta.dirname, outDir, 'mockServiceWorker.js'), { force: true });
     },
   };
 }
@@ -49,14 +54,19 @@ function precacheList(): Plugin {
   };
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
   const envDir = resolve(import.meta.dirname, '../..');
   const mockMode =
     mode === 'mock' ||
     loadEnv(mode, envDir, 'VITE_').VITE_API_MODE === 'mock' ||
     process.env.VITE_API_MODE === 'mock';
+  const directoryFlag = loadEnv(mode, envDir, 'VITE_').VITE_FEATURE_DIRECTORY;
+  const directoryOn =
+    directoryFlag === 'true' ||
+    ((command === 'serve' || mode === 'mock') && directoryFlag !== 'false');
   return {
     envDir,
+    define: { __VT_DIRECTORY__: JSON.stringify(directoryOn) },
     plugins: [react(), tailwindcss(), dropMockWorker(mockMode), precacheList()],
     server: {
       proxy: { '/api': process.env.VT_API_PROXY ?? 'http://localhost:8000' },

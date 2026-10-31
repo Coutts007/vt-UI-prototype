@@ -5,6 +5,7 @@ pnpm-lock.yaml
 uv.lock
 dist/
 dist-directory-off/
+dist-directory-default/
 coverage/
 apps/web/src/
 apps/web/public/mockServiceWorker.js
