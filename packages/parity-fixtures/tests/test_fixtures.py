@@ -69,9 +69,16 @@ def test_edge_cases_do_what_their_names_say(name, site, flag, reason):
     assert row["flag"] == flag and reason in row["reasons"]
 
 
-@pytest.mark.parametrize("name", ["edge-aspect-1030", "edge-disagree-2pct"])
-def test_values_exactly_on_a_limit_pass(name):
-    assert load(ROOT / "cases" / f"{name}.json")["expected"]["sites"]["sleeve"]["flag"] == "pass"
+@pytest.mark.parametrize(
+    ("name", "site"), [("edge-aspect-1030", "waist"), ("edge-disagree-2pct", "waist")]
+)
+def test_values_exactly_on_a_limit_pass(name, site):
+    assert load(ROOT / "cases" / f"{name}.json")["expected"]["sites"][site]["flag"] == "pass"
+
+
+def test_views_differ_case_matches_the_hand_calculation():
+    waist = load(ROOT / "cases" / "analytic-views-differ.json")["expected"]["sites"]["waist"]
+    assert (waist["a_mm"], waist["b_mm"]) == (pytest.approx(142.5), pytest.approx(85.0))
 
 
 def test_rounding_cases_land_on_a_half():

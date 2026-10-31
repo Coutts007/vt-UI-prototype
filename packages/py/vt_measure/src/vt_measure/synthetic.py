@@ -257,3 +257,81 @@ def expected_values(body: Body) -> dict[str, float]:
         "inleg": (1 - U_CROTCH) * body.stature,
         "neck": _perimeter(body.neck_a, body.neck_b),
     }
+
+
+def asymmetric_input() -> dict[str, Any]:
+    """Two views that disagree on purpose, so a level can only be found by moving it correctly.
+
+    One pixel is exactly 1 mm. The outlines are straight ramps: half-width is 100 + sample and
+    half-depth is 50 + sample. Every answer can be worked out by hand (see test_derive.py).
+    """
+    width, height = 1000, 2000
+
+    def view(
+        points: dict[int, tuple[float, float]], weak: tuple[int, ...]
+    ) -> list[dict[str, float]]:
+        return [
+            {
+                "x": points.get(i, (500.0, 1000.0))[0] / width,
+                "y": points.get(i, (500.0, 1000.0))[1] / height,
+                "z": 0.0,
+                "visibility": 0.6 if i in weak else 0.95,
+            }
+            for i in range(33)
+        ]
+
+    def marker(x: int, y: int) -> dict[str, Any]:
+        return {
+            "corners": [[x, y], [x + 150, y], [x + 150, y + 150], [x, y + 150]],
+            "image_w": width,
+            "image_h": height,
+            "side_px": 150.0,
+            "confidence": 0.95,
+        }
+
+    def mask(top: float, bottom: float) -> dict[str, Any]:
+        return {
+            "samples": 101,
+            "mask_top_px": top,
+            "mask_bottom_px": bottom,
+            "image_w": width,
+            "image_h": height,
+        }
+
+    front_points = {
+        11: (700.0, 300.0), 12: (300.0, 300.0),
+        13: (600.0, 500.0), 15: (520.0, 520.0),
+        14: (200.0, 600.0), 16: (200.0, 900.0),
+        23: (650.0, 1100.0), 24: (350.0, 1100.0),
+        25: (650.0, 1500.0), 26: (350.0, 1500.0),
+        27: (650.0, 1650.0), 28: (350.0, 1650.0),
+    }  # fmt: skip
+    # The far side sits elsewhere on purpose. It must only be used if it is the clearer side.
+    side_points = {
+        12: (500.0, 400.0), 24: (500.0, 1000.0), 26: (500.0, 1400.0),
+        11: (500.0, 500.0), 23: (500.0, 1300.0), 25: (500.0, 1500.0),
+    }  # fmt: skip
+    return {
+        "covariates": {
+            "height_mm_entered": 1600,
+            "sex": "male",
+            "clothing_fit": "fitted",
+            "code_verified": True,
+        },
+        "session": {"level_unchecked": False, "free_arm": "right"},
+        "landmarks_front": view(front_points, ()),
+        "landmarks_side": view(side_points, (11, 23, 25)),
+        "marker_front": marker(425, 425),
+        "marker_side": marker(425, 925),
+        "silhouette_front": {
+            **mask(100.0, 1700.0),
+            "half_width_mm": [100.0 + i for i in range(101)],
+            "centre_x_px": [500.0] * 101,
+            "crotch_y_px": 900.0,
+        },
+        "silhouette_side": {
+            **mask(200.0, 1800.0),
+            "half_depth_mm": [50.0 + i for i in range(101)],
+            "anterior_mm": [50.0 + i for i in range(101)],
+        },
+    }

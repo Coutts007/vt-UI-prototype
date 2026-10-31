@@ -5,7 +5,7 @@ Lengths are millimetres. Pure functions only: no I/O and no global state.
 """
 
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -36,7 +36,7 @@ MIN_HALF_MM = 15.0
 SEARCH_STEP = 0.01
 CHEST_ANTERIOR_BAND = (0.15, 0.35)
 CHEST_ANTERIOR_TOL = 0.05
-PCT_DECIMALS = 6
+LIMIT_DECIMALS = 6
 
 Profile = Sequence[float | None]
 Data = Mapping[str, Any]
@@ -81,7 +81,7 @@ class View:
     def y(self, indices: tuple[int, ...]) -> float:
         assert self.silhouette is not None and self.landmarks is not None
         image_h = self.silhouette["image_h"]
-        return float(sum(self.landmarks[i]["y"] * image_h for i in indices) / len(indices))
+        return float(_add(self.landmarks[i]["y"] * image_h for i in indices) / len(indices))
 
     @property
     def shoulder_y(self) -> float:
@@ -118,6 +118,25 @@ class Notes:
         self.failed.add(site)
 
 
+def _add(values: Iterable[float]) -> float:
+    """Plain left-to-right addition. Python's sum() compensates, and JavaScript cannot match it."""
+    total = 0.0
+    for value in values:
+        total = total + value
+    return total
+
+
+def _distance(dx: float, dy: float) -> float:
+    """Written out because hypot may differ in the last digit between languages."""
+    return math.sqrt(dx * dx + dy * dy)
+
+
+def round_for_limit(value: float) -> float:
+    """Round before comparing with a limit, so a value exactly on it stays on it."""
+    factor = 10.0**LIMIT_DECIMALS
+    return math.floor(value * factor + 0.5) / factor
+
+
 def ellipse_perimeter(a: float, b: float) -> float:
     """Ramanujan's first approximation."""
     return math.pi * (3 * (a + b) - math.sqrt((3 * a + b) * (a + 3 * b)))
@@ -141,7 +160,9 @@ def sample_profile(profile: Profile, u: float) -> float | None:
 
 
 def band_fractions(low: float, high: float) -> list[float]:
-    count = round((high - low) / SEARCH_STEP)
+    count = math.floor((high - low) / SEARCH_STEP + 0.5)
+    if count <= 0:
+        return [low]
     return [low + (high - low) * i / count for i in range(count + 1)]
 
 
@@ -150,10 +171,15 @@ def marker_scale(marker: Data | None, mask_image_w: int, rules: Data) -> float |
     if marker is None or len(marker["corners"]) != 4:
         return None
     corners = marker["corners"]
-    sides = [math.dist(corners[i], corners[(i + 1) % 4]) for i in range(4)]
-    if min(sides) <= 0 or max(sides) / min(sides) > rules["marker"]["max_corner_aspect"]:
+    sides = [
+        _distance(corners[(i + 1) % 4][0] - corners[i][0], corners[(i + 1) % 4][1] - corners[i][1])
+        for i in range(4)
+    ]
+    if min(sides) <= 0:
         return None
-    mean_side = sum(sides) / 4
+    if round_for_limit(max(sides) / min(sides)) > rules["marker"]["max_corner_aspect"]:
+        return None
+    mean_side = _add(sides) / 4
     result: float = rules["marker"]["side_mm"] / mean_side * (marker["image_w"] / mask_image_w)
     return result
 
@@ -163,12 +189,12 @@ def identify_free_arm(landmarks: Sequence[Data], marker: Data | None, rules: Dat
     if marker is None:
         return None
     width, height = marker["image_w"], marker["image_h"]
-    centre_x = sum(c[0] for c in marker["corners"]) / len(marker["corners"])
-    centre_y = sum(c[1] for c in marker["corners"]) / len(marker["corners"])
+    centre_x = _add(c[0] for c in marker["corners"]) / len(marker["corners"])
+    centre_y = _add(c[1] for c in marker["corners"]) / len(marker["corners"])
 
     def distance(index: int) -> float:
         point = landmarks[index]
-        return math.hypot(point["x"] * width - centre_x, point["y"] * height - centre_y)
+        return _distance(point["x"] * width - centre_x, point["y"] * height - centre_y)
 
     left, right = distance(15), distance(16)
     ratio = rules["flags"]["free_arm_min_distance_ratio"]
@@ -214,6 +240,10 @@ def _build_views(data: Data, rules: Data) -> tuple[View, View]:
         left = side_landmarks[11]["visibility"] + side_landmarks[23]["visibility"]
         side.shoulder, side.hip, side.knee = ((12,), (24,), (26,)) if right >= left else (
             (11,), (23,), (25,))  # fmt: skip
+    # A hip at or above the shoulder means the pose data cannot be used.
+    for view in (front, side):
+        if view.ok and view.span <= 0:
+            view.scale = None
     return front, side
 
 
@@ -239,7 +269,7 @@ def _required_landmarks(site: str, front: View, side: View, arm: str) -> list[tu
 
 def _clearer_arm(landmarks: Sequence[Data]) -> str:
     def mean(indices: tuple[int, ...]) -> float:
-        return float(sum(landmarks[i]["visibility"] for i in indices) / 3)
+        return _add(landmarks[i]["visibility"] for i in indices) / 3
 
     return "left" if mean(ARMS["left"]) > mean(ARMS["right"]) else "right"
 
@@ -275,7 +305,7 @@ def _chest(front: View, side: View, data: Data, rules: Data, notes: Notes) -> Si
             value = sample_profile(side.silhouette["anterior_mm"], side.u(side.level_y(candidate)))
             if value is not None and value > best_value:
                 best, best_value = candidate, value
-        if best is not None and abs(best - fraction) > CHEST_ANTERIOR_TOL:
+        if best is not None and round_for_limit(abs(best - fraction)) > CHEST_ANTERIOR_TOL:
             notes.warn("chest", "chest_level_mismatch")
     a = _front_half(front, front.level_y(fraction))
     b = _side_half(side, side.level_y(fraction))
@@ -290,7 +320,7 @@ def _waist(front: View, side: View, rules: Data, notes: Notes) -> SiteResult:
         value = _front_half(front, front.level_y(candidate))
         if value is not None and value < best_value:
             best, best_value = candidate, value
-    if best is not None and abs(best - fraction) > levels["waist_check_tol"]:
+    if best is not None and round_for_limit(abs(best - fraction)) > levels["waist_check_tol"]:
         notes.warn("waist", "waist_level_mismatch")
     a = _front_half(front, front.level_y(fraction))
     b = _side_half(side, side.level_y(fraction))
@@ -298,6 +328,9 @@ def _waist(front: View, side: View, rules: Data, notes: Notes) -> SiteResult:
 
 
 def _hip(front: View, side: View, rules: Data, notes: Notes) -> SiteResult:
+    if front.y(front.knee) <= front.y(front.hip) or side.y(side.knee) <= side.y(side.hip):
+        notes.fail("hip", "mask_gap")
+        return SiteResult("hip", None, None, "fail", [])
     best, best_value = None, -math.inf
     for candidate in band_fractions(0.0, rules["levels"]["hip_band_knee_fraction"]):
         value = _side_half(side, side.hip_band_y(candidate))
@@ -321,7 +354,7 @@ def _pixels(view: View, first: int, second: int) -> float:
     assert view.silhouette is not None and view.landmarks is not None
     width, height = view.silhouette["image_w"], view.silhouette["image_h"]
     p, q = view.landmarks[first], view.landmarks[second]
-    return math.hypot((p["x"] - q["x"]) * width, (p["y"] - q["y"]) * height)
+    return _distance((p["x"] - q["x"]) * width, (p["y"] - q["y"]) * height)
 
 
 def _compute(site: str, front: View, side: View, data: Data, rules: Data, arm: str,
@@ -377,7 +410,7 @@ def derive(data: Data, rules: Data) -> Derivation:
         assert front.silhouette is not None and front.scale is not None
         height_px = front.silhouette["mask_bottom_px"] - front.silhouette["mask_top_px"]
         stature_scale = covariates["height_mm_entered"] / height_px
-        disagreement = round(abs(front.scale - stature_scale) / front.scale * 100, PCT_DECIMALS)
+        disagreement = round_for_limit(abs(front.scale - stature_scale) / front.scale * 100)
 
     free_arm = session.get("free_arm")
     arm = free_arm

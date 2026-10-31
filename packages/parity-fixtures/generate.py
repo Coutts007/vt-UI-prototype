@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from vt_measure.derive import derive
-from vt_measure.synthetic import Body, make_input
+from vt_measure.synthetic import Body, asymmetric_input, make_input
 
 ROOT = Path(__file__).parent
 RULES = json.loads((ROOT.parent / "rules" / "rules-0.1-uncalibrated.json").read_text())
@@ -89,6 +89,43 @@ def larger_scale_image(data: dict[str, Any]) -> None:
     marker["image_w"], marker["image_h"] = marker["image_w"] * 2, marker["image_h"] * 2
 
 
+def asymmetric(change: Any = None) -> dict[str, Any]:
+    data = asymmetric_input()
+    if change:
+        change(data)
+    return data
+
+
+def clearer_left_side(data: dict[str, Any]) -> None:
+    for index, value in ((12, 0.55), (24, 0.55), (26, 0.55), (11, 0.95), (23, 0.95), (25, 0.95)):
+        data["landmarks_side"][index]["visibility"] = value
+
+
+def hip_on_shoulder(data: dict[str, Any]) -> None:
+    for index in (23, 24):
+        data["landmarks_front"][index]["y"] = data["landmarks_front"][11]["y"]
+
+
+def knee_above_hip(data: dict[str, Any]) -> None:
+    data["landmarks_side"][26]["y"] = 0.45
+
+
+def narrow_at_limit(data: dict[str, Any]) -> None:
+    data["silhouette_front"]["half_width_mm"][40] = 50.0
+
+
+def narrow_past_limit(data: dict[str, Any]) -> None:
+    data["silhouette_front"]["half_width_mm"][39] = 50.0
+    data["silhouette_front"]["half_width_mm"][40] = 50.0
+
+
+def arm_tie(data: dict[str, Any]) -> None:
+    data["session"]["free_arm"] = None
+    values = (0.83, 0.75, 0.95, 0.95, 0.75, 0.83)
+    for index, value in zip((11, 13, 15, 12, 14, 16), values, strict=True):
+        data["landmarks_front"][index]["visibility"] = value
+
+
 def analytic_cases() -> list[tuple[str, dict[str, Any], dict[str, Any]]]:
     bodies = {
         "default": Body(),
@@ -98,12 +135,27 @@ def analytic_cases() -> list[tuple[str, dict[str, Any], dict[str, Any]]]:
         "male": Body(sex="male"),
         "unspecified": Body(sex="unspecified"),
     }
-    return [(f"analytic-{k}", make_input(v), RULES) for k, v in bodies.items()]
+    cases = [(f"analytic-{k}", make_input(v), RULES) for k, v in bodies.items()]
+    cases.append(("analytic-views-differ", asymmetric(), RULES))
+    return cases
 
 
 def edge_cases() -> list[tuple[str, dict[str, Any], dict[str, Any]]]:
     body = Body(stature=1500.0)
     return [
+        ("edge-near-side-left", asymmetric(clearer_left_side), RULES),
+        ("edge-levels-waist-050", asymmetric(), changed_rules(["levels", "waist"], 0.5)),
+        ("edge-levels-chest-050", asymmetric(), changed_rules(["levels", "chest", "male"], 0.5)),
+        ("edge-levels-hip-050", asymmetric(),
+         changed_rules(["levels", "hip_band_knee_fraction"], 0.5)),
+        ("edge-levels-neck-020", asymmetric(),
+         changed_rules(["levels", "neck_above_shoulder_frac"], 0.2)),
+        ("edge-hip-on-shoulder", asymmetric(hip_on_shoulder), RULES),
+        ("edge-knee-above-hip", asymmetric(knee_above_hip), RULES),
+        ("edge-waist-tol-on-limit", asymmetric(narrow_at_limit), RULES),
+        ("edge-waist-tol-past-limit", asymmetric(narrow_past_limit), RULES),
+        ("edge-arm-visibility-tie", edited(arm_tie), RULES),
+        ("edge-side-shift", make_input(Body(), side_shift_px=40), RULES),
         ("edge-visibility-049", edited(set_visibility(11, 0.49)), RULES),
         ("edge-visibility-050", edited(set_visibility(11, 0.5)), RULES),
         ("edge-visibility-069", edited(set_visibility(11, 0.69)), RULES),

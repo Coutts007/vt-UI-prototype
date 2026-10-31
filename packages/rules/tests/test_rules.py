@@ -66,3 +66,10 @@ def test_free_form_fields_cannot_carry_long_content(field):
         target = target[key]
     target[last] = {"note": "x" * 257} if last != "extra" else "x" * 257
     assert list(Draft202012Validator(SCHEMA).iter_errors(artifact))
+
+
+@pytest.mark.parametrize("path", ARTIFACTS, ids=lambda p: p.name)
+def test_bands_run_low_to_high(path):
+    low, high = load(path)["levels"]["waist_check_band"]
+    assert low < high
+    assert load(path)["levels"]["hip_band_knee_fraction"] > 0

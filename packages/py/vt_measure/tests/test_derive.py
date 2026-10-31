@@ -14,7 +14,7 @@ from vt_measure.derive import (
     round_half_even,
     sample_profile,
 )
-from vt_measure.synthetic import Body, expected_values, make_input
+from vt_measure.synthetic import Body, asymmetric_input, expected_values, make_input
 
 RULES = json.loads(
     (Path(__file__).parents[3] / "rules" / "rules-0.1-uncalibrated.json").read_text()
@@ -378,3 +378,126 @@ def test_derive_does_not_change_its_input():
     before = copy.deepcopy(data)
     derive(data, RULES)
     assert data == before
+
+
+def test_waist_level_moves_between_views_worked_by_hand():
+    # Front: y = 300 + 0.6 x 800 = 780, u = 680 / 1600 = 0.425, half-width = 100 + 42.5.
+    # Side: y = 400 + 0.6 x 600 = 760, u = 560 / 1600 = 0.35, half-depth = 50 + 35.
+    row = site(derive(asymmetric_input(), RULES), "waist")
+    assert row.a_mm == pytest.approx(142.5)
+    assert row.b_mm == pytest.approx(85.0)
+    assert row.raw_mm == pytest.approx(ellipse_perimeter(142.5, 85.0))
+
+
+def test_other_levels_worked_by_hand():
+    result = derive(asymmetric_input(), RULES)
+    # Chest 0.25: front y 500, u 0.25. Side y 550, u 0.21875.
+    assert (site(result, "chest").a_mm, site(result, "chest").b_mm) == (
+        pytest.approx(125.0),
+        pytest.approx(71.875),
+    )
+    # Neck 0.1 above the shoulder: front y 220, u 0.075. Side y 340, u 0.0875.
+    assert (site(result, "neck").a_mm, site(result, "neck").b_mm) == (
+        pytest.approx(107.5),
+        pytest.approx(58.75),
+    )
+    # Hip: depth grows downward, so the band's end wins, g = 0.25.
+    # Side y 1100, u 0.5625. Front y 1200, u 0.6875.
+    assert (site(result, "hip").a_mm, site(result, "hip").b_mm) == (
+        pytest.approx(168.75),
+        pytest.approx(106.25),
+    )
+    assert site(result, "hip").level_fraction == pytest.approx(0.25)
+
+
+def test_lengths_worked_by_hand():
+    result = derive(asymmetric_input(), RULES)
+    assert site(result, "stature").raw_mm == pytest.approx(1600)
+    assert site(result, "shoulder").raw_mm == pytest.approx(400)
+    assert site(result, "sleeve").raw_mm == pytest.approx(math.sqrt(100000) + 300)
+    assert site(result, "outleg").raw_mm == pytest.approx(1040)  # 1800 - 760
+    assert site(result, "inleg").raw_mm == pytest.approx(800)  # 1700 - 900
+
+
+def test_rules_really_choose_the_levels():
+    waist = site(derive(asymmetric_input(), rules_with(["levels", "waist"], 0.5)), "waist")
+    # Front y 700, u 0.375. Side y 700, u 0.3125.
+    assert (waist.a_mm, waist.b_mm) == (pytest.approx(137.5), pytest.approx(81.25))
+    chest_rules = rules_with(["levels", "chest", "male"], 0.5)
+    chest = site(derive(asymmetric_input(), chest_rules), "chest")
+    # Front y 700, u 0.375. Side y 700, u 0.3125.
+    assert (chest.a_mm, chest.b_mm) == (pytest.approx(137.5), pytest.approx(81.25))
+    hip = site(
+        derive(asymmetric_input(), rules_with(["levels", "hip_band_knee_fraction"], 0.5)), "hip"
+    )
+    # g = 0.5: side y 1200, u 0.625. Front y 1300, u 0.75.
+    assert (hip.a_mm, hip.b_mm) == (pytest.approx(175.0), pytest.approx(112.5))
+
+
+def test_side_view_really_uses_the_clearer_side():
+    data = asymmetric_input()
+    for i, value in ((12, 0.55), (24, 0.55), (26, 0.55), (11, 0.95), (23, 0.95), (25, 0.95)):
+        data["landmarks_side"][i]["visibility"] = value
+    # Left side: y = 500 + 0.6 x 800 = 980, u = 780 / 1600 = 0.4875.
+    assert site(derive(data, RULES), "waist").b_mm == pytest.approx(98.75)
+
+
+def test_waist_tolerance_exactly_on_the_limit_is_allowed():
+    def result(samples):
+        data = asymmetric_input()
+        for index in samples:
+            data["silhouette_front"]["half_width_mm"][index] = 50.0
+        return site(derive(data, RULES), "waist").reasons
+
+    # Fraction 0.55 is y 740, u 0.4 exactly, 0.05 from the level used.
+    assert result([40]) == []
+    # Adding sample 39 makes 0.54 the narrowest, which is too far.
+    assert result([39, 40]) == ["waist_level_mismatch"]
+
+
+@pytest.mark.parametrize("hip_y", [300.0, 250.0])
+def test_hip_at_or_above_the_shoulder_fails_the_view(hip_y):
+    data = asymmetric_input()
+    for i in (23, 24):
+        data["landmarks_front"][i]["y"] = hip_y / 2000
+    result = derive(data, RULES)
+    assert site(result, "chest").reasons == ["view_failed"]
+    assert site(result, "outleg").flag == "pass"
+
+
+def test_knee_above_hip_fails_only_the_hip():
+    data = asymmetric_input()
+    data["landmarks_side"][26]["y"] = 900 / 2000
+    result = derive(data, RULES)
+    assert site(result, "hip").reasons == ["mask_gap"]
+    assert site(result, "waist").value_mm is not None
+
+
+def test_empty_or_reversed_band_tests_one_point_without_crashing():
+    for band in ([0.6, 0.6], [0.7, 0.5]):
+        rules = rules_with(["levels", "waist_check_band"], band)
+        assert site(derive(asymmetric_input(), rules), "waist").value_mm is not None
+    rules = rules_with(["levels", "hip_band_knee_fraction"], 0)
+    assert site(derive(asymmetric_input(), rules), "hip").level_fraction == 0
+
+
+def test_aspect_exactly_on_the_limit_passes_despite_float_noise():
+    x, y = 12.3, 45.6
+    corners = [[x, y], [x + 103, y], [x + 103, y + 100], [x, y + 100]]
+    assert marker_scale(marker(corners), 1080, RULES) is not None
+
+
+def test_arm_choice_uses_plain_addition():
+    """Python's sum() calls this a tie, but plain addition, as in JavaScript, does not."""
+    data = make_input(Body(), free_arm="right")
+    data["session"]["free_arm"] = None
+    for i, value in zip(
+        (11, 13, 15, 12, 14, 16), (0.83, 0.75, 0.95, 0.95, 0.75, 0.83), strict=True
+    ):
+        data["landmarks_front"][i]["visibility"] = value
+    left = 0.83 + 0.75 + 0.95
+    right = 0.95 + 0.75 + 0.83
+    assert left != right
+    picked = derive(data, RULES).sites["sleeve"].raw_mm
+    data["session"]["free_arm"] = "left" if left > right else "right"
+    assert derive(data, RULES).sites["sleeve"].raw_mm == picked

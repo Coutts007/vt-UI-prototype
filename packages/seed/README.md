@@ -6,4 +6,4 @@ All data is synthetic. IDs are uuid5 values, so they never change between runs. 
 
 Dates are fixed around `anchor_date`. A loader should shift every date by (today minus `anchor_date`), so exactly one order stays overdue.
 
-Measurement values come from a simple stacked-ellipse body until M2 regenerates them with `vt_measure`.
+Every measurement is derived by `vt_measure` from the synthetic numbers stored beside it, and a test recomputes them.
