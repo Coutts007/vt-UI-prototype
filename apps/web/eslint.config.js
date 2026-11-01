@@ -11,6 +11,7 @@ export default tseslint.config(
       'dist',
       'dist-directory-off',
       'dist-directory-default',
+      'dist-real-api',
       'coverage',
       'playwright-report',
       'test-results',
