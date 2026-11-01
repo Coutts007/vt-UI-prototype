@@ -7,15 +7,16 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query, Request, Response
-from sqlalchemy import ColumnElement, exists, func, or_, select
+from sqlalchemy import ColumnElement, exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.errors import ApiError
-from app.models import Client, MeasurementProfile, Order, Tailor, UserAccount
+from app.models import Client, MeasurementProfile, Order, Participant, Tailor, UserAccount
 from app.schemas import (
     ClientCodeCheck,
     DirectoryClient,
     DirectoryClientPage,
+    DirectoryClientsRemoved,
     DirectoryCodeIssued,
     Specialty,
     TailorListing,
@@ -24,7 +25,7 @@ from app.schemas import (
 from app.security.deps import CurrentPrincipal, Session, require_role, tailor_of
 from app.security.ip_hash import ip_hash
 from app.services import audit
-from app.services.ratelimit import limit_by_ip
+from app.services.ratelimit import limit_by_network
 
 router = APIRouter()
 
@@ -41,6 +42,15 @@ def new_code() -> str:
     return letters + digits
 
 
+DAY = 86400
+
+
+def directory_on(request: Request) -> None:
+    """Switched off, the directory looks as if it was never there (D27)."""
+    if not request.app.state.settings.directory_enabled:
+        raise ApiError("not_found")
+
+
 LISTED: tuple[ColumnElement[bool], ...] = (
     Tailor.directory_listed.is_(True),
     UserAccount.status == "active",
@@ -53,8 +63,8 @@ LISTED: tuple[ColumnElement[bool], ...] = (
     response_model=ClientCodeCheck,
     tags=["public"],
     dependencies=[
-        Depends(limit_by_ip("code-check-minute", 10, 60)),
-        Depends(limit_by_ip("code-check-day", 100, 86400)),
+        Depends(limit_by_network("code-check-minute", 10, 60)),
+        Depends(limit_by_network("code-check-day", 100, 86400)),
     ],
 )
 async def verify_client_code(
@@ -79,7 +89,7 @@ async def verify_client_code(
     operation_id="listTailors",
     response_model=TailorListingPage,
     tags=["public"],
-    dependencies=[Depends(limit_by_ip("directory-list", 60, 60))],
+    dependencies=[Depends(directory_on), Depends(limit_by_network("directory-list", 60, 60))],
 )
 async def list_tailors(
     session: Session,
@@ -143,8 +153,9 @@ async def list_tailors(
     response_model=DirectoryCodeIssued,
     tags=["public"],
     dependencies=[
-        Depends(limit_by_ip("directory-code-hour", 10, 3600)),
-        Depends(limit_by_ip("directory-code-day", 30, 86400)),
+        Depends(directory_on),
+        Depends(limit_by_network("directory-code-hour", 10, 3600)),
+        Depends(limit_by_network("directory-code-day", 30, DAY)),
     ],
 )
 async def issue_directory_code(
@@ -158,6 +169,11 @@ async def issue_directory_code(
     if not tailor:
         raise ApiError("not_found")
     owner, business_name = tailor.tailor_id, tailor.business_name
+    # The tailor first: taps at a tailor already refused must not use up everyone's allowance.
+    settings = request.app.state.settings
+    limiter = request.app.state.limiter
+    limiter.hit("directory-code-tailor", str(owner), settings.directory_codes_per_tailor_day, DAY)
+    limiter.hit("directory-code-global", "all", settings.directory_codes_global_day, DAY)
     for _ in range(CODE_ATTEMPTS):
         client = Client(client_code=new_code(), tailor_id=owner, source="directory")
         try:
@@ -184,6 +200,22 @@ async def issue_directory_code(
     return DirectoryCodeIssued(client_code=code, tailor_business_name=business_name)
 
 
+def own_directory_clients(tailor_id: uuid.UUID) -> tuple[ColumnElement[bool], ...]:
+    return (
+        Client.tailor_id == tailor_id,
+        Client.source == "directory",
+        Client.deleted_at.is_(None),
+    )
+
+
+# Nothing has been done with these codes, so removing one loses nothing.
+UNUSED: tuple[ColumnElement[bool], ...] = (
+    ~exists().where(MeasurementProfile.client_id == Client.client_id),
+    ~exists().where(Order.client_id == Client.client_id),
+    ~exists().where(Participant.client_id == Client.client_id),
+)
+
+
 @router.get(
     "/me/directory-clients",
     operation_id="listDirectoryClients",
@@ -195,12 +227,9 @@ async def list_directory_clients(
     principal: CurrentPrincipal, session: Session, page: Page = 1, page_size: PageSize = 25
 ) -> DirectoryClientPage:
     tailor = await tailor_of(session, principal.user)
-    mine = (
-        Client.tailor_id == tailor.tailor_id,
-        Client.source == "directory",
-        Client.deleted_at.is_(None),
-    )
+    mine = own_directory_clients(tailor.tailor_id)
     total = await session.scalar(select(func.count()).select_from(Client).where(*mine))
+    unused = await session.scalar(select(func.count()).select_from(Client).where(*mine, *UNUSED))
     has_profile = exists().where(MeasurementProfile.client_id == Client.client_id)
     rows = await session.execute(
         select(Client.client_id, Client.client_code, Client.created_at, has_profile.label("used"))
@@ -222,7 +251,43 @@ async def list_directory_clients(
         page=page,
         page_size=page_size,
         total=total or 0,
+        unused_total=unused or 0,
     )
+
+
+@router.post(
+    "/me/directory-clients/remove-unused",
+    operation_id="removeUnusedDirectoryClients",
+    response_model=DirectoryClientsRemoved,
+    tags=["clients"],
+    dependencies=[Depends(require_role("tailor"))],
+)
+async def remove_unused_directory_clients(
+    principal: CurrentPrincipal, request: Request, session: Session
+) -> DirectoryClientsRemoved:
+    tailor = await tailor_of(session, principal.user)
+    # One statement, so the check and the change cannot drift apart.
+    result = await session.execute(
+        update(Client)
+        .where(*own_directory_clients(tailor.tailor_id), *UNUSED)
+        .values(deleted_at=datetime.now(UTC))
+        .returning(Client.client_id)
+        .execution_options(synchronize_session=False)
+    )
+    removed = len(result.all())
+    if removed:
+        audit.record(
+            session,
+            actor_type="user",
+            action="deletion",
+            entity_type="tailor",
+            entity_id=tailor.tailor_id,
+            user_id=principal.user.user_id,
+            ip_hash=ip_hash(request),
+            detail={"source": "directory", "count": removed},
+        )
+    await session.commit()
+    return DirectoryClientsRemoved(removed=removed)
 
 
 @router.delete(
@@ -247,6 +312,15 @@ async def delete_client(
     )
     if active:
         raise ApiError("client_has_orders")
+    # Collected orders and study records leave only through the retention job (backend-spec 14.6).
+    retained = await session.scalar(
+        select(
+            exists().where(Order.client_id == client_id)
+            | exists().where(Participant.client_id == client_id)
+        )
+    )
+    if retained:
+        raise ApiError("client_records_retained")
     client.deleted_at = datetime.now(UTC)
     audit.record(
         session,

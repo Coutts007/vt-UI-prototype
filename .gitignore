@@ -16,6 +16,7 @@ node_modules/
 build/
 dist/
 dist-directory-off/
+dist-directory-default/
 .venv/
 __pycache__/
 *.pyc

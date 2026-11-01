@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from fastapi import Request
 
 from app.errors import ApiError
-from app.security.ip_hash import ip_hash
+from app.security.ip_hash import ip_hash, network_hash
 
 
 class RateLimiter:
@@ -31,5 +31,14 @@ class RateLimiter:
 def limit_by_ip(bucket: str, limit: int, seconds: int) -> Callable[[Request], Awaitable[None]]:
     async def check(request: Request) -> None:
         request.app.state.limiter.hit(bucket, ip_hash(request), limit, seconds)
+
+    return check
+
+
+def limit_by_network(bucket: str, limit: int, seconds: int) -> Callable[[Request], Awaitable[None]]:
+    """Like limit_by_ip, with one bucket for each IPv6 /64."""
+
+    async def check(request: Request) -> None:
+        request.app.state.limiter.hit(bucket, network_hash(request), limit, seconds)
 
     return check

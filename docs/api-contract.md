@@ -35,7 +35,7 @@ This explains `packages/contracts/openapi.yaml`, which is the source of truth. I
 | `GET /tailors` | Lists active tailors who chose to be listed, with search, area, specialty and paging. Shows only the business name, area, specialties, short description and, if the tailor chose it, phone. Never an email, a user id or anything about clients. Limited to 60 requests a minute |
 | `POST /tailors/{listing_id}/codes` | **Get code.** Creates a new client with a new code under that tailor at once, with no approval. Takes no name or phone. Answers 404 if the tailor is not listed or not active. Limited to 10 an hour and 30 a day from one address. Audited |
 
-The tailor directory (D27) is behind the web switch `VITE_FEATURE_DIRECTORY`, off in production builds until the client flow runs on the real API. Tailors opt in through `PATCH /me` (`directory_listed`, off by default; `directory_show_phone`, `directory_specialties`, `directory_description`). Each client carries a `source` of `tailor` or `directory`.
+The tailor directory (D27) is behind the web switch `VITE_FEATURE_DIRECTORY` and the server setting `DIRECTORY_ENABLED`, both off in production until the client flow runs on the real API and the cleanup job exists. With the setting off, `GET /tailors`, `POST /tailors/{listing_id}/codes` and any `directory_*` field in `PATCH /me` answer 404 `not_found`. Tailors opt in through `PATCH /me` (`directory_listed`, off by default; `directory_show_phone`, `directory_specialties`, `directory_description`). Each client carries a `source` of `tailor` or `directory`.
 
 ## Client sending and controlling data
 
@@ -62,10 +62,11 @@ The tailor directory (D27) is behind the web switch `VITE_FEATURE_DIRECTORY`, of
 |---|---|
 | `GET /clients` | Lists clients with search, sort and filters (new captures, flags, no profiles) |
 | `POST /clients` | Creates a client and issues a new code with a link to send over WhatsApp. A display name is optional. Audited |
-| `GET /me/directory-clients` | The signed-in tailor's clients who got their code from the directory, so they can spot and remove abuse |
+| `GET /me/directory-clients` | The signed-in tailor's clients who got their code from the directory, so they can spot and remove abuse. `unused_total` counts the ones the next endpoint would remove |
+| `POST /me/directory-clients/remove-unused` | Removes that tailor's directory clients with no profile, no orders and no participant. Audited with the count only |
 | `GET /clients/{client_id}` | Reads one client |
 | `PATCH /clients/{client_id}` | Changes the display name or height. Audited |
-| `DELETE /clients/{client_id}` | Marks the client for deletion at once, and a nightly job removes the rows. Refused while active orders exist. Audited |
+| `DELETE /clients/{client_id}` | Marks the client for deletion at once, and a nightly job removes the rows. Refused while active orders exist (`client_has_orders`), and for collected orders or a study participant (`client_records_retained`), which leave only through the retention job. Audited |
 | `POST /clients/{client_id}/rotate-code` | Replaces a code, and the old one stops working. Audited |
 | `GET /clients/{client_id}/profiles` | Lists a client's profiles, newest first |
 | `GET /profiles/{profile_id}` | Reads one full profile. Every view is audited |

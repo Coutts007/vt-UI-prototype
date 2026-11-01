@@ -32,15 +32,13 @@ MAX_FAILURES = 5
 LOCK_MINUTES = 15
 LOCK_SECONDS = LOCK_MINUTES * 60
 PASSWORD_ATTEMPTS = 5
-TAILOR_FIELDS = {
-    "business_name",
-    "phone",
-    "area",
+DIRECTORY_FIELDS = {
     "directory_listed",
     "directory_show_phone",
     "directory_specialties",
     "directory_description",
 }
+TAILOR_FIELDS = {"business_name", "phone", "area"} | DIRECTORY_FIELDS
 
 
 def to_e164(phone: str) -> str:
@@ -237,6 +235,8 @@ async def update_me(
         user.locale = changes["locale"]
     if "unit_pref" in changes:
         user.unit_pref = changes["unit_pref"]
+    if DIRECTORY_FIELDS & changes.keys() and not request.app.state.settings.directory_enabled:
+        raise ApiError("not_found")
     detail: dict[str, Any] = {"fields": sorted(changes)}
     if TAILOR_FIELDS & changes.keys():
         tailor = await session.scalar(select(Tailor).where(Tailor.user_id == user.user_id))

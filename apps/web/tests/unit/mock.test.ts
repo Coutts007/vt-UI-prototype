@@ -210,6 +210,7 @@ const CASES: Record<string, Case> = {
   listTailors: { query: { search: 'bespoke' } },
   issueDirectoryCode: { path: { listing_id: seed.directory_listings[0].listing_id } },
   listDirectoryClients: { role: 'tailor' },
+  removeUnusedDirectoryClients: { role: 'tailor' },
   exportCaptures: { role: 'admin' },
   exportReference: { role: 'admin' },
 };
@@ -268,6 +269,13 @@ describe('every endpoint answers as the contract says', () => {
           tokens.tailor,
         );
         c.path = { sheet_id: (await made.clone().json()).sheet_id };
+      }
+      if (op.operationId === 'deleteClient') {
+        // Every seeded client has orders or is a participant, so this needs a fresh code.
+        const listing = seed.directory_listings.find((l) => l.tailor_id === wanjiru.user_id)!;
+        await fetch(`${BASE}/tailors/${listing.listing_id}/codes`, { method: 'POST' });
+        const mine = await call('/me/directory-clients', 'get', {}, tokens.tailor);
+        c.path = { client_id: (await mine.json()).items[0].client_id };
       }
       const response = await call(path, method, c, c.role ? tokens[c.role] : undefined);
       const declared = op.responses[String(response.status)];
@@ -355,6 +363,37 @@ describe('tailor directory (D27)', () => {
     }
     const wanjiruRow = items.find((row: any) => row.business_name === wanjiru.business_name);
     expect(wanjiruRow.phone).toBeNull();
+  });
+
+  const clientOf = (code: string) => seed.clients.find((c) => c.client_code === code)!;
+  const asTailor = (path: string, method = 'GET') =>
+    fetch(`${BASE}${path}`, { method, headers: { Authorization: `Bearer ${tokens.tailor}` } });
+
+  it('refuses to remove a participant or a client with collected orders', async () => {
+    for (const code of ['AB1008', 'AB1006']) {
+      const reply = await asTailor(`/clients/${clientOf(code).client_id}`, 'DELETE');
+      expect(reply.status, code).toBe(409);
+      expect((await reply.json()).code, code).toBe('client_records_retained');
+    }
+    const active = await asTailor(`/clients/${clientOf('AB1004').client_id}`, 'DELETE');
+    expect((await active.json()).code).toBe('client_has_orders');
+  });
+
+  it('removes unused directory clients in bulk and counts them', async () => {
+    const { items } = await list();
+    const mine = items.find((row: any) => row.business_name === wanjiru.business_name);
+    for (let i = 0; i < 2; i += 1) {
+      await fetch(`${BASE}/tailors/${mine.listing_id}/codes`, { method: 'POST' });
+    }
+    const before = await (await asTailor('/me/directory-clients')).json();
+    expect(before.unused_total).toBe(before.total);
+    expect(before.total).toBeGreaterThanOrEqual(2);
+    const removed = await (await asTailor('/me/directory-clients/remove-unused', 'POST')).json();
+    expect(removed.removed).toBe(before.total);
+    const after = await (await asTailor('/me/directory-clients')).json();
+    expect([after.total, after.unused_total]).toEqual([0, 0]);
+    // Seeded clients came from the tailor, so the bulk action leaves them alone.
+    expect((await asTailor(`/clients/${clientOf('AB1008').client_id}`)).status).toBe(200);
   });
 
   it('a pending tailor issues no code, even when opted in', async () => {

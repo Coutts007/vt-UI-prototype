@@ -2,6 +2,19 @@
 
 The newest entry comes first. Every change or improvement adds a line in the same commit.
 
+## 2026-11-01: Tailor directory after the independent review (D27)
+
+- Fixed an intermittent browser test: it reloaded the page with a directory-issued code, which the mock forgets, so it passed only if its click beat the mock's 404. It now uses a seeded code.
+- **Stays off in production** until both M8 and M11's cleanup job exist. The API now has its own switch, `DIRECTORY_ENABLED`, off by default: the public directory endpoints and the listing opt-in answer 404 `not_found` while it is off. A tailor can still see and clear existing codes.
+- Issuing is capped at 50 codes a day per tailor and 1000 a day overall, both settings, on top of the limits per address, refused with `rate_limited` and `Retry-After`. IPv6 now counts per /64 on the directory and code check endpoints. IPv4 is unchanged.
+- Removing a client is refused with the new `client_records_retained` for collected orders or a study participant, for tailors and admins alike. Those records leave only through the retention job. A measured client with neither can still be removed.
+- `POST /me/directory-clients/remove-unused` removes a tailor's directory clients with no profile, no orders and no participant, in one audit row with the count only. The list now reports `unused_total`.
+- Tailor Settings pages through directory clients, offers Remove unused codes with a count and a warning, and gives a measured client a separate, stronger warning and confirm button, with Cancel on each. The panel's words moved to their own lazy file, which a client's phone never downloads. New Kiswahili is unreviewed.
+- Typing or linking a different code on Start now drops consent given for the old one, and waits for that to reach phone storage before moving on. Retyping the same code keeps it.
+- A new browser test builds in production mode with the flag unset. It found a real gap: the flag was switched off at run time only, so the directory screen and panel chunks still shipped. The build now settles the flag, and those chunks are gone from a switched-off build. The client flow is 168.9 KB of the 170 KB stop.
+- A production build no longer deletes the mock worker from another build's folder when several run at once. `VT_E2E_PORT` moves the browser test ports, so two checkouts can test side by side.
+- **Carried forward to M9:** rate limit counts live in memory and reset on restart (`services/ratelimit.py`), and the client list in `ClientListView` does not show where a client came from.
+
 ## 2026-10-31: Tailor directory and Get code (D27)
 
 - API: public `GET /tailors` and `POST /tailors/{listing_id}/codes`, `GET /me/directory-clients`, `DELETE /clients/{id}`, and `GET /client-codes/{code}` (the part of M8 this flow needs). Migration 0002 adds the listing fields, off by default, and each client's `source`. Issuing is limited to 10 an hour and 30 a day per address, and audited with no personal data. The mock answers the same.

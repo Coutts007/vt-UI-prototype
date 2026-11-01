@@ -21,7 +21,6 @@ const client = {
   Help: view(() => import('../views/client/HelpView'), 'HelpView'),
   Privacy: view(() => import('../views/client/PrivacyView'), 'PrivacyView'),
   Declined: view(() => import('../views/client/DeclinedView'), 'DeclinedView'),
-  Directory: view(() => import('../views/client/BusinessDirectoryView'), 'BusinessDirectoryView'),
 };
 const auth = {
   Login: view(() => import('../views/auth/LoginView'), 'LoginView'),
@@ -94,7 +93,6 @@ export const VIEWS: Record<string, Render> = {
   '/help': (c) => <client.Help onNavigate={c.navigate} />,
   '/privacy': (c) => <client.Privacy onNavigate={c.navigate} />,
   '/declined': (c) => <client.Declined onNavigate={c.navigate} />,
-  '/tailors': (c) => <client.Directory onNavigate={c.navigate} />,
 
   '/login': (c) => <auth.Login onLoginSuccess={c.onLogin} onNavigate={c.navigate} />,
   '/register': (c) => <auth.Register onNavigate={c.navigate} />,
@@ -135,6 +133,11 @@ export const VIEWS: Record<string, Render> = {
   ),
 
 };
+
+if (__VT_DIRECTORY__) {
+  const Directory = view(() => import('../views/client/BusinessDirectoryView'), 'BusinessDirectoryView');
+  VIEWS['/tailors'] = (c) => <Directory onNavigate={c.navigate} />;
+}
 
 // Dead code outside dev and mock builds, so production ships no developer screens.
 if (import.meta.env.DEV || import.meta.env.MODE === 'mock') {

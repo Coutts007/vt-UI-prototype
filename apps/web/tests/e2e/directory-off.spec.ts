@@ -1,6 +1,9 @@
 // A real build with VITE_FEATURE_DIRECTORY=false (D27): nothing of the directory can be reached.
 import { expect, test } from '@playwright/test';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { en } from '../../src/i18n/en';
+import { panelEn } from '../../src/views/tailor/directoryPanelText';
 
 test('no link anywhere a client goes', async ({ page }) => {
   for (const path of ['/', '/start', '/help']) {
@@ -35,5 +38,31 @@ test('privacy text and tailor settings say nothing about it', async ({ page }) =
     dispatchEvent(new PopStateEvent('popstate'));
   });
   await expect(page.getByRole('button', { name: /Save Workshop/ })).toBeVisible();
-  await expect(page.getByText(en.listingTitle)).toHaveCount(0);
+  await expect(page.getByText(panelEn.listingTitle)).toHaveCount(0);
+});
+
+test.describe('a production build with the flag unset', () => {
+  const dist = join(import.meta.dirname, '../../dist-directory-default');
+  const BASE = `http://localhost:${Number(process.env.VT_E2E_PORT ?? 4173) + 11}`;
+
+  test('the built files hold none of the directory', () => {
+    const assets = readdirSync(join(dist, 'assets'));
+    expect(assets.some((name) => name.startsWith('WelcomeView-'))).toBe(true);
+    expect(assets.filter((name) => /Directory/.test(name))).toEqual([]);
+    expect(existsSync(join(dist, 'mockServiceWorker.js'))).toBe(false);
+    for (const name of assets.filter((file) => file.endsWith('.js'))) {
+      const code = readFileSync(join(dist, 'assets', name), 'utf8');
+      expect(code.includes('/me/directory-clients'), name).toBe(false);
+      expect(code.includes('/codes'), name).toBe(false);
+    }
+  });
+
+  test('the running build has no route or link to it', async ({ page }) => {
+    await page.goto(`${BASE}/tailors`);
+    await expect(page.getByRole('heading', { name: en.errorNotFoundTitle })).toBeVisible();
+    await page.goto(`${BASE}/start`);
+    await expect(page.locator('#content')).toBeVisible();
+    await expect(page.getByRole('heading').first()).toBeVisible();
+    await expect(page.getByRole('button', { name: en.startNoCode })).toHaveCount(0);
+  });
 });

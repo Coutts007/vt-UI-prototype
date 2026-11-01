@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { en } from '../../src/i18n/en';
 import { sw } from '../../src/i18n/sw';
+import { panelEn, panelSw } from '../../src/views/tailor/directoryPanelText';
 const seed = JSON.parse(
   readFileSync(join(import.meta.dirname, '../../../../packages/seed/seed.json'), 'utf8'),
 );
@@ -118,6 +119,65 @@ test('consent given for one tailor does not carry over to a new code', async ({ 
   expect(draft).not.toHaveProperty('consent');
 });
 
+async function giveConsentThroughTheDirectory(page: Page) {
+  await page.goto('/tailors');
+  await getCode(page, WANJIRU).click();
+  const code = (await page.getByTestId('issued-code').textContent())!;
+  await page.getByRole('button', { name: en.continue, exact: true }).click();
+  await page.getByLabel(en.heightLabel).fill('170');
+  await page.getByText(en.sexFemale, { exact: true }).click();
+  await page.getByRole('button', { name: en.continue, exact: true }).click();
+  for (const box of [en.consentBox1, en.consentBox2, en.consentBox3]) {
+    await page.getByText(box, { exact: true }).click();
+  }
+  await page.getByRole('button', { name: en.openCamera }).click();
+  await expect(page).toHaveURL(/\/check/);
+  return code;
+}
+
+test('typing a different code drops the consent, on disk before moving on', async ({ page }) => {
+  await giveConsentThroughTheDirectory(page);
+  await page.goto('/start');
+  await page.getByLabel(en.clientCodeLabel).fill('AB1008');
+  await page.getByRole('button', { name: en.continue, exact: true }).click();
+  await expect(page).toHaveURL(/\/consent/);
+  const draft = await storedDraft(page);
+  expect(draft.client_code).toBe('AB1008');
+  expect(draft).not.toHaveProperty('consent');
+});
+
+test('retyping the same code keeps the consent', async ({ page }) => {
+  // A seeded code: the mock forgets issued codes on reload, which would make this a race with its 404.
+  const code = 'AB1008';
+  await page.goto('/start');
+  await page.getByLabel(en.clientCodeLabel).fill(code);
+  await page.getByLabel(en.heightLabel).fill('170');
+  await page.getByText(en.sexFemale, { exact: true }).click();
+  await page.getByRole('button', { name: en.continue, exact: true }).click();
+  for (const box of [en.consentBox1, en.consentBox2, en.consentBox3]) {
+    await page.getByText(box, { exact: true }).click();
+  }
+  await page.getByRole('button', { name: en.openCamera }).click();
+  await expect(page).toHaveURL(/\/check/);
+
+  await page.goto('/start');
+  const input = page.getByLabel(en.clientCodeLabel);
+  await expect(input).toHaveValue(code);
+  await input.fill(code.slice(0, 3));
+  await input.fill(code);
+  await page.getByRole('button', { name: en.continue, exact: true }).click();
+  await expect(page).toHaveURL(/\/consent/);
+  expect(await storedDraft(page)).toHaveProperty('consent');
+});
+
+test('a link with a different code drops the consent too', async ({ page }) => {
+  await giveConsentThroughTheDirectory(page);
+  await page.goto('/start?code=AB1008');
+  await expect(page.getByLabel(en.clientCodeLabel)).toHaveValue('AB1008');
+  await expect.poll(async () => (await storedDraft(page)).client_code).toBe('AB1008');
+  expect(await storedDraft(page)).not.toHaveProperty('consent');
+});
+
 test('each tap gives a new code', async ({ page }) => {
   await page.goto('/tailors');
   await getCode(page, WANJIRU).click();
@@ -197,11 +257,13 @@ test('a tailor opts out and the listing goes; they see and remove directory clie
   }, wanjiruListing.listing_id);
   await goTo(page, '/t/settings');
 
-  const optIn = page.getByLabel(en.listingOptIn);
+  const optIn = page.getByLabel(panelEn.listingOptIn);
   await expect(optIn).toBeChecked();
   await optIn.uncheck();
-  await page.getByRole('button', { name: en.listingSave }).click();
-  await expect(page.getByRole('status')).toHaveText(en.listingSaved);
+  await page.getByRole('button', { name: panelEn.listingSave }).click();
+  await expect(
+    page.getByRole('region', { name: panelEn.listingTitle }).getByRole('status'),
+  ).toHaveText(panelEn.listingSaved);
   const names = await page.evaluate(async () => {
     const reply = await (await fetch('/api/v1/tailors')).json();
     return reply.items.map((row: { business_name: string }) => row.business_name);
@@ -215,10 +277,146 @@ test('a tailor opts out and the listing goes; they see and remove directory clie
     await axe(page, 'section[aria-labelledby=listing-title]');
     await axe(page, 'section[aria-labelledby=directory-clients-title]');
   }
-  await page.getByRole('button', { name: `${en.directoryClientRemove}: ${code}` }).click();
+  await page.getByRole('button', { name: `${panelEn.directoryClientRemove}: ${code}` }).click();
   await page
-    .getByRole('button', { name: en.directoryClientConfirm.replace('{code}', code) })
+    .getByRole('button', { name: panelEn.directoryClientConfirm.replace('{code}', code) })
     .click();
   await expect(page.getByText(code)).toHaveCount(0);
-  await expect(page.getByText(en.directoryClientsEmpty)).toBeVisible();
+  await expect(page.getByText(panelEn.directoryClientsEmpty)).toBeVisible();
+});
+
+async function signInAtSettings(page: Page) {
+  await page.goto('/login');
+  await page.locator('input[type=email]').fill('wanjiru@vt.test');
+  await page.locator('input[type=password]').fill('vt-demo-2026');
+  await page.locator('button[type=submit]').click();
+  await page.waitForURL((url) => url.pathname !== '/login');
+}
+
+const issueCodes = (page: Page, count: number) =>
+  page.evaluate(
+    async ([id, times]) => {
+      for (let i = 0; i < Number(times); i += 1) {
+        await fetch(`/api/v1/tailors/${id}/codes`, { method: 'POST' });
+      }
+    },
+    [wanjiruListing.listing_id, count],
+  );
+
+// The mock answers inside a service worker, which page.route cannot see, so fetch is wrapped instead.
+async function listDirectoryClientsAs(page: Page, rows: Record<string, unknown>[]) {
+  await page.addInitScript((all) => {
+    const real = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+      const url = new URL(String(input instanceof Request ? input.url : input), location.href);
+      const reply = await real(input, init);
+      if (!url.pathname.endsWith('/me/directory-clients')) return reply;
+      const body = await reply.json();
+      const wanted = Number(url.searchParams.get('page'));
+      const size = Number(url.searchParams.get('page_size'));
+      return new Response(
+        JSON.stringify({
+          ...body,
+          items: all.slice((wanted - 1) * size, wanted * size),
+          page: wanted,
+          page_size: size,
+          total: all.length,
+        }),
+        { headers: { 'Content-Type': 'application/json' } },
+      );
+    };
+  }, rows);
+}
+
+const row = (code: string, hasProfile: boolean, id = 1) => ({
+  client_id: `33333333-3333-4333-8333-${String(id).padStart(12, '0')}`,
+  client_code: code,
+  created_at: '2026-10-31T08:00:00Z',
+  has_profile: hasProfile,
+});
+
+test('a measured client gets a stronger warning than an unused one, in both languages', async ({
+  page,
+}) => {
+  await listDirectoryClientsAs(page, [row('ZZ1111', true, 1), row('ZZ2222', false, 2)]);
+  await signInAtSettings(page);
+  await goTo(page, '/t/settings');
+  const panel = page.getByRole('region', { name: panelEn.directoryClientsTitle });
+  await panel.getByRole('button', { name: `${panelEn.directoryClientRemove}: ZZ2222` }).click();
+  await expect(
+    panel.getByRole('button', { name: panelEn.directoryClientConfirm.replace('{code}', 'ZZ2222') }),
+  ).toBeVisible();
+  await expect(panel.getByRole('alert')).toHaveCount(0);
+  await panel.getByRole('button', { name: en.cancel, exact: true }).click();
+
+  await panel.getByRole('button', { name: `${panelEn.directoryClientRemove}: ZZ1111` }).click();
+  await expect(panel.getByRole('alert')).toHaveText(
+    panelEn.directoryClientMeasuredWarning.replace('{code}', 'ZZ1111'),
+  );
+  await expect(
+    panel.getByRole('button', {
+      name: panelEn.directoryClientMeasuredConfirm.replace('{code}', 'ZZ1111'),
+    }),
+  ).toBeVisible();
+  await axe(page, 'section[aria-labelledby=directory-clients-title]');
+
+  await page.getByRole('button', { name: en.hdrSwitchLang }).click();
+  await expect(page.getByRole('alert').first()).toHaveText(
+    panelSw.directoryClientMeasuredWarning.replace('{code}', 'ZZ1111'),
+  );
+});
+
+test('a refused removal says why', async ({ page }) => {
+  await page.addInitScript(() => {
+    const real = window.fetch.bind(window);
+    window.fetch = (input, init) =>
+      init?.method === 'DELETE' || (input instanceof Request && input.method === 'DELETE')
+        ? Promise.resolve(
+            new Response(JSON.stringify({ code: 'client_records_retained' }), {
+              status: 409,
+              headers: { 'Content-Type': 'application/problem+json' },
+            }),
+          )
+        : real(input, init);
+  });
+  await signInAtSettings(page);
+  await issueCodes(page, 1);
+  await goTo(page, '/t/settings');
+  const panel = page.getByRole('region', { name: panelEn.directoryClientsTitle });
+  await panel
+    .getByRole('button', { name: new RegExp(`^${panelEn.directoryClientRemove}: `) })
+    .click();
+  await panel.getByRole('button', { name: /^Yes, remove/ }).click();
+  await expect(panel.getByRole('alert')).toHaveText(panelEn.directoryClientRetained);
+});
+
+test('the tailor pages through directory clients and removes the unused ones', async ({ page }) => {
+  // More rows than the mock's hourly limit can issue, with the real unused count underneath.
+  await listDirectoryClientsAs(
+    page,
+    Array.from({ length: 30 }, (_, i) => row(`ZZ${1000 + i}`, true, i)),
+  );
+  await signInAtSettings(page);
+  await issueCodes(page, 2);
+  await goTo(page, '/t/settings');
+  const panel = page.getByRole('region', { name: panelEn.directoryClientsTitle });
+  const button = (name: string) => panel.getByRole('button', { name });
+  await expect(panel.getByText('ZZ1000')).toBeVisible();
+  await expect(panel.getByText('ZZ1025')).toHaveCount(0);
+  await expect(panel.getByText('Page 1 of 2')).toBeVisible();
+  await expect(button(panelEn.directoryClientsPrevious)).toBeDisabled();
+
+  await button(panelEn.directoryClientsNext).click();
+  await expect(panel.getByText('ZZ1025')).toBeVisible();
+  await expect(panel.getByText('ZZ1000')).toHaveCount(0);
+  await expect(button(panelEn.directoryClientsNext)).toBeDisabled();
+
+  await button(panelEn.directoryClientsRemoveUnused.replace('{count}', '2')).click();
+  await expect(panel.getByRole('alert')).toContainText(panelEn.directoryClientsRemoveUnusedWarning);
+  await button(panelEn.directoryClientsRemoveUnusedConfirm.replace('{count}', '2')).click();
+  await expect(panel.getByRole('status')).toHaveText(
+    panelEn.directoryClientsRemovedUnused.replace('{count}', '2'),
+  );
+  await expect(button(panelEn.directoryClientsRemoveUnused.replace('{count}', '2'))).toHaveCount(0);
+  await expect(panel.getByText('Page 2 of 2')).toBeVisible();
 });

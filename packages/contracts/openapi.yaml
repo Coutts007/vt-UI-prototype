@@ -94,7 +94,8 @@ paths:
       summary: Browse the tailors who chose to be listed
       description: >
         Active tailors who opted in, and only what they chose to publish. Never an email, a user
-        id, a client count or anything about clients. Off in production builds until D27's flag is on.
+        id, a client count or anything about clients. Off in production until D27's flag and the
+        server setting directory_enabled are on; with the setting off it answers 404.
       x-rate-limit: 60 per minute
       parameters:
         - { name: search, in: query, schema: { type: string, maxLength: 60 } }
@@ -106,6 +107,7 @@ paths:
         '200':
           description: One page of listed tailors
           content: { application/json: { schema: { $ref: '#/components/schemas/TailorListingPage' } } }
+        '404': { $ref: '#/components/responses/Problem' }
         '422': { $ref: '#/components/responses/Problem' }
         '429': { $ref: '#/components/responses/RateLimited' }
   /tailors/{listing_id}/codes:
@@ -115,9 +117,10 @@ paths:
       summary: Get a new client code under the chosen tailor
       description: >
         Each call creates a new client with its own code, at once and without tailor approval (D27).
-        It takes no name or phone. A tailor who is not listed, or not active, answers 404.
+        It takes no name or phone. A tailor who is not listed, or not active, answers 404, and so
+        does every tailor while the server setting directory_enabled is off.
       x-audit: code_issue
-      x-rate-limit: 10 per hour, 30 per day
+      x-rate-limit: 10 per hour and 30 per day per address (IPv6 by /64), 50 per day per tailor, and a daily cap across all tailors. The last two are server settings.
       parameters:
         - { name: listing_id, in: path, required: true, schema: { type: string, format: uuid, maxLength: 36 } }
       responses:
@@ -330,6 +333,22 @@ paths:
           content: { application/json: { schema: { $ref: '#/components/schemas/DirectoryClientPage' } } }
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }
+  /me/directory-clients/remove-unused:
+    post:
+      operationId: removeUnusedDirectoryClients
+      tags: [clients]
+      summary: Remove the signed-in tailor's directory clients with no profile, no orders and no participant
+      description: Marks them for deletion, like deleteClient. One audit row holds the count and no codes.
+      x-audit: deletion
+      x-roles: [tailor]
+      x-ownership: own clients only
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: How many were removed
+          content: { application/json: { schema: { $ref: '#/components/schemas/DirectoryClientsRemoved' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
   /clients:
     get:
       operationId: listClients
@@ -407,7 +426,10 @@ paths:
       operationId: deleteClient
       tags: [clients]
       summary: Delete a client's data
-      description: The API marks the client for deletion at once, and the retention job removes the rows.
+      description: >
+        The API marks the client for deletion at once, and the retention job removes the rows. Active
+        orders answer client_has_orders. Collected orders or a study participant answer
+        client_records_retained: those records leave only through the retention job.
       x-audit: deletion
       x-roles: [tailor, admin]
       x-ownership: tailors delete their own clients only
@@ -1797,12 +1819,22 @@ components:
     DirectoryClientPage:
       type: object
       additionalProperties: false
-      required: [items, page, page_size, total]
+      required: [items, page, page_size, total, unused_total]
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/DirectoryClient' } }
         page: { type: integer, minimum: 1 }
         page_size: { type: integer, minimum: 1, maximum: 100 }
         total: { type: integer, minimum: 0 }
+        unused_total:
+          type: integer
+          minimum: 0
+          description: Across every page, how many removeUnusedDirectoryClients would remove now
+    DirectoryClientsRemoved:
+      type: object
+      additionalProperties: false
+      required: [removed]
+      properties:
+        removed: { type: integer, minimum: 0 }
     ClientInput:
       type: object
       additionalProperties: false
