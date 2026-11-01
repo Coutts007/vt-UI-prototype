@@ -20,7 +20,6 @@ from support import owner_execute
         "DELETE FROM audit_log",
         "UPDATE reference_measurement SET value_mm = 1000",
         "DELETE FROM reference_measurement",
-        "DELETE FROM measurement_profile",
         "DELETE FROM client",
         "UPDATE reference_correction SET value_mm = 1000",
         "DELETE FROM reference_correction",

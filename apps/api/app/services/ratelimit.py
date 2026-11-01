@@ -11,11 +11,14 @@ from app.security.ip_hash import ip_hash, network_hash
 
 
 class RateLimiter:
-    def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(self, clock: Callable[[], float] = time.monotonic, off: bool = False) -> None:
         self.clock = clock
+        self.off = off
         self.windows: dict[tuple[str, str], tuple[float, int]] = {}
 
     def hit(self, bucket: str, key: str, limit: int, seconds: int) -> None:
+        if self.off:
+            return
         now = self.clock()
         if len(self.windows) > 100_000:
             self.windows = {k: v for k, v in self.windows.items() if v[0] > now}

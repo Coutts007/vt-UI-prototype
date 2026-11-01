@@ -17,6 +17,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO vt_app;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO vt_app, vt_retention;
 REVOKE UPDATE, DELETE ON audit_log, reference_measurement, reference_correction FROM vt_app;
 -- Deleting a client would cascade to its profiles. The API marks it and retention removes it.
+-- Migration 0003 gives the API DELETE on measurement_profile, for deletion requests only.
 REVOKE DELETE ON measurement_profile, client FROM vt_app;
 REVOKE ALL ON alembic_version FROM vt_app;
 GRANT SELECT ON alembic_version TO vt_app;

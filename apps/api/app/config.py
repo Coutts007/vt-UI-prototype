@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     directory_enabled: bool = False
     directory_codes_per_tailor_day: int = Field(default=50, ge=1)
     directory_codes_global_day: int = Field(default=1000, ge=1)
+    # For end-to-end runs on one laptop only, where every test shares an address.
+    rate_limits_off: bool = False
 
     @model_validator(mode="after")
     def refuse_default_secrets(self) -> "Settings":
@@ -33,4 +35,6 @@ class Settings(BaseSettings):
             or len(self.jwt_secret) < 32
         ):
             raise ValueError("Production needs its own secrets")
+        if self.env == "production" and self.rate_limits_off:
+            raise ValueError("Production keeps its rate limits")
         return self

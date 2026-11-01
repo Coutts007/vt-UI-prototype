@@ -2,6 +2,14 @@
 
 The newest entry comes first. Every change or improvement adds a line in the same commit.
 
+## 2026-11-01: M8 ingest and public endpoints
+
+- `POST /profiles` runs the whole of backend-spec 9: size, image guard, strict parse, the validation order, consent, study, idempotency, versions, conflict rows, then server checks in one transaction. A check that fails internally is logged by type and the profile is still kept.
+- The image guard reads every JSON key and value on every route before any schema, so a picture is refused as a picture wherever it hides.
+- The server re-derives each profile with `vt_measure` under the profile's own rules. The mismatch rate on the seed profiles is 0. Static proportion bounds, change since last and height checks warn only.
+- `GET /rules/current` and `/rules/{version}` serve checked artifacts; the API refuses to start on a wrong checksum.
+- `POST /deletion-requests` and `POST /data-requests/access` work with proof of possession. The API role can now delete profiles (migration 0003), for deletion requests only, and still cannot delete clients or audit rows.
+
 ## 2026-11-01: M7 TypeScript measurement module (not yet run on a phone)
 
 - `src/measure/derive.ts` is a port of `vt_measure`. All 68 parity cases match in both languages, and `make parity` now runs both.
