@@ -52,7 +52,7 @@ def consent_json(row: Consent) -> dict[str, Any]:
     return body | ({"withdrawn_at": row.withdrawn_at.isoformat()} if row.withdrawn_at else {})
 
 
-def _measurement_json(row: Measurement) -> dict[str, Any]:
+def measurement_json(row: Measurement) -> dict[str, Any]:
     body: dict[str, Any] = {
         "site_code": row.site_code,
         "value_mm": row.value_mm,
@@ -126,6 +126,6 @@ async def profile_json(
         "marker_side": row.marker_side,
         "silhouette_front": row.silhouette_front,
         "silhouette_side": row.silhouette_side,
-        "measurements": [_measurement_json(m) for m in rows],
+        "measurements": [measurement_json(m) for m in rows],
         "server_checks": await checks_of(session, row.profile_id),
     }

@@ -1,7 +1,7 @@
 """Pydantic shapes mirroring packages/contracts/openapi.yaml."""
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any, Literal
 
 from pydantic import (
@@ -497,6 +497,252 @@ class ClientDataExport(BaseModel):
     profiles: list[MeasurementProfile]
     consents: list[ConsentRecord]
     order_count: int
+
+
+# --- The tailor's clients, conflicts, orders and audit (M9).
+
+GarmentType = Literal["shirt", "dress", "trousers", "suit_jacket", "skirt", "other"]
+OrderStatus = Literal["new", "cutting", "fitting", "ready", "collected"]
+ProfileStatus = Literal["final", "conflict", "superseded", "deleted"]
+ClientSource = Literal["tailor", "directory"]
+
+
+class FlagCounts(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    pass_: int = Field(alias="pass", ge=0)
+    check: int = Field(ge=0)
+    fail: int = Field(ge=0)
+
+
+class ClientInput(Input):
+    display_name: str | None = Field(default=None, max_length=60)
+    height_mm: int | None = Field(default=None, ge=1200, le=2200)
+
+
+class ClientCreated(BaseModel):
+    client_id: str
+    client_code: str
+    deep_link: str
+
+
+class ClientCodeRotated(BaseModel):
+    client_code: str
+
+
+class ClientSummary(BaseModel):
+    client_id: str
+    client_code: str
+    display_name: str | None
+    source: ClientSource
+    last_capture_at: datetime | None
+    flag_counts: FlagCounts | None
+    open_orders: int
+    has_new: bool
+    has_conflict: bool
+
+
+class ClientPage(BaseModel):
+    items: list[ClientSummary]
+    page: int
+    page_size: int
+    total: int
+
+
+class ClientDetail(BaseModel):
+    client_id: str
+    client_code: str
+    tailor_id: str
+    display_name: str | None
+    height_mm: int | None
+    created_at: datetime
+    deletion_requested: bool
+    source: ClientSource
+
+
+class ProfileSummary(BaseModel):
+    profile_id: str
+    version: int
+    captured_at: datetime
+    status: ProfileStatus
+    capture_mode: Literal["self", "assisted"]
+    flag_counts: FlagCounts
+    server_check_count: int
+
+
+class ClaimProfile(BaseModel):
+    profile_id: str
+    version: int
+    captured_at: datetime
+    received_at: datetime
+    status: ProfileStatus
+    claim_round: int
+    on_order: bool
+
+
+class ClaimWithdrawal(BaseModel):
+    consent_id: str
+    consent_version: str
+    given_at: datetime
+    withdrawn_at: datetime
+
+
+class ClaimDeletionRequest(BaseModel):
+    request_id: str
+    reason: Literal["delete", "withdraw_consent"]
+    status: Literal["received", "partially_done", "done", "rejected"]
+    received_at: datetime
+    details_cleared: bool
+
+
+class ClientClaim(BaseModel):
+    claimed: bool
+    claim_round: int
+    profiles: list[ClaimProfile]
+    withdrawals: list[ClaimWithdrawal]
+    deletion_requests: list[ClaimDeletionRequest]
+
+
+class ClaimReviewInput(Input):
+    supersede_profile_ids: list[uuid.UUID] = Field(default_factory=list, max_length=100)
+    clear_consent_ids: list[uuid.UUID] = Field(default_factory=list, max_length=100)
+    close_request_ids: list[uuid.UUID] = Field(default_factory=list, max_length=100)
+
+
+class ConflictSide(BaseModel):
+    profile_id: str
+    version: int
+    captured_at: datetime
+    measurements: list[Measurement]
+
+
+class Conflict(BaseModel):
+    conflict_id: str
+    client_id: str
+    client_code: str
+    server_profile: ConflictSide
+    incoming_profile: ConflictSide
+    created_at: datetime
+    resolved_at: datetime | None
+    resolution: Literal["newer", "server"] | None
+
+
+class ConflictResolution(Input):
+    keep: Literal["newer", "server"]
+
+
+class OrderItemInput(Input):
+    site_code: SiteCode
+    body_mm: int | None = Field(ge=100, le=3000)
+    ease_mm: int = Field(ge=0, le=300)
+    overridden: StrictBool
+    override_reason: str | None = Field(default=None, max_length=256)
+    flag_confirmed: StrictBool | None = None
+    pending_fitting: StrictBool | None = None
+
+
+class OrderItem(BaseModel):
+    site_code: SiteCode
+    body_mm: int | None
+    ease_mm: int
+    finished_mm: int | None
+    overridden: bool
+    override_reason: str | None = None
+    flag_confirmed: bool | None = None
+    pending_fitting: bool | None = None
+    confidence_flag: Flag
+
+
+class OrderInput(Input):
+    client_id: uuid.UUID
+    profile_id: uuid.UUID
+    garment_type: GarmentType
+    due_date: date
+    notes: str | None = Field(default=None, max_length=1000)
+    items: list[OrderItemInput] = Field(min_length=1, max_length=9)
+
+
+class OrderUpdate(Input):
+    status: OrderStatus | None = None
+    due_date: date | None = None
+    notes: str | None = Field(default=None, max_length=1000)
+    items: list[OrderItemInput] | None = Field(default=None, min_length=1, max_length=9)
+
+
+class OrderStep(BaseModel):
+    status: OrderStatus
+    at: datetime
+
+
+class Order(BaseModel):
+    order_id: str
+    order_no: str
+    client_id: str
+    client_code: str
+    display_name: str | None
+    profile_id: str
+    profile_version: int
+    garment_type: GarmentType
+    status: OrderStatus
+    due_date: date
+    notes: str
+    items: list[OrderItem]
+    created_at: datetime
+    updated_at: datetime
+    status_history: list[OrderStep]
+
+
+class OrderSummary(BaseModel):
+    order_id: str
+    order_no: str
+    client_id: str
+    client_code: str
+    display_name: str | None
+    profile_version: int
+    garment_type: GarmentType
+    status: OrderStatus
+    due_date: date
+    flagged_sites: int
+    has_conflict: bool
+
+
+class OrderPage(BaseModel):
+    items: list[OrderSummary]
+    page: int
+    page_size: int
+    total: int
+
+
+class EasePreset(Input):
+    garment_type: GarmentType
+    site_code: SiteCode
+    ease_mm: int = Field(ge=0, le=300)
+
+
+class EaseSuggestion(BaseModel):
+    site_code: SiteCode
+    ease_mm: int
+    source: Literal["history", "preset", "default"]
+    n: int
+
+
+class AuditEntry(BaseModel):
+    log_id: str
+    occurred_at: datetime
+    actor_type: Literal["user", "client", "system"]
+    user_email: str | None
+    role: Role | None
+    action: str
+    entity_type: str
+    entity_id: str
+    summary: str
+
+
+class AuditPage(BaseModel):
+    items: list[AuditEntry]
+    page: int
+    page_size: int
+    total: int
 
 
 class RulesArtifact(BaseModel):

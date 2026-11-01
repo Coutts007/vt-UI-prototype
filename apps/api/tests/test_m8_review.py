@@ -113,8 +113,12 @@ async def test_refusal_is_identical_whether_or_not_the_code_exists(
         ),
         await client.post(route, json={"client_code": FREE_CODE, **extra}),
         await client.post(route, json={"client_code": "ZZ9999", **extra}, headers=proof()),
-        await client.post(route, json={"client_code": "AB1002", **extra}, headers=proof()),
     ]
+    if route == ACCESS:
+        # A deletion on an unclaimed code that holds data goes to its tailor instead (D45).
+        replies.append(
+            await client.post(route, json={"client_code": "AB1002", **extra}, headers=proof())
+        )
     assert {r.status_code for r in replies} == {403}
     assert len({r.content for r in replies}) == 1, "unknown, unclaimed and wrong must look the same"
 

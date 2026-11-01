@@ -424,6 +424,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/clients/{client_id}/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: components["parameters"]["ClientId"];
+            };
+            cookie?: never;
+        };
+        /** Who holds this code, and what was done under each claim (D45) */
+        get: operations["getClientClaim"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clients/{client_id}/claim/free": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: components["parameters"]["ClientId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Free the code, so a client on a new phone can claim it again
+         * @description The next phone to upload claims the code, and it can read and delete only what it uploads itself. Nothing already stored changes, and a withdrawal stays until the tailor clears it.
+         */
+        post: operations["freeClientClaim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clients/{client_id}/claim/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: components["parameters"]["ClientId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Explicitly supersede profiles, clear withdrawals or close requests on a freed code
+         * @description Only what the tailor names changes, and never automatically. A held code answers validation_failed: free it first. A profile on an order cannot be superseded.
+         */
+        post: operations["reviewClientClaim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/profiles/{profile_id}": {
         parameters: {
             query?: never;
@@ -1018,7 +1081,7 @@ export interface components {
         /** @enum {string} */
         ProfileStatus: "final" | "conflict" | "superseded" | "deleted";
         /** @enum {string} */
-        AuditAction: "register" | "login" | "login_failed" | "logout" | "settings_change" | "profile_ingest" | "client_code_claim" | "profile_view" | "deletion_request" | "access_request" | "deletion" | "code_issue" | "code_rotate" | "client_update" | "conflict_resolve" | "order_create" | "order_update" | "order_delete" | "status_change" | "override" | "export" | "share" | "approve" | "account_reject" | "account_disable" | "account_enable" | "account_create" | "rules_register" | "rules_freeze" | "rederive" | "participant_create" | "participant_update" | "reference_entry" | "reference_correction";
+        AuditAction: "register" | "login" | "login_failed" | "logout" | "settings_change" | "profile_ingest" | "client_code_claim" | "profile_view" | "deletion_request" | "access_request" | "deletion" | "code_issue" | "code_rotate" | "code_reset" | "claim_review" | "client_update" | "conflict_resolve" | "order_create" | "order_update" | "order_delete" | "status_change" | "override" | "export" | "share" | "approve" | "account_reject" | "account_disable" | "account_enable" | "account_create" | "rules_register" | "rules_freeze" | "rederive" | "participant_create" | "participant_update" | "reference_entry" | "reference_correction";
         PublicSettings: {
             study_mode: boolean;
             consent_version: string;
@@ -1436,6 +1499,50 @@ export interface components {
             created_at: string;
             deletion_requested: boolean;
             source: components["schemas"]["ClientSource"];
+        };
+        ClaimProfile: {
+            /** Format: uuid */
+            profile_id: string;
+            version: number;
+            /** Format: date-time */
+            captured_at: string;
+            /** Format: date-time */
+            received_at: string;
+            status: components["schemas"]["ProfileStatus"];
+            claim_round: number;
+            on_order: boolean;
+        };
+        ClaimWithdrawal: {
+            /** Format: uuid */
+            consent_id: string;
+            consent_version: string;
+            /** Format: date-time */
+            given_at: string;
+            /** Format: date-time */
+            withdrawn_at: string;
+        };
+        ClaimDeletionRequest: {
+            /** Format: uuid */
+            request_id: string;
+            /** @enum {string} */
+            reason: "delete" | "withdraw_consent";
+            /** @enum {string} */
+            status: "received" | "partially_done" | "done" | "rejected";
+            /** Format: date-time */
+            received_at: string;
+            details_cleared: boolean;
+        };
+        ClientClaim: {
+            claimed: boolean;
+            claim_round: number;
+            profiles: components["schemas"]["ClaimProfile"][];
+            withdrawals: components["schemas"]["ClaimWithdrawal"][];
+            deletion_requests: components["schemas"]["ClaimDeletionRequest"][];
+        };
+        ClaimReviewInput: {
+            supersede_profile_ids?: string[];
+            clear_consent_ids?: string[];
+            close_request_ids?: string[];
         };
         OrderItemInput: {
             site_code: components["schemas"]["SiteCode"];
@@ -2521,6 +2628,86 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    getClientClaim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: components["parameters"]["ClientId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The claim and what was done under it */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientClaim"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    freeClientClaim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: components["parameters"]["ClientId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The claim after freeing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientClaim"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    reviewClientClaim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_id: components["parameters"]["ClientId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClaimReviewInput"];
+            };
+        };
+        responses: {
+            /** @description The claim after the review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientClaim"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
     getProfile: {
