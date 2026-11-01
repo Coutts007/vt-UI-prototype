@@ -1,92 +1,54 @@
-import React, { useState, useEffect } from 'react';
-import { useI18n } from '../../i18n';
-import { Order, MeasurementProfile } from '../../types/api';
-import { api } from '../../api/client';
-import { OrderSheetPreview } from '../../components/ui/OrderSheetPreview';
-import { ChevronLeft } from 'lucide-react';
+// Asks the server for the sheet. The server renders it in M10; until then this answers honestly.
+import React, { useState } from 'react';
+import { apiClient } from '../../api/instance';
+import { Button } from '../../components/ui/Button';
+import { BackLink, Card, hintClass, Title } from './common';
+import { useTailorText } from './tailorText';
 
-interface OrderSheetViewProps {
-  orderId: string;
-  onNavigate: (path: string) => void;
-}
-
-export const OrderSheetView: React.FC<OrderSheetViewProps> = ({ orderId, onNavigate }) => {
-  const { t } = useI18n();
-
-  const [order, setOrder] = useState<Order | null>(null);
-  const [profile, setProfile] = useState<MeasurementProfile | null>(null);
+export const OrderSheetView: React.FC<{ orderId: string; onNavigate: (path: string) => void }> = ({ orderId, onNavigate }) => {
+  const tx = useTailorText();
   const [includeName, setIncludeName] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [sheet, setSheet] = useState<{ png_url: string; pdf_url: string; share_text: string } | null>(null);
 
-  useEffect(() => {
-    loadOrder();
-  }, [orderId]);
-
-  const loadOrder = async () => {
-    setLoading(true);
+  const generate = async () => {
+    setBusy(true);
+    setFailed(false);
     try {
-      const ord = await api.getOrderById(orderId);
-      if (ord) {
-        setOrder(ord);
-        const prof = await api.getProfileById(ord.profile_id);
-        setProfile(prof);
-      }
+      setSheet(
+        await apiClient.post('/orders/{order_id}/sheets', {
+          path: { order_id: orderId },
+          body: { include_name: includeName },
+        }),
+      );
     } catch {
-      // ignore
+      setFailed(true);
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   };
-
-  const handleShareWhatsApp = async () => {
-    if (!order) return;
-    const res = await api.generateSpecSheet(order.order_id, includeName);
-    await api.logShare(res.sheet_id, 'whatsapp_share');
-
-    if (typeof navigator !== 'undefined' && navigator.share) {
-      navigator.share({ text: res.share_text }).catch(() => {});
-    } else {
-      window.open(`https://wa.me/?text=${encodeURIComponent(res.share_text)}`, '_blank', 'noopener,noreferrer');
-    }
-  };
-
-  const handleDownload = async () => {
-    if (!order) return;
-    const res = await api.generateSpecSheet(order.order_id, includeName);
-    await api.logShare(res.sheet_id, 'download');
-    window.print();
-  };
-
-  const handlePrint = async () => {
-    if (!order) return;
-    const res = await api.generateSpecSheet(order.order_id, includeName);
-    await api.logShare(res.sheet_id, 'print');
-    window.print();
-  };
-
-  if (loading || !order) {
-    return <div className="p-8 text-center text-sm text-slate-600">Loading specification sheet…</div>;
-  }
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl mx-auto pb-12">
-      <button
-        onClick={() => onNavigate(`/t/orders/${order.order_id}`)}
-        className="text-xs text-[var(--vt-ink-muted,#5C554C)] hover:text-[var(--vt-ink,#1F1C18)] flex items-center gap-1 cursor-pointer font-medium"
-      >
-        <ChevronLeft className="w-4 h-4" />
-        <span>Back to order {order.order_no}</span>
-      </button>
-
-      <OrderSheetPreview
-        order={order}
-        profile={profile}
-        includeName={includeName}
-        onToggleIncludeName={setIncludeName}
-        onShareWhatsApp={handleShareWhatsApp}
-        onDownload={handleDownload}
-        onPrint={handlePrint}
-      />
+    <div className="flex flex-col gap-4 max-w-xl mx-auto">
+      <BackLink onClick={() => onNavigate(`/t/orders/${orderId}`)} label={tx('back')} />
+      <Title>{tx('sheetTitle')}</Title>
+      <Card>
+        <label className="flex items-center gap-2 min-h-[48px] text-sm cursor-pointer">
+          <input type="checkbox" className="w-5 h-5" checked={includeName} onChange={(e) => setIncludeName(e.target.checked)} />
+          {tx('sheetIncludeName')}
+        </label>
+        <p className={hintClass}>{tx('sheetNameNote')}</p>
+        <Button loading={busy} onClick={generate}>{tx('sheetGenerate')}</Button>
+        {failed && <p role="alert" className="text-sm text-rose-800">{tx('sheetFailed')}</p>}
+        {sheet && (
+          <div className="flex flex-col gap-2">
+            <pre className="text-xs whitespace-pre-wrap">{sheet.share_text}</pre>
+            <a className="underline min-h-[48px] inline-flex items-center" href={sheet.png_url}>{tx('sheetDownloadPng')}</a>
+            <a className="underline min-h-[48px] inline-flex items-center" href={sheet.pdf_url}>{tx('sheetDownloadPdf')}</a>
+          </div>
+        )}
+      </Card>
     </div>
   );
 };

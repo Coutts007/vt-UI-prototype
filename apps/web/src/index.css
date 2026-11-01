@@ -1,21 +1,21 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 :root {
-  --vt-chalk: #F7F3EC;
-  --vt-paper: #FFFFFF;
-  --vt-ink: #1F1C18;
-  --vt-ink-muted: #5C554C;
-  --vt-thread: #2E3A87;
-  --vt-thread-ink: #FFFFFF;
-  --vt-kitenge: #C8531E;
-  --vt-line: #DDD5C8;
-  --vt-pass: #1E7B45;
-  --vt-check: #B26B00;
-  --vt-fail: #B3261E;
-  --vt-capture-bg: #0E0E10;
-  --vt-border-ok: #1E7B45;
-  --vt-border-wait: #D97706;
-  --vt-border-stop: #DC2626;
+  --vt-chalk: #f7f3ec;
+  --vt-paper: #ffffff;
+  --vt-ink: #1f1c18;
+  --vt-ink-muted: #5c554c;
+  --vt-thread: #2e3a87;
+  --vt-thread-ink: #ffffff;
+  --vt-kitenge: #c8531e;
+  --vt-line: #ddd5c8;
+  --vt-pass: #1e7b45;
+  --vt-check: #b26b00;
+  --vt-fail: #b3261e;
+  --vt-capture-bg: #0e0e10;
+  --vt-border-ok: #1e7b45;
+  --vt-border-wait: #d97706;
+  --vt-border-stop: #dc2626;
 }
 
 body {
@@ -23,7 +23,13 @@ body {
   padding: 0;
   background-color: var(--vt-chalk);
   color: var(--vt-ink);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Noto Sans',
+    sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -43,9 +49,12 @@ body {
 /* Print stylesheet for Specification Sheet */
 @media print {
   body {
-    background-color: #FFFFFF !important;
+    background-color: #ffffff !important;
   }
-  header, nav, aside, button {
+  header,
+  nav,
+  aside,
+  button {
     display: none !important;
   }
 }
@@ -76,4 +85,17 @@ body {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Sunlight mode for the tailor's screens: black on white, solid lines. */
+:root[data-contrast='high'] {
+  --vt-chalk: #ffffff;
+  --vt-paper: #ffffff;
+  --vt-ink: #000000;
+  --vt-ink-muted: #000000;
+  --vt-line: #000000;
+  --vt-thread: #000050;
+  --vt-pass: #004d20;
+  --vt-check: #5c3400;
+  --vt-fail: #7a0000;
 }
