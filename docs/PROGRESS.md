@@ -32,6 +32,7 @@ The newest entry comes first. Every change or improvement adds a line in the sam
 
 ## 2026-11-01: Tailor directory after the independent review (D27)
 
+- Fixed an intermittent browser test: it reloaded the page with a directory-issued code, which the mock forgets, so it passed only if its click beat the mock's 404. It now uses a seeded code.
 - **Stays off in production** until both M8 and M11's cleanup job exist. The API now has its own switch, `DIRECTORY_ENABLED`, off by default: the public directory endpoints and the listing opt-in answer 404 `not_found` while it is off. A tailor can still see and clear existing codes.
 - Issuing is capped at 50 codes a day per tailor and 1000 a day overall, both settings, on top of the limits per address, refused with `rate_limited` and `Retry-After`. IPv6 now counts per /64 on the directory and code check endpoints. IPv4 is unchanged.
 - Removing a client is refused with the new `client_records_retained` for collected orders or a study participant, for tailors and admins alike. Those records leave only through the retention job. A measured client with neither can still be removed.
