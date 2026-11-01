@@ -44,6 +44,7 @@ test-api:
 parity:
 	uv run python packages/parity-fixtures/generate.py
 	uv run pytest packages/parity-fixtures
+	pnpm --filter @vt/web exec vitest run tests/unit/parity.test.ts
 	git diff --exit-code -- packages/parity-fixtures/cases
 	test -z "$$(git status --porcelain -- packages/parity-fixtures/cases)"
 

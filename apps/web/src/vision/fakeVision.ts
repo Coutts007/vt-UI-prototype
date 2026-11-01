@@ -179,12 +179,17 @@ function square(cx: number, cy: number, w: number, h: number): MarkerObs {
   };
 }
 
-function curve(base: number, wave: number): (number | null)[] {
+/** A plausible body by position down the mask: a neck, then a torso narrowest at the waist. */
+function curve(neck: number, torso: number, slope: number, centre: number): (number | null)[] {
   return Array.from({ length: 101 }, (_, i) => {
-    const value = base + wave * Math.sin((i / 100) * Math.PI * 3);
-    return Math.round(Math.max(0, Math.min(400, value)) * 10) / 10;
+    const u = i / 100;
+    const value = u < 0.17 ? neck : torso + Math.abs(u - centre) * slope;
+    return Math.round(value * 10) / 10;
   });
 }
+
+const U_WAIST = 0.394;
+const U_BUST = 0.275;
 
 function silhouette(view: View, b: Body, crotch: boolean): SilhouetteFront | SilhouetteSide {
   const shared = {
@@ -197,11 +202,11 @@ function silhouette(view: View, b: Body, crotch: boolean): SilhouetteFront | Sil
   if (view === 'front') {
     return {
       ...shared,
-      half_width_mm: curve(150, 30),
+      half_width_mm: curve(58, 135, 150, U_WAIST),
       crotch_y_px: crotch ? Math.round((b.top + 0.55 * b.frac) * IMAGE_H) : null,
     };
   }
-  return { ...shared, half_depth_mm: curve(100, 20), anterior_mm: curve(90, 15) };
+  return { ...shared, half_depth_mm: curve(55, 100, 80, U_WAIST), anterior_mm: curve(55, 110, -100, U_BUST) };
 }
 
 export class FakeVisionWorker implements WorkerLike {

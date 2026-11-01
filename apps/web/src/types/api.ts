@@ -21,7 +21,9 @@ export type FlagReason =
   | 'crotch_not_found'
   | 'marker_weak'
   | 'waist_level_mismatch'
-  | 'view_failed';
+  | 'chest_level_mismatch'
+  | 'view_failed'
+  | 'free_arm_unknown';
 
 export type CheckState = 'pass' | 'fail' | 'skipped';
 
