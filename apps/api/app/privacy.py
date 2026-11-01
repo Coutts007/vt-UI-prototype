@@ -4,6 +4,7 @@ It reads every key and value before any schema does, so a picture is named as a 
 wherever it hides, even in a field that would have been refused anyway.
 """
 
+import html
 import json
 import re
 import unicodedata
@@ -14,21 +15,29 @@ MAX_STRING = 2048
 MAX_BASE64_RUN = 1024
 # Matches each whole run once and moves on, so the cost is linear in the text's length.
 BASE64_RUN = re.compile(r"[A-Za-z0-9+/_-]+")
-PERCENT_LAYERS = 3
+# Enough for any honest text. A string is at most 2048 characters, so this stays cheap.
+ENCODED_LAYERS = 8
+HIDDEN_CATEGORIES = {"Cf", "Cc", "Cs", "Co", "Cn", "Mn", "Me", "Mc"}
+# Letters and symbols by category, yet blank on screen: Hangul fillers, Braille blank, Khmer vowels.
+BLANK_MARKS = frozenset("\u115f\u1160\u17b4\u17b5\u2800\u3164\uffa0")
 
 
 def _visible(text: str) -> str:
-    """Fullwidth forms become plain, and characters nobody can see (zero-width, BOM) go."""
-    folded = unicodedata.normalize("NFKC", text)
-    return "".join(c for c in folded if unicodedata.category(c) not in {"Cf", "Cc"})
+    """Compatibility forms become plain, accents come off, and what nobody can see goes."""
+    folded = unicodedata.normalize("NFKD", text)
+    return "".join(
+        c
+        for c in folded
+        if unicodedata.category(c) not in HIDDEN_CATEGORIES and c not in BLANK_MARKS
+    )
 
 
 def _normalised(text: str) -> str:
-    if text.isascii() and "%" not in text and text.isprintable():
+    if text.isascii() and "%" not in text and "&" not in text and text.isprintable():
         return text
     plain = _visible(text)
-    for _ in range(PERCENT_LAYERS):
-        decoded = unquote(plain)
+    for _ in range(ENCODED_LAYERS):
+        decoded = html.unescape(unquote(plain))
         if decoded == plain:
             break
         plain = _visible(decoded)

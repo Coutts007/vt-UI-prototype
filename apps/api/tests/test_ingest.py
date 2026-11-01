@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import copy
+import hashlib
 import json
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -25,7 +26,7 @@ from app.models import (
 from app.services.rules import load_rules
 from fastapi import FastAPI
 from httpx import AsyncClient
-from ingest_support import FREE_CODE, ROUTE, SEED, key, payload
+from ingest_support import FREE_CODE, ROUTE, SECRET, SEED, key, payload
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from support import owner_execute
@@ -281,10 +282,21 @@ async def test_consent_is_inserted_once(client: AsyncClient, session: AsyncSessi
     assert count == 1
 
 
+async def claimed(owner_url: str, code: str) -> None:
+    """A code that holds data is never claimed by an upload (D45), so tests set it up directly."""
+    digest = hashlib.sha256(SECRET.encode()).hexdigest()
+    await owner_execute(
+        owner_url, f"UPDATE client SET secret_hash='{digest}' WHERE client_code='{code}'"
+    )
+
+
 STUDY = {"set_no": 1, "lighting": "window", "distance_m": 2.2, "clothing_fit_observed": "fitted"}
 
 
-async def test_study_block_needs_the_matching_participant(client: AsyncClient) -> None:
+async def test_study_block_needs_the_matching_participant(
+    client: AsyncClient, owner_url: str
+) -> None:
+    await claimed(owner_url, "CD2003")
     other = SEED["participants"][0]["participant_code"]
     body = payload(code="CD2003")
     body["session"]["study"] = {**STUDY, "participant_code": other}
@@ -297,16 +309,18 @@ async def test_study_block_refused_with_study_mode_off(client: AsyncClient, owne
         owner_url, "UPDATE app_setting SET value = 'false' WHERE key = 'study_mode'"
     )
     code = participant["client_code"]
+    await claimed(owner_url, code)
     body = payload(code=code, version=50)
     body["session"]["study"] = {**STUDY, "participant_code": participant["participant_code"]}
     assert (await post(client, body)).status_code == 422
 
 
 async def test_study_block_accepted_when_it_matches(
-    client: AsyncClient, session: AsyncSession
+    client: AsyncClient, session: AsyncSession, owner_url: str
 ) -> None:
     participant = SEED["participants"][0]
     code = participant["client_code"]
+    await claimed(owner_url, code)
     body = payload(code=code, version=50)
     body["session"]["study"] = {**STUDY, "participant_code": participant["participant_code"]}
     assert (await post(client, body)).status_code == 201

@@ -175,7 +175,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ask for a client's data to be deleted, or withdraw consent */
+        /**
+         * Ask for a client's data to be deleted, or withdraw consent
+         * @description An unclaimed code with no profiles replies 202 done and nothing changes: there is nothing to delete, whatever the secret. Any other code needs its secret, or gets client_secret_refused.
+         */
         post: operations["requestDeletion"];
         delete?: never;
         options?: never;
@@ -1015,7 +1018,7 @@ export interface components {
         /** @enum {string} */
         ProfileStatus: "final" | "conflict" | "superseded" | "deleted";
         /** @enum {string} */
-        AuditAction: "register" | "login" | "login_failed" | "logout" | "settings_change" | "profile_ingest" | "profile_view" | "deletion_request" | "access_request" | "deletion" | "code_issue" | "code_rotate" | "client_update" | "conflict_resolve" | "order_create" | "order_update" | "order_delete" | "status_change" | "override" | "export" | "share" | "approve" | "account_reject" | "account_disable" | "account_enable" | "account_create" | "rules_register" | "rules_freeze" | "rederive" | "participant_create" | "participant_update" | "reference_entry" | "reference_correction";
+        AuditAction: "register" | "login" | "login_failed" | "logout" | "settings_change" | "profile_ingest" | "client_code_claim" | "profile_view" | "deletion_request" | "access_request" | "deletion" | "code_issue" | "code_rotate" | "client_update" | "conflict_resolve" | "order_create" | "order_update" | "order_delete" | "status_change" | "override" | "export" | "share" | "approve" | "account_reject" | "account_disable" | "account_enable" | "account_create" | "rules_register" | "rules_freeze" | "rederive" | "participant_create" | "participant_update" | "reference_entry" | "reference_correction";
         PublicSettings: {
             study_mode: boolean;
             consent_version: string;
@@ -1793,7 +1796,7 @@ export interface components {
         };
     };
     parameters: {
-        /** @description The phone's secret for this client code, 64 lowercase hex characters (256 random bits). The first accepted upload claims an unclaimed code. After that, this is the proof of possession. It is optional in the schema only because a missing one must get the same refusal as a wrong one. */
+        /** @description The phone's secret for this client code, 64 lowercase hex characters (256 random bits). The first accepted upload claims an unclaimed code that holds no profiles. An unclaimed code that holds profiles is claimed only by an exact replay of a stored body. After that, this is the proof of possession. It is optional in the schema only because a missing one must get the same refusal as a wrong one. */
         ClientSecret: string;
         Page: number;
         PageSize: number;
@@ -2004,7 +2007,7 @@ export interface operations {
             header: {
                 /** @description The profile_id */
                 "Idempotency-Key": string;
-                /** @description The phone's secret for this client code, 64 lowercase hex characters (256 random bits). The first accepted upload claims an unclaimed code. After that, this is the proof of possession. It is optional in the schema only because a missing one must get the same refusal as a wrong one. */
+                /** @description The phone's secret for this client code, 64 lowercase hex characters (256 random bits). The first accepted upload claims an unclaimed code that holds no profiles. An unclaimed code that holds profiles is claimed only by an exact replay of a stored body. After that, this is the proof of possession. It is optional in the schema only because a missing one must get the same refusal as a wrong one. */
                 "X-Client-Secret"?: components["parameters"]["ClientSecret"];
                 /** @description The app sending now, which may be newer than the one that captured. Without it, the capture-time session.app_version is read. */
                 "X-App-Version"?: string;
@@ -2041,7 +2044,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description The phone's secret for this client code, 64 lowercase hex characters (256 random bits). The first accepted upload claims an unclaimed code. After that, this is the proof of possession. It is optional in the schema only because a missing one must get the same refusal as a wrong one. */
+                /** @description The phone's secret for this client code, 64 lowercase hex characters (256 random bits). The first accepted upload claims an unclaimed code that holds no profiles. An unclaimed code that holds profiles is claimed only by an exact replay of a stored body. After that, this is the proof of possession. It is optional in the schema only because a missing one must get the same refusal as a wrong one. */
                 "X-Client-Secret"?: components["parameters"]["ClientSecret"];
             };
             path?: never;
@@ -2071,7 +2074,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description The phone's secret for this client code, 64 lowercase hex characters (256 random bits). The first accepted upload claims an unclaimed code. After that, this is the proof of possession. It is optional in the schema only because a missing one must get the same refusal as a wrong one. */
+                /** @description The phone's secret for this client code, 64 lowercase hex characters (256 random bits). The first accepted upload claims an unclaimed code that holds no profiles. An unclaimed code that holds profiles is claimed only by an exact replay of a stored body. After that, this is the proof of possession. It is optional in the schema only because a missing one must get the same refusal as a wrong one. */
                 "X-Client-Secret"?: components["parameters"]["ClientSecret"];
             };
             path?: never;

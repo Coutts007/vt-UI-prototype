@@ -135,7 +135,7 @@ paths:
       operationId: syncProfile
       tags: [profiles]
       summary: Sync a profile from a phone
-      x-audit: profile_ingest
+      x-audit: profile_ingest or client_code_claim
       x-rate-limit: 30 per hour per IP, 10 per hour per client code
       parameters:
         - name: Idempotency-Key
@@ -170,6 +170,9 @@ paths:
       operationId: requestDeletion
       tags: [profiles]
       summary: Ask for a client's data to be deleted, or withdraw consent
+      description: >-
+        An unclaimed code with no profiles replies 202 done and nothing changes: there is nothing to
+        delete, whatever the secret. Any other code needs its secret, or gets client_secret_refused.
       x-audit: deletion_request
       x-rate-limit: 5 per hour
       parameters:
@@ -1153,7 +1156,9 @@ components:
       required: false
       description: >-
         The phone's secret for this client code, 64 lowercase hex characters (256 random bits). The
-        first accepted upload claims an unclaimed code. After that, this is the proof of possession.
+        first accepted upload claims an unclaimed code that holds no profiles. An unclaimed code that
+        holds profiles is claimed only by an exact replay of a stored body. After that, this is the
+        proof of possession.
         It is optional in the schema only because a missing one must get the same refusal as a wrong one.
       schema: { type: string, maxLength: 64 }
     Page: { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
@@ -1262,6 +1267,7 @@ components:
         - logout
         - settings_change
         - profile_ingest
+        - client_code_claim
         - profile_view
         - deletion_request
         - access_request

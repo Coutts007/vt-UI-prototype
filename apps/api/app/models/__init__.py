@@ -18,6 +18,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     func,
     text,
 )
@@ -152,6 +153,8 @@ class Client(Base):
     created_at: Mapped[datetime] = now()
     # The hash of the phone's secret, set by the first accepted upload (D45).
     secret_hash: Mapped[str | None] = mapped_column(String(64))
+    # True only when a replay of a stored body proved the claim, so deletion can reach the details.
+    claimed_over_data: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     deleted_at: Mapped[datetime | None] = stamp()
     previous_code: Mapped[str | None] = mapped_column(String(6))
     source: Mapped[str] = mapped_column(String(10), server_default="tailor")
@@ -438,6 +441,9 @@ class DeletedProfile(Base):
     __tablename__ = "deleted_profile"
     profile_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     deleted_at: Mapped[datetime] = now()
+    client_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("client.client_id", ondelete="CASCADE")
+    )
 
 
 class Conflict(Base):

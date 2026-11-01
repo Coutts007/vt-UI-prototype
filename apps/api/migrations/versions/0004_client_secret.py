@@ -4,6 +4,8 @@ Revision ID: 0004
 Revises: 0003
 """
 
+import warnings
+
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
@@ -38,6 +40,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    warnings.warn(
+        "This downgrade reopens every claimed code to the next caller and forgets every deleted "
+        "profile id, so a phone's replay can bring deleted measurements back. Take a backup first, "
+        "and only do this on a server no client phone can reach.",
+        UserWarning,
+        stacklevel=1,
+    )
     op.execute("DELETE FROM server_check WHERE kind = 'rederive_failed'")
     op.drop_constraint("kind_allowed", "server_check", type_="check")
     op.create_check_constraint("kind_allowed", "server_check", f"kind IN ({KINDS})")

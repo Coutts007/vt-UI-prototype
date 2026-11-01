@@ -51,7 +51,9 @@ def request(reason: str = "delete", code: str = FREE_CODE) -> dict[str, Any]:
 async def claim(session: AsyncSession, code: str) -> None:
     """Seed clients come unclaimed, as a client would after a tailor's reset."""
     await session.execute(
-        update(Client).where(Client.client_code == code).values(secret_hash=hash_secret(SECRET))
+        update(Client)
+        .where(Client.client_code == code)
+        .values(secret_hash=hash_secret(SECRET), claimed_over_data=True)
     )
     await session.commit()
 
@@ -61,6 +63,7 @@ async def test_deletion_removes_every_unreferenced_profile_and_clears_details(
 ) -> None:
     first = await stored(client)
     second = await stored(client, 2)
+    await claim(session, FREE_CODE)
     reply = await client.post(DELETE, json=request(), headers=proof())
     assert reply.status_code == 202
     fits_contract("DeletionRequestReceipt", reply.json())

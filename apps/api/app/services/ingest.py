@@ -224,6 +224,30 @@ async def _server_checks(
     return found
 
 
+async def _holds_data(session: AsyncSession, client: Client) -> bool:
+    found = await session.scalar(
+        select(exists().where(MeasurementProfile.client_id == client.client_id))
+    )
+    return bool(found)
+
+
+def _claim(
+    request: Request, session: AsyncSession, client: Client, secret: str, *, over_data: bool
+) -> None:
+    client.secret_hash = hash_secret(secret)
+    client.claimed_over_data = over_data
+    audit.record(
+        session,
+        actor_type="client",
+        action="client_code_claim",
+        entity_type="client",
+        entity_id=client.client_id,
+        client_id=client.client_id,
+        ip_hash=ip_hash(request),
+        detail={"over_data": over_data},
+    )
+
+
 async def ingest(
     request: Request,
     session: AsyncSession,
@@ -246,16 +270,32 @@ async def ingest(
     claimed = client.secret_hash is not None
     if not (matches(secret, client.secret_hash) if claimed else well_formed(secret)):
         raise ApiError("client_secret_refused")
-    request.app.state.limiter.hit("profile-code", body.client_code, CODE_LIMIT, HOUR)
 
-    if await session.get(DeletedProfile, body.profile_id):
-        raise ApiError("profile_deleted")
     payload_hash = canonical_hash(raw)
     existing = await session.get(MeasurementProfile, body.profile_id)
+    if (
+        existing
+        and existing.client_id == client.client_id
+        and existing.payload_sha256 == payload_hash
+    ):
+        # Knowing a whole stored body is the proof that closes a lost reply after a reset.
+        if not claimed:
+            assert secret is not None
+            _claim(request, session, client, secret, over_data=True)
+        reply = await _reply(session, existing)
+        await session.commit()
+        return reply
+    # A code that holds data waits for its tailor: an upload must not make anyone its owner (D45).
+    if not claimed and await _holds_data(session, client):
+        raise ApiError("client_secret_refused")
+    # One refusal for an id that is another client's, live or deleted (D45).
+    deleted = await session.get(DeletedProfile, body.profile_id)
+    if deleted and deleted.client_id not in (None, client.client_id):
+        raise invalid("profile_id", "profile_id_reused")
+    if deleted:
+        raise ApiError("profile_deleted")
     if existing:
-        if existing.payload_sha256 != payload_hash:
-            raise invalid("profile_id", "profile_id_reused")
-        return await _reply(session, existing)
+        raise invalid("profile_id", "profile_id_reused")
 
     # The app sending now decides, so an updated app can send what an old one captured (D42).
     if older_app(sending_version or body.session.app_version, settings["min_app_version"]):
@@ -265,6 +305,9 @@ async def ingest(
 
     if await session.get(CaptureSession, body.session.session_id):
         raise invalid("session.session_id", "session_id_reused")
+
+    # Last, so refused and replayed requests cannot use up the honest client's hour.
+    request.app.state.limiter.hit("profile-code", body.client_code, CODE_LIMIT, HOUR)
 
     newest = await session.scalar(
         select(MeasurementProfile)
@@ -319,7 +362,7 @@ async def ingest(
         session.add(row)
         if not claimed:
             assert secret is not None
-            client.secret_hash = hash_secret(secret)
+            _claim(request, session, client, secret, over_data=False)
         await session.flush()
         for item in body.measurements:
             session.add(

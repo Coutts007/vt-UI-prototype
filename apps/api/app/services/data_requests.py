@@ -1,10 +1,11 @@
 """Deletion and access requests from a client, with proof of possession (backend-spec 14.5)."""
 
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import Request
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, exists, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import ApiError
@@ -25,6 +26,7 @@ from app.services.profiles import consent_json, profile_json
 
 BACKUPS = "Copies leave the backups within 30 days."
 RETAINED = " Profiles on an order stay until 30 days after the order is collected."
+NOTHING_HELD = "Nothing is held for this code."
 
 
 async def _proven_client(
@@ -33,15 +35,33 @@ async def _proven_client(
     """One answer for an unknown code, an unclaimed one and a wrong secret (D45)."""
     query = select(Client).where(Client.client_code == code, Client.deleted_at.is_(None))
     client = await session.scalar(query.with_for_update(key_share=True) if lock else query)
+    return _proven(client, secret)
+
+
+def _proven(client: Client | None, secret: str | None) -> Client:
     if not matches(secret, client.secret_hash if client else None) or client is None:
         raise ApiError("client_secret_refused")
     return client
 
 
+async def _has_profiles(session: AsyncSession, client: Client) -> bool:
+    found = await session.scalar(
+        select(exists().where(MeasurementProfile.client_id == client.client_id))
+    )
+    return bool(found)
+
+
 async def request_deletion(
     request: Request, session: AsyncSession, body: DeletionRequestInput, secret: str | None
 ) -> dict[str, Any]:
-    client = await _proven_client(session, body.client_code, secret, lock=True)
+    query = select(Client).where(
+        Client.client_code == body.client_code, Client.deleted_at.is_(None)
+    )
+    found = await session.scalar(query.with_for_update(key_share=True))
+    if found and found.secret_hash is None and not await _has_profiles(session, found):
+        # The upload never arrived. Nothing changes, so a stranger gains nothing by asking (D45).
+        return {"request_id": str(uuid.uuid4()), "status": "done", "note": NOTHING_HELD}
+    client = _proven(found, secret)
     moment = datetime.now(UTC)
     if body.reason == "withdraw_consent":
         await session.execute(
@@ -62,7 +82,9 @@ async def request_deletion(
     rows = removed.all()
     sessions = [row.session_id for row in rows]
     if rows:
-        session.add_all([DeletedProfile(profile_id=row.profile_id) for row in rows])
+        session.add_all(
+            [DeletedProfile(profile_id=row.profile_id, client_id=client.client_id) for row in rows]
+        )
         await session.execute(
             delete(CaptureSession)
             .where(CaptureSession.session_id.in_(sessions))
@@ -73,8 +95,10 @@ async def request_deletion(
         .select_from(MeasurementProfile)
         .where(MeasurementProfile.client_id == client.client_id)
     )
-    client.display_name = None
-    client.height_mm = None
+    # What the tailor typed goes only if a replay proved this caller sent the client's data (D45).
+    if client.claimed_over_data:
+        client.display_name = None
+        client.height_mm = None
     status = "partially_done" if retained else "done"
     note = BACKUPS + (RETAINED if retained else "")
     row = DeletionRequest(

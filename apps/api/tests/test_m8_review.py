@@ -165,6 +165,10 @@ async def test_the_secret_is_nowhere_stored_or_logged(
     assert SECRET not in str(logs) and SECRET not in export.text
     row = await session.get(MeasurementProfile, uuid.UUID(body["profile_id"]))
     assert row is None
+    digest = hashlib.sha256(SECRET.encode()).hexdigest()
+    await owner_execute(
+        owner_url, f"UPDATE client SET secret_hash='{digest}' WHERE client_code='AB1007'"
+    )
     keep = payload(code="AB1007")
     await post(client, keep)
     stored = await session.get(MeasurementProfile, uuid.UUID(keep["profile_id"]))

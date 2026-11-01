@@ -1,7 +1,7 @@
 """Public, proof-of-possession endpoints for a client's own data (backend-spec 8)."""
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import JSONResponse
@@ -21,7 +21,11 @@ from app.services.ratelimit import limit_by_network
 
 router = APIRouter(tags=["profiles"])
 # Optional here so that a missing secret gets the same refusal as a wrong one (D45).
-ClientSecret = Annotated[str | None, Header(alias="X-Client-Secret")]
+# The length is declared, not enforced here, for the same reason: too long is refused like wrong.
+ClientSecret = Annotated[
+    str | None, Header(alias="X-Client-Secret", json_schema_extra={"maxLength": 64})
+]
+REFUSED: dict[int | str, dict[str, Any]] = {403: {"description": "client_secret_refused"}}
 
 
 @router.post(
@@ -29,6 +33,7 @@ ClientSecret = Annotated[str | None, Header(alias="X-Client-Secret")]
     operation_id="syncProfile",
     status_code=201,
     response_model=ProfileAccepted,
+    responses=REFUSED,
     dependencies=[Depends(limit_by_network("profile-network", 30, HOUR))],
 )
 async def sync_profile(
@@ -51,6 +56,7 @@ async def sync_profile(
     operation_id="requestDeletion",
     status_code=202,
     response_model=DeletionRequestReceipt,
+    responses=REFUSED,
     dependencies=[Depends(limit_by_network("deletion-request", 5, HOUR))],
 )
 async def deletion_request(
@@ -66,6 +72,7 @@ async def deletion_request(
     "/data-requests/access",
     operation_id="requestDataAccess",
     response_model=ClientDataExport,
+    responses=REFUSED,
     dependencies=[Depends(limit_by_network("access-request", 5, HOUR))],
 )
 async def data_access(
