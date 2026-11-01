@@ -308,6 +308,15 @@ async def test_a_claim_is_audited_on_its_own(
     await post(client, body)
     session.expire_all()
     claims = list(await session.scalars(query.order_by(AuditLog.log_id)))
+    assert [c.detail for c in claims] == [{"over_data": False}], "two rows: a replay cannot claim"
+    await owner_execute(
+        owner_url,
+        f"DELETE FROM measurement_profile WHERE profile_id != '{body['profile_id']}'"
+        f" AND client_id = '{row.client_id}'",
+    )
+    await post(client, body)
+    session.expire_all()
+    claims = list(await session.scalars(query.order_by(AuditLog.log_id)))
     assert [c.detail for c in claims] == [{"over_data": False}, {"over_data": True}]
 
 

@@ -317,19 +317,22 @@ describe('review findings: shared phone and deletion', () => {
     expect(await status('b')).toBe('synced');
   });
 
-  it.each([
-    [409, 'conflict'],
-    [404, 'rejected'],
-  ])('a left-behind profile ending %i is purged too', async (code) => {
+  it('a left-behind profile ending in a conflict is purged too', async () => {
     await vtStorage.saveProfile(profile('a'));
     await vtStorage.clearClientDetails();
-    await run(
-      fail(new ApiError(code, code === 404 ? 'code_not_found' : 'profile_version_conflict', {})),
-    ).done;
+    await run(fail(new ApiError(409, 'profile_version_conflict', {}))).done;
     expect(await status('a')).toBeUndefined();
     await vtStorage.saveProfile(profile('b'));
     await run(() => ({})).done;
     expect(await status('b')).toBe('synced');
+  });
+
+  it('a left-behind profile refused code_not_found stays on the phone (A6)', async () => {
+    // The server holds no copy, so this phone has the only one: purging would lose it for good.
+    await vtStorage.saveProfile(profile('a'));
+    await vtStorage.clearClientDetails();
+    await run(fail(new ApiError(404, 'code_not_found', {}))).done;
+    expect(await status('a')).toBe('rejected');
   });
 
   it('a left-behind unsent profile is hidden from the next client', async () => {
