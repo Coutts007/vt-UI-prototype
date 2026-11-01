@@ -8,6 +8,7 @@ The newest entry comes first. Every change or improvement adds a line in the sam
 - A tailor can free a client code. Each freeing starts a new claim round, so the next phone can claim the code but reads and deletes only what it uploaded itself. A replay proves only its own row: it claims nothing if another row shares the round.
 - The claim page shows profiles by round, withdrawals and deletion requests, including any that wiped the name and height. Superseding, clearing a withdrawal and closing a request happen only when the tailor names them, on a freed code.
 - The tailor's screens now use the real sign-in and API: register, pending, login, clients, issuing a code with its QR and WhatsApp text, client page with deletion banner, profile view, conflicts, the order form with ease suggestions and flagged rows, queue, order detail with status history, presets, settings and own audit. Each is tested at 360 px with axe on the mock and on the API.
+- The older shell, directory and claim-audit tests now follow the real screens and rules.
 - Sunlight mode (high contrast) is a setting for the tailor's screens. Its contrast is tested on the main screens.
 - A left-behind profile refused `code_not_found` now stays on the phone as rejected, because the server has no copy.
 - The mock follows the server on claim rounds, withdrawals, `stale_app_version`, the per-code limit and session reuse. It now separates a deleted client from a client who asked for deletion.

@@ -298,8 +298,9 @@ async def test_a_claim_is_audited_on_its_own(
     await post(client, body)
     await post(client, payload(version=2))
     row = await row_of(session)
+    client_id = row.client_id
     query = select(AuditLog).where(
-        AuditLog.client_id == row.client_id, AuditLog.action == "client_code_claim"
+        AuditLog.client_id == client_id, AuditLog.action == "client_code_claim"
     )
     claims = list(await session.scalars(query))
     assert [(c.actor_type, c.detail) for c in claims] == [("client", {"over_data": False})]
@@ -312,7 +313,7 @@ async def test_a_claim_is_audited_on_its_own(
     await owner_execute(
         owner_url,
         f"DELETE FROM measurement_profile WHERE profile_id != '{body['profile_id']}'"
-        f" AND client_id = '{row.client_id}'",
+        f" AND client_id = '{client_id}'",
     )
     await post(client, body)
     session.expire_all()
