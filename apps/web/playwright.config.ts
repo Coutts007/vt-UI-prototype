@@ -17,7 +17,11 @@ export default defineConfig({
   },
   globalSetup: './tests/e2e/global-setup.ts',
   projects: [
-    { name: 'chromium', use: { ...devices['Pixel 7'] }, testIgnore: /directory-off|real-vision/ },
+    {
+      name: 'chromium',
+      use: { ...devices['Pixel 7'] },
+      testIgnore: /directory-off|real-vision|server-sync/,
+    },
     // A real build with the directory switched off (D27), so nothing depends on a runtime switch.
     {
       name: 'directory-off',

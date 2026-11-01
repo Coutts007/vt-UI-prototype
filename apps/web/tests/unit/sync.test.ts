@@ -57,6 +57,13 @@ describe('profile replies', () => {
     expect(options.body).not.toHaveProperty('sync_status');
   });
 
+  it('an old app is not a conflict: the profile stays queued', async () => {
+    await vtStorage.saveProfile(profile('a'));
+    await run(fail(new ApiError(409, 'stale_app_version', {}))).done;
+    expect((await vtStorage.getProfileById('a'))?.sync_status).toBe('pending');
+    expect(await vtStorage.db.pending_sync.count()).toBe(1);
+  });
+
   it('409 becomes conflict and keeps the local copy', async () => {
     await vtStorage.saveProfile(profile('a'));
     await run(fail(new ApiError(409, 'profile_version_conflict', {}))).done;

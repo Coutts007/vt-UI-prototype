@@ -6,6 +6,7 @@ uv.lock
 dist/
 dist-directory-off/
 dist-directory-default/
+dist-real-api/
 coverage/
 apps/web/src/
 apps/web/public/mockServiceWorker.js

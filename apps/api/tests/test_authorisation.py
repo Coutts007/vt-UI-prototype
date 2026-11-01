@@ -97,6 +97,15 @@ SCHEMA_PAIRS = {
     "issueDirectoryCode": (None, "DirectoryCodeIssued"),
     "listDirectoryClients": (None, "DirectoryClientPage"),
     "removeUnusedDirectoryClients": (None, "DirectoryClientsRemoved"),
+    "getCurrentRules": (None, "RulesArtifact"),
+    "syncProfile": ("MeasurementProfilePayload", "ProfileAccepted"),
+    "requestDeletion": ("DeletionRequestInput", "DeletionRequestReceipt"),
+    "requestDataAccess": ("AccessRequestInput", "ClientDataExport"),
+    "landmark": ("Landmark", "MarkerObs"),
+    "silhouettes": ("SilhouetteFront", "SilhouetteSide"),
+    "session": ("CaptureSession", "StudyBlock"),
+    "rows": ("Measurement", "ServerCheck"),
+    "records": ("ConsentRecord", "Covariates"),
 }
 
 

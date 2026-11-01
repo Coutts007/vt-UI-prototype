@@ -44,6 +44,14 @@ async function sendCreate(op: PendingSyncOp, api: SyncDeps['api']): Promise<Outc
   } catch (error) {
     if (error instanceof NetworkError) return 'stop';
     if (!(error instanceof ApiError)) throw error;
+    if (error.status === 409 && error.code === 'stale_app_version') {
+      // Not a conflict: nothing reached the server. An updated app can still send this profile.
+      console.warn('profile_sync_refused', error.code);
+      if (op.attempts + 1 >= HELP_AFTER_ATTEMPTS) {
+        await vtStorage.db.profiles.update(profile.profile_id, { needs_help: true });
+      }
+      return 'retry';
+    }
     if (error.status === 409) {
       await vtStorage.updateProfileSyncStatus(profile.profile_id, 'conflict');
       await vtStorage.purgeAfterSync(profile.profile_id);

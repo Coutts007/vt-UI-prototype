@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Request
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Path, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from app.schemas import PublicSettings, Status
+from app.schemas import PublicSettings, RulesArtifact, Status
 from app.security.deps import Session
+from app.services.rules import find_rules
 from app.services.settings import read_settings
 
 router = APIRouter(tags=["public"])
@@ -35,3 +38,18 @@ async def public_settings(session: Session) -> PublicSettings:
         min_app_version=values["min_app_version"],
         current_rules_version=values["current_rules_version"],
     )
+
+
+@router.get("/rules/current", operation_id="getCurrentRules", response_model=RulesArtifact)
+async def current_rules(request: Request, session: Session) -> dict[str, Any]:
+    values = await read_settings(session)
+    return await find_rules(request.app.state.rules, session, values["current_rules_version"])
+
+
+@router.get("/rules/{version}", operation_id="getRules", response_model=RulesArtifact)
+async def rules_by_version(
+    version: Annotated[str, Path(pattern=r"^[0-9]+\.[0-9]+-[a-z0-9-]+$", max_length=40)],
+    request: Request,
+    session: Session,
+) -> dict[str, Any]:
+    return await find_rules(request.app.state.rules, session, version)

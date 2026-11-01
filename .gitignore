@@ -17,6 +17,7 @@ build/
 dist/
 dist-directory-off/
 dist-directory-default/
+dist-real-api/
 .venv/
 __pycache__/
 *.pyc

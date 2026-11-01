@@ -8,6 +8,7 @@ import structlog
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.errors import problem_body
+from app.privacy import has_image_content
 
 MAX_BODY = 256 * 1024
 log = structlog.get_logger()
@@ -83,6 +84,9 @@ class ApiMiddleware:
                 await refuse("unsupported_media_type", 415)
                 return
             body = b"".join(chunks)
+            if size and has_image_content(body):
+                await refuse("image_content_rejected", 422)
+                return
             sent = False
 
             async def replay() -> Message:
