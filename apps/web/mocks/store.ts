@@ -42,6 +42,7 @@ export interface MockDb {
   participants: Row[];
   readings: Row[];
   deletionRequests: Row[];
+  clientSecrets: Record<string, string>;
   settings: Row;
   rules: Row[];
   sheets: Row[];
@@ -69,6 +70,7 @@ export function createDb(rulesArtifact: Row, now = new Date()): MockDb {
     participants: data.participants,
     readings: data.reference_readings,
     deletionRequests: data.deletion_requests,
+    clientSecrets: {},
     settings: data.settings,
     rules: [{ ...rulesArtifact }],
     sheets: [],

@@ -79,6 +79,7 @@ export const SavedView: React.FC<{ onNavigate: (path: string) => void }> = ({ on
         {title}
       </h1>
       {profile.needs_help && <p role="alert" className="font-medium">{t('syncNeedsHelp')}</p>}
+      {profile.secret_refused && <p role="alert" className="font-medium">{t('syncSecretRefused')}</p>}
 
       {status === 'rejected' && <ChangeCodeForm profileId={profile.profile_id} onChanged={() => void load()} />}
 

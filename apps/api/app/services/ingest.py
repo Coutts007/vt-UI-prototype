@@ -19,12 +19,14 @@ from app.models import (
     Client,
     Conflict,
     Consent,
+    DeletedProfile,
     Measurement,
     MeasurementProfile,
     Participant,
     ServerCheck,
 )
 from app.schemas import MeasurementProfilePayload
+from app.security.client_secret import hash_secret, matches, well_formed
 from app.security.ip_hash import ip_hash
 from app.services import audit
 from app.services.profile_checks import (
@@ -53,6 +55,26 @@ def invalid(field: str, code: str) -> ApiError:
 def canonical_hash(raw: Any) -> str:
     text = json.dumps(raw, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(text.encode()).hexdigest()
+
+
+def older_rules(version: str, current: str) -> bool:
+    def number(name: str) -> tuple[int, ...]:
+        return tuple(int(part) for part in name.split("-", 1)[0].split("."))
+
+    try:
+        return number(version) < number(current)
+    except ValueError:
+        return False
+
+
+# Class 22 is a value the column cannot hold, and 23 a broken constraint. Anything else, such as a
+# lost connection, is not the payload's fault: it is a server error and the phone retries.
+PAYLOAD_SQLSTATES = ("22", "23")
+
+
+def _payload_at_fault(error: DBAPIError) -> bool:
+    state = getattr(error.orig, "sqlstate", None) or getattr(error.orig, "pgcode", None) or ""
+    return str(state)[:2] in PAYLOAD_SQLSTATES
 
 
 def older_app(version: str, minimum: str) -> bool:
@@ -185,11 +207,16 @@ async def _server_checks(
     found: list[Check] = []
     if rules is None:
         found.append(check("rules_version_unknown", "check", None))
-    elif body.rules_version != current_rules:
+    elif older_rules(body.rules_version, current_rules):
         found.append(check("stale_rules", "info", None, current=current_rules))
     values: dict[str, int | None] = {row.site_code: row.value_mm for row in body.measurements}
     if rules is not None:
-        found += rederive_checks(raw, rules)
+        try:
+            found += rederive_checks(raw, rules)
+        except Exception as error:
+            # The other checks still stand, and the tailor can see this one did not run.
+            log.error("rederivation_failed", error_type=type(error).__name__)
+            found.append(check("rederive_failed", "check", None))
         found += static_bounds(values, rules.get("anomaly", {}).get("static_ratio_bounds", {}))
     if previous is not None and abs(previous.captured_at - body.captured_at) <= CHANGE_WINDOW:
         found += change_since_last(values, await _stored_values(session, previous.profile_id))
@@ -198,11 +225,14 @@ async def _server_checks(
 
 
 async def ingest(
-    request: Request, session: AsyncSession, raw: dict[str, Any], body: MeasurementProfilePayload
+    request: Request,
+    session: AsyncSession,
+    raw: dict[str, Any],
+    body: MeasurementProfilePayload,
+    secret: str | None,
+    sending_version: str | None,
 ) -> JSONResponse:
     settings = await read_settings(session)
-    if older_app(body.session.app_version, settings["min_app_version"]):
-        raise ApiError("stale_app_version")
 
     # A row lock, so that two phones for one client cannot both become the newest version.
     client = await session.scalar(
@@ -212,16 +242,27 @@ async def ingest(
     )
     if not client:
         raise ApiError("code_not_found")
+    # Before anything else that touches this client: a forged upload changes nothing.
+    claimed = client.secret_hash is not None
+    if not (matches(secret, client.secret_hash) if claimed else well_formed(secret)):
+        raise ApiError("client_secret_refused")
     request.app.state.limiter.hit("profile-code", body.client_code, CODE_LIMIT, HOUR)
-    await _check_consent(session, body, client, settings["consent_version"])
-    participant = await _participant_for(session, body, client, settings["study_mode"])
 
+    if await session.get(DeletedProfile, body.profile_id):
+        raise ApiError("profile_deleted")
     payload_hash = canonical_hash(raw)
     existing = await session.get(MeasurementProfile, body.profile_id)
     if existing:
         if existing.payload_sha256 != payload_hash:
             raise invalid("profile_id", "profile_id_reused")
         return await _reply(session, existing)
+
+    # The app sending now decides, so an updated app can send what an old one captured (D42).
+    if older_app(sending_version or body.session.app_version, settings["min_app_version"]):
+        raise ApiError("stale_app_version")
+    await _check_consent(session, body, client, settings["consent_version"])
+    participant = await _participant_for(session, body, client, settings["study_mode"])
+
     if await session.get(CaptureSession, body.session.session_id):
         raise invalid("session.session_id", "session_id_reused")
 
@@ -276,6 +317,9 @@ async def ingest(
             payload_sha256=payload_hash,
         )
         session.add(row)
+        if not claimed:
+            assert secret is not None
+            client.secret_hash = hash_secret(secret)
         await session.flush()
         for item in body.measurements:
             session.add(
@@ -313,6 +357,8 @@ async def ingest(
         )
         await session.flush()
     except DBAPIError as error:
+        if not _payload_at_fault(error):
+            raise
         # A number the schema allows and the column cannot hold, or another client's identifier.
         log.warning("profile_refused_by_database", error_type=type(error).__name__)
         await session.rollback()

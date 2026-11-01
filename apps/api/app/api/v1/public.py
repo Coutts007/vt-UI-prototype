@@ -4,6 +4,7 @@ from fastapi import APIRouter, Path, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
+from app.errors import ApiError
 from app.schemas import PublicSettings, RulesArtifact, Status
 from app.security.deps import Session
 from app.services.rules import find_rules
@@ -52,4 +53,9 @@ async def rules_by_version(
     request: Request,
     session: Session,
 ) -> dict[str, Any]:
-    return await find_rules(request.app.state.rules, session, version)
+    # Spec 8 serves frozen artifacts. The current one stays readable while it is still a draft.
+    artifact = await find_rules(request.app.state.rules, session, version)
+    current = (await read_settings(session))["current_rules_version"]
+    if artifact.get("status") != "frozen" and version != current:
+        raise ApiError("rules_version_unknown")
+    return artifact

@@ -340,6 +340,8 @@ export const sw: Record<TranslationKey, string> = {
   syncConflict: 'Toleo jipya limehifadhiwa',
   syncRejected: 'Nambari haikupatikana',
   syncNeedsHelp: 'Vipimo hivi havikuweza kutumwa baada ya majaribio kadhaa. Muombe fundi wako msaada.',
+  syncSecretRefused: "Simu hii si ile iliyotuma vipimo vya kwanza kwa msimbo huu. Muombe fundi wako aufungue msimbo.",
+  deletionSecretRefused: "Simu hii haikuweza kufuta data yako kwenye mfumo wa fundi wako, kwa sababu simu nyingine inashikilia msimbo huu. Muombe fundi wako msaada.",
   syncOverdue: 'Baadhi ya vipimo vimesubiri zaidi ya wiki moja kutumwa. Unganisha intaneti.',
   storageWarning: 'Fungua Virtual Tailor ukiwa mtandaoni ili vipimo vyako vitumwe.',
   hdrTailorLogin: 'Kuingia kwa fundi',

@@ -1,6 +1,7 @@
 // The sync queue (frontend-spec 12.2). Decides per reply what becomes of each queued operation.
 import type { ApiClient } from '../api/http';
 import { ApiError, NetworkError } from '../api/http';
+import { APP_VERSION } from '../appVersion';
 import { LocalProfile, PendingSyncOp, vtStorage } from './storage';
 
 const MINUTE = 60_000;
@@ -24,7 +25,7 @@ export interface SyncDeps {
 }
 
 function toPayload(profile: LocalProfile) {
-  const { sync_status: _status, needs_help: _help, ...payload } = profile;
+  const { sync_status: _status, needs_help: _help, secret_refused: _refused, ...payload } = profile;
   return payload;
 }
 
@@ -36,14 +37,34 @@ async function sendCreate(op: PendingSyncOp, api: SyncDeps['api']): Promise<Outc
   try {
     await api.post('/profiles', {
       body: toPayload(profile),
-      headers: { 'Idempotency-Key': profile.profile_id },
+      headers: {
+        'Idempotency-Key': profile.profile_id,
+        'X-Client-Secret': await vtStorage.secretFor(profile.client_code),
+        'X-App-Version': APP_VERSION,
+      },
     } as never);
-    await vtStorage.db.profiles.update(profile.profile_id, { sync_status: 'synced', needs_help: false });
+    await vtStorage.db.profiles.update(profile.profile_id, {
+      sync_status: 'synced',
+      needs_help: false,
+      secret_refused: false,
+    });
     await vtStorage.purgeAfterSync(profile.profile_id);
     return 'done';
   } catch (error) {
     if (error instanceof NetworkError) return 'stop';
     if (!(error instanceof ApiError)) throw error;
+    if (error.code === 'client_secret_refused') {
+      // Another phone claimed this code. It stays queued, so it sends once the tailor frees the code.
+      console.warn('profile_sync_refused', error.code);
+      await vtStorage.db.profiles.update(profile.profile_id, { secret_refused: true });
+      return 'retry';
+    }
+    if (error.code === 'profile_deleted') {
+      // The client already asked for this to go, so it must not linger here either.
+      await vtStorage.db.profiles.delete(profile.profile_id);
+      await vtStorage.purgeAfterSync(profile.profile_id);
+      return 'done';
+    }
     if (error.status === 409 && error.code === 'stale_app_version') {
       // Not a conflict: nothing reached the server. An updated app can still send this profile.
       console.warn('profile_sync_refused', error.code);
@@ -57,7 +78,7 @@ async function sendCreate(op: PendingSyncOp, api: SyncDeps['api']): Promise<Outc
       await vtStorage.purgeAfterSync(profile.profile_id);
       return 'done';
     }
-    if (error.status === 404) {
+    if (error.code === 'code_not_found') {
       await vtStorage.updateProfileSyncStatus(profile.profile_id, 'rejected');
       await vtStorage.purgeAfterSync(profile.profile_id);
       return 'done';
@@ -75,20 +96,21 @@ async function sendCreate(op: PendingSyncOp, api: SyncDeps['api']): Promise<Outc
 
 async function sendDeletion(op: PendingSyncOp, api: SyncDeps['api']): Promise<Outcome> {
   if (!op.client_code) return 'done';
+  const secret = await vtStorage.existingSecret(op.client_code);
   try {
     await api.post('/deletion-requests', {
       body: {
         client_code: op.client_code,
-        profile_ids: [op.profile_id],
         reason: op.operation === 'withdraw' ? 'withdraw_consent' : 'delete',
       },
+      headers: secret ? { 'X-Client-Secret': secret } : {},
     } as never);
     return 'done';
   } catch (error) {
     if (error instanceof NetworkError) return 'stop';
     if (!(error instanceof ApiError)) throw error;
-    // The server holds nothing under this code and these ids, so nothing is left to delete.
-    if (error.status === 404) return 'done';
+    // Never dropped on a refusal: the client asked for this, and it has not happened.
+    if (error.code === 'client_secret_refused') await vtStorage.updateOp(op.op_id!, { secret_refused: true });
     return 'retry';
   }
 }
@@ -119,12 +141,17 @@ export async function runSync(deps: SyncDeps): Promise<number> {
     });
     if (outcome === 'stop') break;
   }
+  await vtStorage.pruneLeftSecrets();
   return settled;
 }
 
 export interface SyncNotice {
   /** The server refused a profile three times (12.2). */
   needsHelp: boolean;
+  /** Another phone holds this code, so only the tailor can free it (D45). */
+  secretRefused: boolean;
+  /** A deletion could not be proved from this phone, so it has not happened yet. */
+  deletionRefused: boolean;
   /** A code was refused and can be corrected on My measurements. */
   rejected: boolean;
   /** Something has waited past the 24-hour window. */
@@ -140,6 +167,8 @@ export async function readNotice(): Promise<SyncNotice> {
   ]);
   return {
     needsHelp: visible.some((p) => p.needs_help),
+    secretRefused: visible.some((p) => p.secret_refused),
+    deletionRefused: ops.some((op) => op.operation !== 'create' && op.secret_refused),
     rejected: visible.some((p) => p.sync_status === 'rejected'),
     overdue: ops.some((op) => op.gave_up),
     unsent: profiles.filter((p) => p.sync_status === 'pending').length,

@@ -338,6 +338,8 @@ export const en = {
   syncConflict: 'Newer version saved',
   syncRejected: 'Code not found',
   syncNeedsHelp: 'These measurements could not be sent after several tries. Ask your tailor for help.',
+  syncSecretRefused: "This phone is not the one that first sent measurements for this code. Ask your tailor to free the code.",
+  deletionSecretRefused: "This phone could not delete your data from your tailor's system, because another phone holds this code. Ask your tailor for help.",
   syncOverdue: 'Some measurements have waited over a week to send. Connect to the internet.',
   storageWarning: 'Open Virtual Tailor once you are online so your measurements are sent.',
   hdrTailorLogin: 'Tailor login',

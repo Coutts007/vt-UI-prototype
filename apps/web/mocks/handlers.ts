@@ -298,6 +298,9 @@ export function createHandlers(options: MockOptions = {}) {
       if (JSON.stringify(body).includes('data:image')) return problem('image_content_rejected');
       const client = clientByCode(body.client_code);
       if (!client) return problem('code_not_found');
+      const secret = request.headers.get('X-Client-Secret');
+      const held = db.clientSecrets[client.client_code];
+      if (!secret || (held && held !== secret)) return problem('client_secret_refused');
       if (!body.consent?.scope?.includes('measure')) return problem('consent_missing');
       const replay = profileById(body.profile_id);
       if (replay)
@@ -306,6 +309,7 @@ export function createHandlers(options: MockOptions = {}) {
           version: replay.version,
           server_checks: replay.server_checks,
         });
+      db.clientSecrets[client.client_code] = secret;
       const versions = db.profiles
         .filter((p) => p.client_id === client.client_id && p.status === 'final')
         .map((p) => p.version);
@@ -348,12 +352,11 @@ export function createHandlers(options: MockOptions = {}) {
       db.profiles.push(stored);
       return created({ profile_id: body.profile_id, version: body.version, server_checks: [] });
     }),
-    route('post', '/deletion-requests', null, ({ body }) => {
+    route('post', '/deletion-requests', null, ({ body, request: incoming }) => {
       const client = clientByCode(body.client_code);
-      const owned =
-        client &&
-        body.profile_ids.some((id: string) => profileById(id)?.client_id === client.client_id);
-      if (!owned) return problem('not_found');
+      const secret = incoming.headers.get('X-Client-Secret');
+      if (!client || !secret || db.clientSecrets[client.client_code] !== secret)
+        return problem('client_secret_refused');
       const request = {
         request_id: newId(),
         reason: body.reason,
@@ -365,12 +368,11 @@ export function createHandlers(options: MockOptions = {}) {
       audit(db, null, 'deletion_request', 'client', client.client_id, 'Client asked for deletion');
       return created({ request_id: request.request_id, status: request.status }, 202);
     }),
-    route('post', '/data-requests/access', null, ({ body }) => {
+    route('post', '/data-requests/access', null, ({ body, request }) => {
       const client = clientByCode(body.client_code);
-      const owned =
-        client &&
-        body.profile_ids.some((id: string) => profileById(id)?.client_id === client.client_id);
-      if (!owned) return problem('not_found');
+      const secret = request.headers.get('X-Client-Secret');
+      if (!client || !secret || db.clientSecrets[client.client_code] !== secret)
+        return problem('client_secret_refused');
       const profiles = db.profiles.filter((p) => p.client_id === client.client_id);
       audit(db, null, 'access_request', 'client', client.client_id, 'Client asked for a copy');
       return {

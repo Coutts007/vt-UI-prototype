@@ -10,6 +10,8 @@ from typing import Any
 SEED = json.loads((Path(__file__).parents[3] / "packages/seed/seed.json").read_text())
 FREE_CODE = "AB1008"
 ROUTE = "/api/v1/profiles"
+SECRET = "ab" * 32
+OTHER_SECRET = "cd" * 32
 _TEMPLATE = next(p for p in SEED["profiles"] if p["status"] == "final" and p["version"] == 1)
 
 
@@ -30,5 +32,9 @@ def payload(code: str = FREE_CODE, version: int = 1, **changes: Any) -> dict[str
     return {**body, **changes}
 
 
-def key(body: dict[str, Any]) -> dict[str, str]:
-    return {"Idempotency-Key": str(body["profile_id"])}
+def proof(secret: str = SECRET) -> dict[str, str]:
+    return {"X-Client-Secret": secret}
+
+
+def key(body: dict[str, Any], secret: str = SECRET) -> dict[str, str]:
+    return {"Idempotency-Key": str(body["profile_id"]), **proof(secret)}

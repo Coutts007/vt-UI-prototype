@@ -12,9 +12,10 @@ from app.models import (
     DeletionRequest,
     MeasurementProfile,
 )
+from app.security.client_secret import hash_secret
 from httpx import AsyncClient
-from ingest_support import FREE_CODE, ROUTE, SEED, key, payload
-from sqlalchemy import select
+from ingest_support import FREE_CODE, ROUTE, SECRET, SEED, key, payload, proof
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from test_authorisation import fits_contract
 
@@ -43,8 +44,16 @@ async def stored(client: AsyncClient, version: int = 1) -> dict[str, Any]:
     return body
 
 
-def request(body: dict[str, Any], reason: str = "delete", code: str = FREE_CODE) -> dict[str, Any]:
-    return {"client_code": code, "profile_ids": [body["profile_id"]], "reason": reason}
+def request(reason: str = "delete", code: str = FREE_CODE) -> dict[str, Any]:
+    return {"client_code": code, "reason": reason}
+
+
+async def claim(session: AsyncSession, code: str) -> None:
+    """Seed clients come unclaimed, as a client would after a tailor's reset."""
+    await session.execute(
+        update(Client).where(Client.client_code == code).values(secret_hash=hash_secret(SECRET))
+    )
+    await session.commit()
 
 
 async def test_deletion_removes_every_unreferenced_profile_and_clears_details(
@@ -52,7 +61,7 @@ async def test_deletion_removes_every_unreferenced_profile_and_clears_details(
 ) -> None:
     first = await stored(client)
     second = await stored(client, 2)
-    reply = await client.post(DELETE, json=request(first))
+    reply = await client.post(DELETE, json=request(), headers=proof())
     assert reply.status_code == 202
     fits_contract("DeletionRequestReceipt", reply.json())
     assert reply.json()["status"] == "done" and "30 days" in reply.json()["note"]
@@ -69,7 +78,8 @@ async def test_deletion_removes_every_unreferenced_profile_and_clears_details(
 async def test_deletion_writes_a_system_audit_row_without_the_code(
     client: AsyncClient, session: AsyncSession
 ) -> None:
-    reply = await client.post(DELETE, json=request(await stored(client)))
+    await stored(client)
+    reply = await client.post(DELETE, json=request(), headers=proof())
     rows = list(
         await session.scalars(
             select(AuditLog).where(AuditLog.entity_id == reply.json()["request_id"])
@@ -84,14 +94,11 @@ async def test_profiles_on_an_order_stay_until_collected_plus_30_days(
 ) -> None:
     order = SEED["orders"][0]
     profile = next(p for p in SEED["profiles"] if p["profile_id"] == order["profile_id"])
-    body = {
-        "client_code": profile["client_code"],
-        "profile_ids": [profile["profile_id"]],
-        "reason": "delete",
-    }
-    reply = await client.post(DELETE, json=body)
+    await claim(session, profile["client_code"])
+    reply = await client.post(DELETE, json=request(code=profile["client_code"]), headers=proof())
     assert reply.status_code == 202 and reply.json()["status"] == "partially_done"
     assert await session.get(MeasurementProfile, uuid.UUID(profile["profile_id"]))
+    session.expire_all()
     row = await session.scalar(select(Client).where(Client.client_code == profile["client_code"]))
     assert row and row.display_name is None and row.height_mm is None
 
@@ -99,8 +106,8 @@ async def test_profiles_on_an_order_stay_until_collected_plus_30_days(
 async def test_withdrawal_sets_withdrawn_and_stops_new_profiles(
     client: AsyncClient, session: AsyncSession
 ) -> None:
-    first = await stored(client)
-    reply = await client.post(DELETE, json=request(first, "withdraw_consent"))
+    await stored(client)
+    reply = await client.post(DELETE, json=request("withdraw_consent"), headers=proof())
     assert reply.status_code == 202
     consents = list(
         await session.scalars(
@@ -115,32 +122,9 @@ async def test_withdrawal_sets_withdrawn_and_stops_new_profiles(
     assert refused.json()["code"] == "consent_missing"
 
 
-@pytest.mark.parametrize("route", [DELETE, ACCESS])
-async def test_proof_of_possession_hides_which_part_failed(client: AsyncClient, route: str) -> None:
-    body = await stored(client)
-    extra = {"reason": "delete"} if route == DELETE else {}
-    attempts = [
-        {"client_code": "ZZ9999", "profile_ids": [body["profile_id"]]},
-        {"client_code": FREE_CODE, "profile_ids": [str(uuid.uuid4())]},
-        {"client_code": "AB1002", "profile_ids": [body["profile_id"]]},
-    ]
-    replies = [await client.post(route, json={**a, **extra}) for a in attempts]
-    assert {r.status_code for r in replies} == {404}
-    assert len({r.json()["code"] for r in replies}) == 1
-    assert replies[0].json()["code"] == "not_found"
-
-
-async def test_a_second_request_after_deletion_is_404(client: AsyncClient) -> None:
-    body = await stored(client)
-    await client.post(DELETE, json=request(body))
-    assert (await client.post(DELETE, json=request(body))).status_code == 404
-
-
 async def test_access_returns_the_clients_data(client: AsyncClient, session: AsyncSession) -> None:
     body = await stored(client)
-    reply = await client.post(
-        ACCESS, json={"client_code": FREE_CODE, "profile_ids": [body["profile_id"]]}
-    )
+    reply = await client.post(ACCESS, json={"client_code": FREE_CODE}, headers=proof())
     assert reply.status_code == 200, reply.text
     fits_contract("ClientDataExport", reply.json())
     data = reply.json()
@@ -151,23 +135,22 @@ async def test_access_returns_the_clients_data(client: AsyncClient, session: Asy
     assert len(rows) == 1 and rows[0].actor_type == "client"
 
 
-async def test_access_has_no_tailor_notes(client: AsyncClient) -> None:
+async def test_access_has_no_tailor_notes(client: AsyncClient, session: AsyncSession) -> None:
     order = next(o for o in SEED["orders"])
     profile = next(p for p in SEED["profiles"] if p["profile_id"] == order["profile_id"])
-    reply = await client.post(
-        ACCESS, json={"client_code": profile["client_code"], "profile_ids": [profile["profile_id"]]}
-    )
+    await claim(session, profile["client_code"])
+    reply = await client.post(ACCESS, json={"client_code": profile["client_code"]}, headers=proof())
     assert reply.status_code == 200 and "notes" not in reply.text
     assert reply.json()["order_count"] >= 1
 
 
 @pytest.mark.parametrize(("route", "limit"), [(DELETE, 5), (ACCESS, 5)])
 async def test_data_requests_are_limited(client: AsyncClient, route: str, limit: int) -> None:
-    body: dict[str, Any] = {"client_code": "ZZ9999", "profile_ids": [str(uuid.uuid4())]}
+    body: dict[str, Any] = {"client_code": "ZZ9999"}
     if route == DELETE:
         body["reason"] = "delete"
     for _ in range(limit):
-        assert (await client.post(route, json=body)).status_code == 404
+        assert (await client.post(route, json=body)).status_code == 403
     reply = await client.post(route, json=body)
     assert reply.status_code == 429 and "retry-after" in reply.headers
 

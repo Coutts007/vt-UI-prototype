@@ -6,17 +6,41 @@ wherever it hides, even in a field that would have been refused anyway.
 
 import json
 import re
+import unicodedata
 from typing import Any
+from urllib.parse import unquote
 
 MAX_STRING = 2048
-BASE64_RUN = re.compile(r"[A-Za-z0-9+/_-]{1025,}")
+MAX_BASE64_RUN = 1024
+# Matches each whole run once and moves on, so the cost is linear in the text's length.
+BASE64_RUN = re.compile(r"[A-Za-z0-9+/_-]+")
+PERCENT_LAYERS = 3
+
+
+def _visible(text: str) -> str:
+    """Fullwidth forms become plain, and characters nobody can see (zero-width, BOM) go."""
+    folded = unicodedata.normalize("NFKC", text)
+    return "".join(c for c in folded if unicodedata.category(c) not in {"Cf", "Cc"})
+
+
+def _normalised(text: str) -> str:
+    if text.isascii() and "%" not in text and text.isprintable():
+        return text
+    plain = _visible(text)
+    for _ in range(PERCENT_LAYERS):
+        decoded = unquote(plain)
+        if decoded == plain:
+            break
+        plain = _visible(decoded)
+    return plain
 
 
 def _looks_like_image(text: str) -> bool:
-    return (
-        len(text) > MAX_STRING
-        or text.lstrip().lower().startswith("data:")
-        or BASE64_RUN.search(text) is not None
+    if len(text) > MAX_STRING:
+        return True
+    plain = _normalised(text)
+    return plain.lstrip().lower().startswith("data:") or any(
+        match.end() - match.start() > MAX_BASE64_RUN for match in BASE64_RUN.finditer(plain)
     )
 
 

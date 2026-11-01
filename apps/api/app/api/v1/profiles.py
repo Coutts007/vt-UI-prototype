@@ -20,6 +20,8 @@ from app.services.ingest import HOUR, ingest, invalid
 from app.services.ratelimit import limit_by_network
 
 router = APIRouter(tags=["profiles"])
+# Optional here so that a missing secret gets the same refusal as a wrong one (D45).
+ClientSecret = Annotated[str | None, Header(alias="X-Client-Secret")]
 
 
 @router.post(
@@ -34,10 +36,14 @@ async def sync_profile(
     request: Request,
     session: Session,
     idempotency_key: Annotated[uuid.UUID, Header()],
+    x_client_secret: ClientSecret = None,
+    x_app_version: Annotated[str | None, Header(alias="X-App-Version", max_length=20)] = None,
 ) -> JSONResponse:
     if idempotency_key != body.profile_id:
         raise invalid("Idempotency-Key", "idempotency_key_mismatch")
-    return await ingest(request, session, await request.json(), body)
+    return await ingest(
+        request, session, await request.json(), body, x_client_secret, x_app_version
+    )
 
 
 @router.post(
@@ -48,9 +54,12 @@ async def sync_profile(
     dependencies=[Depends(limit_by_network("deletion-request", 5, HOUR))],
 )
 async def deletion_request(
-    body: DeletionRequestInput, request: Request, session: Session
+    body: DeletionRequestInput,
+    request: Request,
+    session: Session,
+    x_client_secret: ClientSecret = None,
 ) -> DeletionRequestReceipt:
-    return DeletionRequestReceipt(**await request_deletion(request, session, body))
+    return DeletionRequestReceipt(**await request_deletion(request, session, body, x_client_secret))
 
 
 @router.post(
@@ -59,7 +68,12 @@ async def deletion_request(
     response_model=ClientDataExport,
     dependencies=[Depends(limit_by_network("access-request", 5, HOUR))],
 )
-async def data_access(body: AccessRequestInput, request: Request, session: Session) -> JSONResponse:
+async def data_access(
+    body: AccessRequestInput,
+    request: Request,
+    session: Session,
+    x_client_secret: ClientSecret = None,
+) -> JSONResponse:
     # Sent as built: the contract leaves optional fields out, and a model would fill them with null.
-    export = await request_access(request, session, body.client_code, body.profile_ids)
+    export = await request_access(request, session, body.client_code, x_client_secret)
     return JSONResponse(export)

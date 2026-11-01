@@ -1,4 +1,5 @@
 // Turns the two captured views into a profile, using the module the server re-runs (make parity).
+import { APP_VERSION } from '../appVersion';
 import rulesFile from '../../../../packages/rules/rules-0.1-uncalibrated.json';
 import type { ClientDraftSettings, LocalProfile } from '../db/storage';
 import { clearerArm, correctedScale, derive, Rules, SITES } from '../measure/derive';
@@ -11,7 +12,7 @@ const RULES = rulesFile as unknown as Rules;
 /** The contract's limit is exclusive. */
 const MAX_SCALE = 99.999;
 
-export const APP_VERSION = '0.5.0';
+export { APP_VERSION };
 
 /**
  * Reads each held mask into its profiles, once. A view retaken later keeps the other view's numbers,

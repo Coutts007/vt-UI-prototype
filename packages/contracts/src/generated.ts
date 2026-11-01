@@ -1176,7 +1176,7 @@ export interface components {
         };
         ServerCheck: {
             /** @enum {string} */
-            kind: "unusual_proportion" | "outlier_profile" | "change_since_last" | "client_server_mismatch" | "rules_version_unknown" | "stale_rules" | "height_mismatch";
+            kind: "unusual_proportion" | "outlier_profile" | "change_since_last" | "client_server_mismatch" | "rules_version_unknown" | "stale_rules" | "height_mismatch" | "rederive_failed";
             /** @enum {string} */
             severity: "info" | "check";
             site_code: components["schemas"]["SiteCode"] | null;
@@ -1262,7 +1262,6 @@ export interface components {
         };
         DeletionRequestInput: {
             client_code: components["schemas"]["ClientCode"];
-            profile_ids: string[];
             /** @enum {string} */
             reason: "delete" | "withdraw_consent";
         };
@@ -1288,7 +1287,6 @@ export interface components {
         };
         AccessRequestInput: {
             client_code: components["schemas"]["ClientCode"];
-            profile_ids: string[];
         };
         ClientDataExport: {
             client_code: components["schemas"]["ClientCode"];
@@ -1795,6 +1793,8 @@ export interface components {
         };
     };
     parameters: {
+        /** @description The phone's secret for this client code, 64 lowercase hex characters (256 random bits). The first accepted upload claims an unclaimed code. After that, this is the proof of possession. It is optional in the schema only because a missing one must get the same refusal as a wrong one. */
+        ClientSecret: string;
         Page: number;
         PageSize: number;
         ClientId: string;
@@ -2004,6 +2004,10 @@ export interface operations {
             header: {
                 /** @description The profile_id */
                 "Idempotency-Key": string;
+                /** @description The phone's secret for this client code, 64 lowercase hex characters (256 random bits). The first accepted upload claims an unclaimed code. After that, this is the proof of possession. It is optional in the schema only because a missing one must get the same refusal as a wrong one. */
+                "X-Client-Secret"?: components["parameters"]["ClientSecret"];
+                /** @description The app sending now, which may be newer than the one that captured. Without it, the capture-time session.app_version is read. */
+                "X-App-Version"?: string;
             };
             path?: never;
             cookie?: never;
@@ -2023,8 +2027,10 @@ export interface operations {
                     "application/json": components["schemas"]["ProfileAccepted"];
                 };
             };
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["ProfileConflict"];
+            410: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
             415: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
@@ -2034,7 +2040,10 @@ export interface operations {
     requestDeletion: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The phone's secret for this client code, 64 lowercase hex characters (256 random bits). The first accepted upload claims an unclaimed code. After that, this is the proof of possession. It is optional in the schema only because a missing one must get the same refusal as a wrong one. */
+                "X-Client-Secret"?: components["parameters"]["ClientSecret"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2053,14 +2062,18 @@ export interface operations {
                     "application/json": components["schemas"]["DeletionRequestReceipt"];
                 };
             };
-            404: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
             429: components["responses"]["RateLimited"];
         };
     };
     requestDataAccess: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The phone's secret for this client code, 64 lowercase hex characters (256 random bits). The first accepted upload claims an unclaimed code. After that, this is the proof of possession. It is optional in the schema only because a missing one must get the same refusal as a wrong one. */
+                "X-Client-Secret"?: components["parameters"]["ClientSecret"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2079,7 +2092,8 @@ export interface operations {
                     "application/json": components["schemas"]["ClientDataExport"];
                 };
             };
-            404: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
             429: components["responses"]["RateLimited"];
         };
     };

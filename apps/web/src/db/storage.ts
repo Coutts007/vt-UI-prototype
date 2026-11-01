@@ -11,6 +11,16 @@ export interface LocalProfile extends Payload {
   sync_status: SyncStatus;
   /** The server refused it three times, so the client is told to contact their tailor. */
   needs_help?: boolean;
+  /** The server holds another phone's secret for this code, so only the tailor can free it (D45). */
+  secret_refused?: boolean;
+}
+
+/** One per client code on this phone. Never in a profile, a payload or a log (D45). */
+export interface ClientSecretRow {
+  client_code: string;
+  secret: string;
+  /** An earlier client cleared this phone: kept only until their unsent work settles. */
+  left?: boolean;
 }
 
 export interface PendingSyncOp {
@@ -26,6 +36,8 @@ export interface PendingSyncOp {
   gave_up?: boolean;
   /** A send has begun, so the server may hold this profile even with no reply yet. */
   started?: boolean;
+  /** The server refused this deletion's secret, so the client is told to ask their tailor. */
+  secret_refused?: boolean;
 }
 
 export interface PreflightRecord {
@@ -103,6 +115,7 @@ class VTDatabase extends Dexie {
   profiles!: Table<LocalProfile, string>;
   pending_sync!: Table<PendingSyncOp, number>;
   settings!: Table<{ key: string; value: unknown }, string>;
+  client_secrets!: Table<ClientSecretRow, string>;
 
   constructor() {
     super('virtual_tailor');
@@ -111,6 +124,7 @@ class VTDatabase extends Dexie {
       pending_sync: '++op_id, created_at, profile_id',
       settings: 'key',
     });
+    this.version(2).stores({ client_secrets: 'client_code' });
     // The guard sits on the tables, so no write can go around it.
     for (const table of this.tables) {
       table.hook('creating', (_key, row) => assertNoImages(row, table.name));
@@ -119,6 +133,11 @@ class VTDatabase extends Dexie {
       });
     }
   }
+}
+
+function newSecret(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 const LEGACY_DRAFT_KEY = 'vt_client_draft';
@@ -152,11 +171,39 @@ class VTStorage {
   /** Writes first, so "Saved" is only ever shown for something on disk (NFR-08). */
   async saveProfile(profile: LocalProfile): Promise<void> {
     assertNoImages(profile, 'profile');
-    await this.db.transaction('rw', this.db.profiles, this.db.pending_sync, async () => {
+    await this.db.transaction('rw', this.db.profiles, this.db.pending_sync, this.db.client_secrets, async () => {
       await this.db.profiles.put(profile);
+      // Someone is measuring under this code again, so a cleared client's secret is theirs to keep.
+      await this.db.client_secrets.update(profile.client_code, { left: false });
       if (profile.sync_status === 'pending') {
         await this.db.pending_sync.add(this.op(profile.profile_id, 'create', profile.client_code));
       }
+    });
+  }
+
+  /** This phone's secret for a code, made on first use. A transaction, so two tabs agree on one. */
+  async secretFor(clientCode: string): Promise<string> {
+    return this.db.transaction('rw', this.db.client_secrets, async () => {
+      const row = await this.db.client_secrets.get(clientCode);
+      if (row) return row.secret;
+      const secret = newSecret();
+      await this.db.client_secrets.add({ client_code: clientCode, secret });
+      return secret;
+    });
+  }
+
+  async existingSecret(clientCode: string): Promise<string | null> {
+    return (await this.db.client_secrets.get(clientCode))?.secret ?? null;
+  }
+
+  /** A cleared client's secret goes once nothing of theirs is waiting to send. */
+  async pruneLeftSecrets(): Promise<void> {
+    await this.db.transaction('rw', this.db.client_secrets, this.db.pending_sync, async () => {
+      const waiting = new Set((await this.db.pending_sync.toArray()).map((op) => op.client_code));
+      const rows = await this.db.client_secrets.toArray();
+      await this.db.client_secrets.bulkDelete(
+        rows.filter((row) => row.left && !waiting.has(row.client_code)).map((row) => row.client_code),
+      );
     });
   }
 
@@ -239,12 +286,15 @@ class VTStorage {
   async deleteMyData(clientCode: string, reason: 'delete' | 'withdraw'): Promise<void> {
     await this.db.transaction('rw', this.db.profiles, this.db.pending_sync, this.db.settings, async () => {
       const rows = await this.db.profiles.where('client_code').equals(clientCode).toArray();
+      // The server deletes everything of a client's at once, so one request says it all.
+      let asked = false;
       for (const row of rows) {
         const creates = await this.db.pending_sync.where('profile_id').equals(row.profile_id).toArray();
         const neverSent = row.sync_status === 'pending' && creates.every((c) => !c.started && c.attempts === 0);
         await this.db.pending_sync.where('profile_id').equals(row.profile_id).delete();
         await this.db.profiles.delete(row.profile_id);
-        if (!neverSent && row.sync_status !== 'rejected') {
+        if (!neverSent && row.sync_status !== 'rejected' && !asked) {
+          asked = true;
           await this.db.pending_sync.add(this.op(row.profile_id, reason, clientCode));
         }
       }
@@ -271,7 +321,12 @@ class VTStorage {
   }
 
   async clearAllLocalData(): Promise<void> {
-    await Promise.all([this.db.profiles.clear(), this.db.pending_sync.clear(), this.db.settings.clear()]);
+    await Promise.all([
+      this.db.profiles.clear(),
+      this.db.pending_sync.clear(),
+      this.db.settings.clear(),
+      this.db.client_secrets.clear(),
+    ]);
     this.draft = null;
     localStorage.removeItem(LEGACY_DRAFT_KEY);
     // The prototype client keeps its copies here until M9 to M11.
@@ -291,6 +346,16 @@ class VTStorage {
     const left = await this.leftIds();
     await this.db.profiles.bulkDelete(rows.filter((row) => !kept.has(row.profile_id)).map((row) => row.profile_id));
     await this.db.settings.clear();
+    // The next person must not act for this client (D45). Only what still has to send keeps its secret.
+    const ops = await this.db.pending_sync.toArray();
+    const needed = new Set([...unsent.map((row) => row.client_code), ...ops.map((op) => op.client_code)]);
+    const secrets = await this.db.client_secrets.toArray();
+    await this.db.client_secrets.bulkDelete(
+      secrets.filter((row) => !needed.has(row.client_code)).map((row) => row.client_code),
+    );
+    await this.db.client_secrets.bulkPut(
+      secrets.filter((row) => needed.has(row.client_code)).map((row) => ({ ...row, left: true })),
+    );
     this.draft = null;
     localStorage.removeItem(LEGACY_DRAFT_KEY);
     await this.setLeftIds([...new Set([...left.filter((id) => kept.has(id)), ...kept])]);
