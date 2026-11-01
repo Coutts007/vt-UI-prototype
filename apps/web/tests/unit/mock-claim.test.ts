@@ -21,6 +21,10 @@ const body = (code = EMPTY, version = 1): Record<string, any> => {
     client_code: code,
     version,
     profile_id: `00000000-0000-5000-8000-${String(id).padStart(12, '0')}`,
+    session: {
+      ...copy.session,
+      session_id: `00000000-0000-5000-8001-${String(id).padStart(12, '0')}`,
+    },
   };
 };
 const upload = (profile: Record<string, any>, secret: string | null = SECRET) =>
@@ -76,13 +80,107 @@ it('a deleted profile answers 410 to its owner', async () => {
   expect((await upload(mine)).status).toBe(410);
 });
 
+// The tailor's side of a claim (D45, M9), with the same rules as the server's.
+const signIn = async () => {
+  const reply = await fetch(`${BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'wanjiru@vt.test', password: 'vt-demo-2026' }),
+  });
+  return {
+    Authorization: `Bearer ${((await reply.json()) as any).access_token}`,
+    'Content-Type': 'application/json',
+  };
+};
+const claimOf = async (code: string, headers: Record<string, string>) =>
+  (
+    await fetch(`${BASE}/clients/${clientOf(code).client_id}/claim`, { headers })
+  ).json() as Promise<any>;
+const free = (code: string, headers: Record<string, string>) =>
+  fetch(`${BASE}/clients/${clientOf(code).client_id}/claim/free`, { method: 'POST', headers });
+const fresh = body;
+
 it('deleting an empty unclaimed code is done, and claims nothing', async () => {
-  const reply = await remove(EMPTY, null);
+  const headers = await signIn();
+  const issued = await fetch(`${BASE}/clients`, { method: 'POST', headers, body: '{}' });
+  const code = ((await issued.json()) as any).client_code;
+  const reply = await remove(code, null);
   expect(reply.status).toBe(202);
   expect(((await reply.json()) as { status: string }).status).toBe('done');
-  expect((await upload(body(), OTHER)).status).toBe(201);
+  expect((await upload(body(code), OTHER)).status).toBe(201);
 });
 
-it('deleting a code with data and no claim is refused', async () => {
-  expect(await codeOf(await remove(HAS_DATA))).toBe('client_secret_refused');
+it('after a tailor frees a code the next phone reaches only its own rows', async () => {
+  const headers = await signIn();
+  expect((await upload(fresh())).status).toBe(201);
+  expect((await claimOf(EMPTY, headers)).claimed).toBe(true);
+  await free(EMPTY, headers);
+  expect((await claimOf(EMPTY, headers)).claimed).toBe(false);
+  expect((await upload(fresh(EMPTY, 2), OTHER)).status).toBe(201);
+  const view = await claimOf(EMPTY, headers);
+  expect(view.claimed).toBe(true);
+  expect(view.profiles.map((p: any) => p.claim_round)).toEqual([0, 1]);
+  const access = await fetch(`${BASE}/data-requests/access`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Client-Secret': OTHER },
+    body: JSON.stringify({ client_code: EMPTY }),
+  });
+  expect(((await access.json()) as any).profiles).toHaveLength(1);
+});
+
+it('a deletion on an unclaimed code that holds data goes to the tailor and changes nothing', async () => {
+  const headers = await signIn();
+  const reply = await remove(HAS_DATA, null);
+  expect(reply.status).toBe(202);
+  expect(((await reply.json()) as any).status).toBe('received');
+  const before = await claimOf(HAS_DATA, headers);
+  expect(before.profiles.length).toBeGreaterThan(0);
+  expect(before.deletion_requests[0].status).toBe('received');
+  const closed = await fetch(`${BASE}/clients/${clientOf(HAS_DATA).client_id}/claim/review`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ close_request_ids: [before.deletion_requests[0].request_id] }),
+  });
+  expect(((await closed.json()) as any).deletion_requests[0].status).toBe('rejected');
+});
+
+it('review is refused while a phone holds the code', async () => {
+  const headers = await signIn();
+  await upload(fresh());
+  const reply = await fetch(`${BASE}/clients/${clientOf(EMPTY).client_id}/claim/review`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ close_request_ids: [] }),
+  });
+  expect(reply.status).toBe(422);
+});
+
+it('a withdrawal blocks the next upload until the tailor clears it', async () => {
+  const headers = await signIn();
+  await upload(fresh());
+  const gone = await fetch(`${BASE}/deletion-requests`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Client-Secret': SECRET },
+    body: JSON.stringify({ client_code: EMPTY, reason: 'withdraw_consent' }),
+  });
+  expect(gone.status).toBe(202);
+  await free(EMPTY, headers);
+  expect(await codeOf(await upload(fresh(EMPTY, 2), OTHER))).toBe('consent_missing');
+  const view = await claimOf(EMPTY, headers);
+  await fetch(`${BASE}/clients/${clientOf(EMPTY).client_id}/claim/review`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ clear_consent_ids: view.withdrawals.map((w: any) => w.consent_id) }),
+  });
+  expect((await upload(fresh(EMPTY, 2), OTHER)).status).toBe(201);
+});
+
+it('a reused session id, and the eleventh upload in an hour, are refused', async () => {
+  const first = fresh();
+  await upload(first);
+  const again = fresh(EMPTY, 2);
+  again.session = first.session;
+  expect((await upload(again)).status).toBe(422);
+  for (let n = 2; n <= 10; n += 1) expect((await upload(fresh(EMPTY, n))).status).toBe(201);
+  expect(await codeOf(await upload(fresh(EMPTY, 11)))).toBe('rate_limited');
 });
