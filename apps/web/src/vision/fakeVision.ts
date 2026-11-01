@@ -47,6 +47,8 @@ export interface FakeOptions {
   recover: boolean;
   /** Below 1 runs every wait faster, for tests. */
   speed: number;
+  /** Use the real camera and models instead (/dev/capture-tuning). */
+  real?: boolean;
 }
 
 export const DEFAULT_FAKE: FakeOptions = { scenario: 'good', recover: false, speed: 1 };

@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import tailwindcss from '@tailwindcss/vite';
@@ -39,11 +39,18 @@ function precacheList(): Plugin {
           files.push(`/audio/${locale}/${clip}`);
         }
       }
-      files.push('/vt-measuring-sheet-A4.pdf');
+      files.push('/vt-measuring-sheet-A4.pdf', '/vision-manifest.json');
+      const vision = (
+        JSON.parse(readFileSync(resolve(publicDir, 'vision-manifest.json'), 'utf8')) as {
+          version: string;
+        }
+      ).version;
       const version = createHash('sha256').update(files.join()).digest('hex').slice(0, 12);
       const worker = bundle['sw.js'];
       if (worker?.type === 'chunk') {
-        worker.code = worker.code.replace('__VT_PRECACHE__', [version, ...files].join());
+        worker.code = worker.code
+          .replace('__VT_PRECACHE__', [version, ...files].join())
+          .replace('__VT_VISION__', vision);
       }
     },
   };

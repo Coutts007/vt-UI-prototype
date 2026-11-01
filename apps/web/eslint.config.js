@@ -4,7 +4,17 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist', 'dist-directory-off', 'coverage', 'playwright-report', 'test-results'] },
+  {
+    ignores: [
+      'public/wasm/**',
+      'public/opencv/**',
+      'dist',
+      'dist-directory-off',
+      'coverage',
+      'playwright-report',
+      'test-results',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

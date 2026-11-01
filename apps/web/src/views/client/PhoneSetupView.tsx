@@ -12,7 +12,6 @@ import { CAPTURE_CONFIG } from '../../capture/config';
 import type { CaptureMode } from '../../capture/machine';
 import { captureSession } from '../../capture/session';
 import { Button } from '../../components/ui/Button';
-import { visionAvailable } from '../../vision/client';
 import { LevelBubble } from '../../components/ui/LevelBubble';
 import { ProgressSteps } from '../../components/ui/data';
 import { Banner } from '../../components/ui/feedback';
@@ -76,11 +75,13 @@ export const PhoneSetupView: React.FC<{ onNavigate: (path: string) => void }> = 
   const [sensor, setSensor] = useState<'waiting' | 'on' | 'absent'>('waiting');
   const [levelHeld, setLevelHeld] = useState(false);
   const [heard, setHeard] = useState(false);
+  const [sizeMb, setSizeMb] = useState(25);
+  const [doneMb, setDoneMb] = useState(0);
+  const [failed, setFailed] = useState(false);
   const [muted, setMuted] = useState(voiceGuide.getMuted());
   const levelSince = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!visionAvailable()) return;
     void vtStorage.loadDraft().then((draft) => {
       if (!draft.consent) onNavigate(draft.client_code ? '/consent' : '/start');
       else if (draft.consent.withdrawn_at) onNavigate('/consent');
@@ -90,16 +91,30 @@ export const PhoneSetupView: React.FC<{ onNavigate: (path: string) => void }> = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Placeholder until M6 has model files: the bar only shows how the step will look.
-  const download = () => {
+  const memoryGb = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? null;
+
+  useEffect(() => {
+    void import('../../vision/download').then(async ({ fetchManifest, filesFor, missingFiles, sumBytes }) => {
+      const manifest = await fetchManifest();
+      setSizeMb(Math.ceil(sumBytes(filesFor(manifest, memoryGb)) / 1_048_576));
+      if (!(await missingFiles(manifest, memoryGb)).length) setProgress(100);
+    }).catch(() => {});
+  }, [memoryGb]);
+
+  const download = async () => {
+    setFailed(false);
     setProgress(0);
-    const timer = setInterval(() => {
-      setProgress((value) => {
-        const next = (value ?? 0) + 25;
-        if (next >= 100) clearInterval(timer);
-        return Math.min(next, 100);
+    try {
+      const { downloadVision } = await import('../../vision/download');
+      await downloadVision(memoryGb, ({ doneBytes, totalBytes }) => {
+        setProgress(Math.floor((doneBytes / totalBytes) * 100));
+        setDoneMb(Math.round(doneBytes / 1_048_576));
       });
-    }, 150);
+      setProgress(100);
+    } catch {
+      setFailed(true);
+      setProgress(null);
+    }
   };
 
   const applyLevel = (next: Tilt) => {
@@ -154,6 +169,12 @@ export const PhoneSetupView: React.FC<{ onNavigate: (path: string) => void }> = 
       captureSession.send({ type: result.reason === 'denied' ? 'PERMISSION_DENIED' : 'CAMERA_UNAVAILABLE' });
       return;
     }
+    // Below 1280 px this camera cannot measure (10.1.1). Zero means the browser did not say.
+    if (result.streamMax && result.streamMax < CAPTURE_CONFIG.frames.minLongEdge) {
+      setCameraIssue('unavailable');
+      captureSession.send({ type: 'CAMERA_UNAVAILABLE' });
+      return;
+    }
     const draft = vtStorage.getDraft();
     if (draft.preflight && result.streamMax) {
       vtStorage.saveDraft({ ...draft, preflight: { ...draft.preflight, stream_max: result.streamMax } });
@@ -194,21 +215,6 @@ export const PhoneSetupView: React.FC<{ onNavigate: (path: string) => void }> = 
     setMuted(!muted);
   };
 
-  // No build but dev and mock can measure before M6, so nothing here may promise otherwise.
-  if (!visionAvailable()) {
-    return (
-      <div className="max-w-xl mx-auto px-4 py-6 flex flex-col gap-5">
-        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">{t('setupTitle')}</h1>
-        <p role="status" className="font-semibold">
-          {t('captureUnavailable')}
-        </p>
-        <Button variant="outline" onClick={() => onNavigate('/')}>
-          {t('backHome')}
-        </Button>
-      </div>
-    );
-  }
-
   return (
     <div className="max-w-xl mx-auto px-4 py-6 flex flex-col gap-5">
       <ProgressSteps current={2} />
@@ -223,7 +229,8 @@ export const PhoneSetupView: React.FC<{ onNavigate: (path: string) => void }> = 
       {step === 'download' && (
         <section className={CARD}>
           <h2 className="font-bold">{t('modelDownloadTitle')}</h2>
-          <p>{t('modelDownloadPrompt')}</p>
+          <p>{t('modelDownloadPrompt', { mb: sizeMb })}</p>
+          {failed && <p role="alert" className="font-medium">{t('downloadFailed')}</p>}
           {progress !== null && (
             <div>
               <div
@@ -236,14 +243,16 @@ export const PhoneSetupView: React.FC<{ onNavigate: (path: string) => void }> = 
               >
                 <div className="h-full bg-[var(--vt-thread)]" style={{ width: `${progress}%` }} />
               </div>
-              <p className="text-sm mt-1 tabular-nums">{progress}%</p>
+              <p className="text-sm mt-1 tabular-nums">
+                {doneMb} / {sizeMb} MB · {progress}%
+              </p>
             </div>
           )}
           {progress === 100 && <p className="font-medium text-emerald-900">{t('downloadDone')}</p>}
           <div className="flex gap-3">
             {progress !== 100 ? (
               <>
-                <Button onClick={download} disabled={progress !== null} className="flex-1">
+                <Button onClick={() => void download()} disabled={progress !== null} className="flex-1">
                   {t('downloadNow')}
                 </Button>
                 <Button variant="outline" onClick={() => setStep('who')} className="flex-1">

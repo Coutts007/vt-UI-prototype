@@ -29,3 +29,21 @@ it('voice clips and the measuring sheet are served from the cache offline (A3)',
     );
   }
 });
+
+it('models and WASM use their own cache, and the manifest is precached', () => {
+  for (const path of [
+    '/models/pose_landmarker_lite.task',
+    '/wasm/vision_wasm_internal.wasm',
+    '/opencv/opencv.js',
+  ]) {
+    expect(strategyFor({ method: 'GET', url: `${origin}${path}`, mode: 'cors' }, origin)).toBe(
+      'vision-cache',
+    );
+  }
+  expect(
+    strategyFor({ method: 'GET', url: `${origin}/vision-manifest.json`, mode: 'cors' }, origin),
+  ).toBe('cache-first');
+  expect(strategyFor({ method: 'POST', url: `${origin}/models/x`, mode: 'cors' }, origin)).toBe(
+    'network-only',
+  );
+});

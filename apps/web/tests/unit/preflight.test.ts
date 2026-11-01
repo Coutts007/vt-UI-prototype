@@ -83,10 +83,3 @@ describe('parseBrowser', () => {
 it('the SIMD probe is a valid module where SIMD exists', () => {
   expect(WebAssembly.validate(SIMD_PROBE)).toBe(true);
 });
-
-it('the models row fails where no vision exists, and never claims otherwise', () => {
-  const models = (visionAvailable: boolean) =>
-    runPreflight({ ...ok, visionAvailable }).find((item) => item.id === 'models')?.status;
-  expect(models(false)).toBe('fail');
-  expect(models(true)).toBe('pass');
-});

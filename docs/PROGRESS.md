@@ -2,6 +2,23 @@
 
 The newest entry comes first. Every change or improvement adds a line in the same commit.
 
+## 2026-11-01: M6 real capture pipeline (code complete, not yet run on a phone)
+
+- Camera: rear 1080p, `zoom:1` pinned where the lens can go wider, a wide lens swapped for the main one, applied settings read back, landscape delivery turned upright in the pipeline, ImageCapture still on Android, all tracks stopped on leaving. A stream that arrives after the screen has gone is stopped at once (the M5 finding). The wake lock no longer leaks if it is granted after leaving.
+- `pose.worker`: self-hosted MediaPipe lite and full models with WASM, GPU then CPU, masks as `Uint8Array`. `marker.worker`: a custom OpenCV.js ArUco build with sub-pixel corners, documented in `docs/opencv-build.md`. Both return numbers and masks only.
+- All 10.3 checks now run on real numbers with hysteresis, then the burst and medians of 10.4. Combined masks are kept for M7 and released after computing. Every frame is closed, with a dev-only live-object counter and tests.
+- `/setup` has a real download with checksums, progress and resume. Models and WASM get their own service-worker cache. The production "measuring isn't available yet" stop is gone.
+- `/dev/capture-tuning` has a real-camera switch with live numbers for every check.
+- The measuring sheet's marker is now read by the real detector from the generated PDF, in a unit test. An earlier draft of this entry claimed that before it was true: the OpenCV file was a temporary stub. The real 3.9 MB build is now in place, and `docs/opencv-build.md` records how to rebuild it.
+- Running against the real build found and fixed three faults: the detector could not be constructed (a missing `Algorithm` binding), stopping a capture restarted the workers and kept a frame alive, and stopping kept the combined mask in memory until the next capture. The memory-release browser test now passes on real workers.
+- Browser tests run the real models and detector end to end on a synthetic figure: front view measured, stop, everything freed, no request leaving the site.
+- **Known intermittent:** the real-vision flow test passed 8 of 9 runs alone on one worker, using software rendering. A logged passing run shows the burst being rejected and retried on the synthetic figure, which may explain the timeout, but the failing run was not captured, so the cause is unproven. The project allows one retry. Watch for repeated retakes in the phone test. `make e2e` now runs real vision as a separate step, because it times out alongside the other browser tests.
+- First load is 19.4 MB on a floor phone and 28.4 MB with the full model, against the 30 MB limit.
+- **Size:** see D38. The budget flow line passes only because the capture code loads on demand; the real main-thread figure is printed and is over 170 KB. That is the owner's decision.
+- **Provisional numbers:** measurements still come from the prototype engine until M7, and the silhouette profiles are empty, so a real capture's values are not usable yet.
+- **Unverified:** no real phone has run this. Four-phone test, fps, memory, sunlight, lenses, iPhone rotation direction and airplane mode are all open (A10). Thresholds are untuned. Tests use a drawn figure on Chromium's fake camera.
+- **Not built:** the camera file-input fallback (10.1.7), see D37.
+
 ## 2026-10-31: Tailor directory and Get code (D27)
 
 - API: public `GET /tailors` and `POST /tailors/{listing_id}/codes`, `GET /me/directory-clients`, `DELETE /clients/{id}`, and `GET /client-codes/{code}` (the part of M8 this flow needs). Migration 0002 adds the listing fields, off by default, and each client's `source`. Issuing is limited to 10 an hour and 30 a day per address, and audited with no personal data. The mock answers the same.

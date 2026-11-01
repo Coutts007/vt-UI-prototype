@@ -1,7 +1,7 @@
-// Camera permission and preview. Real capture arrives in M6; no frame is read from this stream.
+// Camera permission and motion sensors. The capture stream itself is in cameraManager.ts.
 export type CameraResult = { ok: true } | { ok: false; reason: 'denied' | 'unavailable' };
 
-const VIDEO: MediaStreamConstraints['video'] = {
+export const CAMERA_VIDEO: MediaTrackConstraints = {
   facingMode: { ideal: 'environment' },
   width: { ideal: 1080 },
   height: { ideal: 1920 },
@@ -12,7 +12,7 @@ const VIDEO: MediaStreamConstraints['video'] = {
 /** Asks for the camera once and lets it go, so capture can open it without another prompt. */
 export async function requestCameraPermission(): Promise<CameraResult & { streamMax?: number }> {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: VIDEO, audio: false });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: CAMERA_VIDEO, audio: false });
     const capabilities = stream.getVideoTracks()[0]?.getCapabilities?.();
     const streamMax = capabilities ? Math.max(capabilities.width?.max ?? 0, capabilities.height?.max ?? 0) : 0;
     stream.getTracks().forEach((track) => track.stop());
@@ -20,22 +20,6 @@ export async function requestCameraPermission(): Promise<CameraResult & { stream
   } catch (error) {
     const name = (error as DOMException).name;
     return { ok: false, reason: name === 'NotAllowedError' || name === 'SecurityError' ? 'denied' : 'unavailable' };
-  }
-}
-
-export class CameraManager {
-  private stream: MediaStream | null = null;
-
-  async start(video: HTMLVideoElement): Promise<void> {
-    this.stop();
-    this.stream = await navigator.mediaDevices.getUserMedia({ video: VIDEO, audio: false });
-    video.srcObject = this.stream;
-    await video.play();
-  }
-
-  stop(): void {
-    this.stream?.getTracks().forEach((track) => track.stop());
-    this.stream = null;
   }
 }
 

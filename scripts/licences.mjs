@@ -21,6 +21,22 @@ for (const pkg of api) {
   if (['pip-licenses', 'prettytable', 'wcwidth', 'tomli'].includes(pkg.Name)) continue;
   rows.push(['api', pkg.Name, pkg.Version, pkg.License]);
 }
+// Self-hosted files that no package manager lists (D37). Licences checked by hand; see docs/opencv-build.md.
+rows.push(
+  [
+    'web-asset',
+    'pose_landmarker_lite.task (BlazePose GHUM 3D model card)',
+    'float16/1',
+    'Apache-2.0',
+  ],
+  [
+    'web-asset',
+    'pose_landmarker_full.task (BlazePose GHUM 3D model card)',
+    'float16/1',
+    'Apache-2.0',
+  ],
+  ['web-asset', 'OpenCV.js custom build', '4.10.0', 'Apache-2.0'],
+);
 rows.sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
 
 // LGPL is allowed only as an unmodified dynamically linked library, so it is reviewed, not blocked.

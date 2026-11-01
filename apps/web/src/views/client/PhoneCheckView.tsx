@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
-import { visionAvailable } from '../../vision/client';
 import { CAPTURE_CONFIG } from '../../capture/config';
 import {
   PreflightItem,
@@ -27,6 +26,8 @@ export const PhoneCheckView: React.FC<{ onNavigate: (path: string) => void }> = 
   const [items, setItems] = useState<PreflightItem[] | null>(null);
   const [verdict, setVerdict] = useState<Verdict>('ready');
   const [showLink, setShowLink] = useState(false);
+  const [mb, setMb] = useState(25);
+  const [cached, setCached] = useState(false);
 
   const run = async () => {
     setItems(null);
@@ -34,6 +35,13 @@ export const PhoneCheckView: React.FC<{ onNavigate: (path: string) => void }> = 
     const results = runPreflight(facts);
     setItems(results);
     setVerdict(overallVerdict(results));
+    void import('../../vision/download')
+      .then(async ({ fetchManifest, filesFor, missingFiles, sumBytes }) => {
+        const manifest = await fetchManifest();
+        setMb(Math.ceil(sumBytes(filesFor(manifest, facts.memoryGb)) / 1_048_576));
+        setCached(!(await missingFiles(manifest, facts.memoryGb)).length);
+      })
+      .catch(() => {});
     await vtStorage.loadDraft();
     vtStorage.saveDraft({ ...vtStorage.getDraft(), preflight: deviceSummary(facts) });
   };
@@ -64,7 +72,7 @@ export const PhoneCheckView: React.FC<{ onNavigate: (path: string) => void }> = 
             }`}
           >
             {ICONS[verdict === 'ready' ? 'pass' : verdict]}
-            <span>{t(!visionAvailable() ? 'captureUnavailable' : verdict === 'ready' ? 'checkReady' : verdict === 'caution' ? 'checkCaution' : 'checkFail')}</span>
+            <span>{t(verdict === 'ready' ? 'checkReady' : verdict === 'caution' ? 'checkCaution' : 'checkFail')}</span>
           </div>
           <ul className="rounded-2xl border border-[var(--vt-line)] bg-white divide-y divide-[var(--vt-line)]">
             {items.map((item) => (
@@ -74,7 +82,9 @@ export const PhoneCheckView: React.FC<{ onNavigate: (path: string) => void }> = 
                   <span className="font-semibold block">{t(item.label)}</span>
                   <span className="text-sm text-[var(--vt-ink-muted)]">
                     {item.id === 'models'
-                      ? t('willDownloadMB', { mb: 15 })
+                      ? cached
+                        ? t('modelsDownloaded')
+                        : t('willDownloadMB', { mb })
                       : item.message
                         ? t(item.message)
                         : status(item)}
@@ -87,7 +97,7 @@ export const PhoneCheckView: React.FC<{ onNavigate: (path: string) => void }> = 
             <Button onClick={() => onNavigate('/sheet')} disabled={verdict === 'fail'} size="xl" className="w-full">
               {t('continue')}
             </Button>
-            {verdict === 'fail' && visionAvailable() && (
+            {verdict === 'fail' && (
               <>
                 <Button variant="outline" onClick={() => onNavigate('/help')} className="w-full">
                   {t('askTailorInPerson')}

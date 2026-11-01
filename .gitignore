@@ -48,3 +48,5 @@ docs/architecture.md
 docs/traceability.md
 docs/device-test-log.md
 docs/i18n-review.md
+# Generated synthetic camera clips (the script that draws them is committed)
+apps/web/tests/fixtures/video/generated/

@@ -35,6 +35,14 @@ export interface BurstFrame {
   silhouette: SilhouetteFront | SilhouetteSide;
 }
 
+/** A burst: the frames, and the marker from the full-resolution still where one was taken (10.4). */
+export interface BurstResult {
+  frames: BurstFrame[];
+  still?: MarkerObs | null;
+  /** Pixel-wise majority of the frames' masks. M7 reads it before it is released. */
+  mask?: PersonMask | null;
+}
+
 export type VisionRequest =
   | { id: number; cmd: 'init'; heightMm: number }
   | { id: number; cmd: 'reset'; view: View }
@@ -43,7 +51,7 @@ export type VisionRequest =
   | { id: number; cmd: 'compute' };
 
 export type VisionReply =
-  | { id: number; ok: true; sample?: VisionSample; frames?: BurstFrame[] }
+  | { id: number; ok: true; sample?: VisionSample; frames?: BurstFrame[]; still?: MarkerObs | null; mask?: PersonMask | null }
   | { id: number; ok: false; error: string };
 
 /** The same shape as a Web Worker, so M6 can swap in real workers behind VisionClient. */

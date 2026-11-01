@@ -8,3 +8,8 @@ dist-directory-off/
 coverage/
 apps/web/src/
 apps/web/public/mockServiceWorker.js
+apps/web/public/wasm/
+apps/web/public/opencv/
+apps/web/public/models/
+apps/web/public/vision-manifest.json
+apps/web/tests/fixtures/video/generated/
