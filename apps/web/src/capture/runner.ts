@@ -4,7 +4,7 @@ import type { TranslationKey } from '../i18n/en';
 import { VisionClient } from '../vision/client';
 import type { Landmark, View } from '../vision/types';
 import type { AudioPort } from './audio';
-import { combineBurst } from './burst';
+import { CombinedView, combineBurst } from './burst';
 import { CAPTURE_CONFIG } from './config';
 import { CheckId, CheckOutcome, CheckResults, evaluateChecks, firstFailing, toViewChecks } from './checks';
 import { CheckFilter, GuidancePacer, InstructionHold } from './guidance';
@@ -44,6 +44,8 @@ export interface RunnerDeps {
   now?: () => number;
   /** Tilt from the phone's sensors; when absent the sample's own value is used. */
   sensorTilt?: () => { beta: number; gamma: number } | null;
+  /** The vision worker spaces its own burst frames, so the runner must not wait first. */
+  selfTimedBurst?: boolean;
 }
 
 export class CaptureRunner {
@@ -262,9 +264,11 @@ export class CaptureRunner {
     let combined = null;
     try {
       // About a second for the five frames (10.4).
-      await new Promise<void>((resolve) =>
-        this.after(CAPTURE_CONFIG.burst.frames * CAPTURE_CONFIG.burst.spacingMs, resolve),
-      );
+      if (!this.deps.selfTimedBurst) {
+        await new Promise<void>((resolve) =>
+          this.after(CAPTURE_CONFIG.burst.frames * CAPTURE_CONFIG.burst.spacingMs, resolve),
+        );
+      }
       combined = combineBurst(await vision.burst(view));
     } catch {
       combined = null;
@@ -275,15 +279,17 @@ export class CaptureRunner {
       session.send({ type: 'BURST_BAD' });
       return;
     }
+    const { mask, ...numbers } = combined;
+    session.holdMask(view, mask);
     session.views[view] = {
-      ...combined,
+      ...numbers,
       checks: toViewChecks(this.lastOutcome, session.machine.context.levelUnchecked),
-      free_arm: view === 'front' ? this.freeArmOf(combined) : null,
+      free_arm: view === 'front' ? this.freeArmOf(numbers) : null,
     };
     session.send({ type: 'BURST_OK' });
   }
 
-  private freeArmOf(combined: NonNullable<ReturnType<typeof combineBurst>>) {
+  private freeArmOf(combined: Pick<CombinedView, 'marker' | 'landmarks'>) {
     return evaluateChecks({
       view: 'front',
       sample: {

@@ -6,6 +6,8 @@ import tseslint from 'typescript-eslint';
 export default tseslint.config(
   {
     ignores: [
+      'public/wasm/**',
+      'public/opencv/**',
       'dist',
       'dist-directory-off',
       'dist-directory-default',

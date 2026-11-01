@@ -1,6 +1,6 @@
 // Promise wrapper around a vision worker (frontend-spec 10.5).
 import { CAPTURE_CONFIG } from '../capture/config';
-import type { BurstFrame, VisionReply, VisionRequest, VisionSample, View, WorkerLike } from './types';
+import type { BurstResult, VisionReply, VisionRequest, VisionSample, View, WorkerLike } from './types';
 
 type Pending = { resolve: (reply: VisionReply) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> };
 type Body<C extends VisionRequest['cmd']> = Omit<Extract<VisionRequest, { cmd: C }>, 'id'>;
@@ -9,7 +9,13 @@ export class VisionClient {
   private next = 1;
   private pending = new Map<number, Pending>();
 
-  constructor(private readonly worker: WorkerLike) {
+  constructor(
+    private readonly worker: WorkerLike,
+    private readonly limits: { initMs: number; liveMs: number } = {
+      initMs: CAPTURE_CONFIG.timing.burstTimeoutMs,
+      liveMs: CAPTURE_CONFIG.timing.liveTimeoutMs,
+    },
+  ) {
     worker.onmessage = ({ data }) => {
       const waiting = this.pending.get(data.id);
       if (!waiting) return;
@@ -38,7 +44,7 @@ export class VisionClient {
   }
 
   init(heightMm: number): Promise<unknown> {
-    return this.expect<'init'>({ cmd: 'init', heightMm }, CAPTURE_CONFIG.timing.burstTimeoutMs);
+    return this.expect<'init'>({ cmd: 'init', heightMm }, this.limits.initMs);
   }
 
   reset(view: View): Promise<unknown> {
@@ -46,13 +52,14 @@ export class VisionClient {
   }
 
   async live(): Promise<VisionSample> {
-    const reply = await this.expect<'live'>({ cmd: 'live' }, CAPTURE_CONFIG.timing.liveTimeoutMs);
+    const reply = await this.expect<'live'>({ cmd: 'live' }, this.limits.liveMs);
     return (reply as { sample: VisionSample }).sample;
   }
 
-  async burst(view: View): Promise<BurstFrame[]> {
+  async burst(view: View): Promise<BurstResult> {
     const reply = await this.expect<'burst'>({ cmd: 'burst', view }, CAPTURE_CONFIG.timing.burstTimeoutMs);
-    return (reply as { frames: BurstFrame[] }).frames;
+    const { frames, still, mask } = reply as BurstResult;
+    return { frames, still, mask };
   }
 
   compute(): Promise<unknown> {
@@ -68,15 +75,32 @@ export class VisionClient {
 
 export const FAKE_VISION_KEY = 'vt_fake_vision';
 
-/** Until M6 there is no real vision, so only dev and mock builds can measure. */
-export const visionAvailable = (): boolean => import.meta.env.DEV || import.meta.env.MODE === 'mock';
-
 const fakeBursts = { front: 0, side: 0 };
 
-/** Fake vision exists only in dev and mock builds. A production build has none until M6. */
-export async function createVisionClient(): Promise<{ client: VisionClient; speed: number } | null> {
-  if (!visionAvailable()) return null;
+export interface VisionMade {
+  client: VisionClient;
+  speed: number;
+  real: boolean;
+}
+
+async function realClient(): Promise<VisionMade> {
+  const { RealVisionWorker, REAL_LIMITS } = await import('./realVision');
+  return { client: new VisionClient(new RealVisionWorker(), REAL_LIMITS), speed: 1, real: true };
+}
+
+const wantsReal = (): boolean => {
+  try {
+    return (JSON.parse(sessionStorage.getItem(FAKE_VISION_KEY) ?? '{}') as { real?: boolean }).real === true;
+  } catch {
+    return false;
+  }
+};
+
+/** Production always uses real vision, and the fake is compiled out of it. */
+export async function createVisionClient(): Promise<VisionMade> {
+  if (!import.meta.env.DEV && import.meta.env.MODE !== 'mock' && import.meta.env.MODE !== 'test') return realClient();
+  if (wantsReal()) return realClient();
   const { FakeVisionWorker, readFakeOptions } = await import('./fakeVision');
   const options = readFakeOptions();
-  return { client: new VisionClient(new FakeVisionWorker(options, fakeBursts)), speed: options.speed };
+  return { client: new VisionClient(new FakeVisionWorker(options, fakeBursts)), speed: options.speed, real: false };
 }

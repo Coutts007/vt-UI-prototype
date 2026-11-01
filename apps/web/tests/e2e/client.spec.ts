@@ -31,7 +31,7 @@ async function fake(page: Page, options: Fake = {}) {
 // Stands in for the service worker's precache, which the mock build does not run.
 async function preloadChunks(page: Page) {
   const names = readdirSync(ASSETS).filter((name) =>
-    /^(WelcomeView|StartView|ConsentView|PhoneCheckView|SheetGuideView|PhoneSetupView|CaptureView|ProcessingView|ReviewView|SavedView|MyMeasurementsView|sync|fakeVision|en|sw)-.*\.js$/.test(
+    /^(WelcomeView|StartView|ConsentView|PhoneCheckView|SheetGuideView|PhoneSetupView|CaptureView|ProcessingView|compute|ReviewView|SavedView|MyMeasurementsView|sync|fakeVision|en|sw)-.*\.js$/.test(
       name,
     ),
   );

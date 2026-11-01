@@ -41,9 +41,10 @@ async function capture(scenario: Scenario = 'good', height = 1700) {
       worker.onmessage = ({ data }) => {
         if (!data.ok) throw new Error(data.error);
         if (!data.frames) return;
-        const combined = combineBurst(data.frames!)!;
+        const combined = combineBurst({ frames: data.frames! })!;
+        const { mask: _mask, ...numbers } = combined;
         session.views[view] = {
-          ...combined,
+          ...numbers,
           checks: toViewChecks(evaluateChecks({ view, sample: worker.live('good', view) }), false),
           free_arm: view === 'front' ? 'left' : null,
         };
@@ -85,7 +86,7 @@ describe('buildProfile', () => {
     expect(session.guidance_mode).toBe('voice');
     expect(session.camera_facing).toBe('environment');
     expect(session.free_arm).toBe('left');
-    expect(session.config_hash).toMatch(/^capture-1-/);
+    expect(session.config_hash).toMatch(/^capture-2-/);
   });
 
   it('a helper means visual guidance', async () => {

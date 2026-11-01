@@ -71,15 +71,17 @@ describe('burst', () => {
     expect(median([4, 1, 2, 3])).toBe(2.5);
   });
   it('tolerates two bad frames but not three', async () => {
-    const frames = await client().burst('front');
+    const { frames } = await client().burst('front');
     expect(frames).toHaveLength(5);
     const two = frames.map((f, i) => (i < 2 ? { ...f, marker: null } : f));
-    const combined = combineBurst(two)!;
+    const combined = combineBurst({ frames: two })!;
     expect(combined.marker_confidence).toBeCloseTo(0.6 * 0.96, 2);
-    expect(combineBurst(frames.map((f, i) => (i < 3 ? { ...f, landmarks: null } : f)))).toBeNull();
+    expect(
+      combineBurst({ frames: frames.map((f, i) => (i < 3 ? { ...f, landmarks: null } : f)) }),
+    ).toBeNull();
   });
   it('confidence falls as the corners spread', async () => {
-    const frames = await client().burst('front');
+    const { frames } = await client().burst('front');
     const spread = frames.map((frame, i) => ({
       ...frame,
       marker: {
@@ -87,8 +89,8 @@ describe('burst', () => {
         corners: frame.marker!.corners.map(([x, y]) => [x + i * 3, y]),
       },
     }));
-    expect(combineBurst(spread)!.marker_confidence).toBeLessThan(
-      combineBurst(frames)!.marker_confidence,
+    expect(combineBurst({ frames: spread })!.marker_confidence).toBeLessThan(
+      combineBurst({ frames })!.marker_confidence,
     );
   });
 });

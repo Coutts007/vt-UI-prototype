@@ -34,6 +34,7 @@ export function buildProfile(
     crotch_found: silhouetteFront.crotch_y_px !== null,
   });
   const preflight = draft.preflight;
+  const stream = session.streamSize;
   return {
     profile_id: crypto.randomUUID(),
     client_code: draft.client_code,
@@ -62,10 +63,10 @@ export function buildProfile(
       os: preflight?.os ?? 'unknown',
       browser: preflight?.browser ?? 'unknown',
       memory_gb: preflight?.memory_gb ?? null,
-      model_variant: 'lite',
-      stream_w: front.marker.image_w,
-      stream_h: front.marker.image_h,
-      still_source: 'canvas',
+      model_variant: session.modelVariant,
+      stream_w: stream?.width ?? front.marker.image_w,
+      stream_h: stream?.height ?? front.marker.image_h,
+      still_source: front.still_source,
       level_unchecked: context.levelUnchecked,
       capture_fallback: false,
       front_checks: front.checks,

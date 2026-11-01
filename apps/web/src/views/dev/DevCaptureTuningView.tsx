@@ -1,10 +1,12 @@
 // Developer page: pick what the fake vision worker replays, and read every check's live verdict.
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { CHECK_ORDER, evaluateChecks, firstFailing, maskBounds } from '../../capture/checks';
 import { CAPTURE_CONFIG, configHash } from '../../capture/config';
 import { FAKE_VISION_KEY } from '../../vision/client';
 import { DEFAULT_FAKE, FakeOptions, FakeVisionWorker, readFakeOptions, SCENARIOS, Scenario } from '../../vision/fakeVision';
 import type { View } from '../../vision/types';
+
+const RealPanel = lazy(() => import('./DevRealVisionPanel').then((m) => ({ default: m.DevRealVisionPanel })));
 
 export const DevCaptureTuningView: React.FC = () => {
   const [options, setOptions] = useState<FakeOptions>(readFakeOptions);
@@ -72,6 +74,20 @@ export const DevCaptureTuningView: React.FC = () => {
         />
         Fail first, then recover
       </label>
+      <label className="flex items-center gap-2 min-h-12">
+        <input
+          type="checkbox"
+          data-testid="real-switch"
+          checked={options.real === true}
+          onChange={(event) => setOptions({ ...options, real: event.target.checked })}
+        />
+        Real camera and models (built app only, not the Vite dev server)
+      </label>
+      {options.real && (
+        <Suspense fallback={null}>
+          <RealPanel view={view} />
+        </Suspense>
+      )}
       <p data-testid="first-failing" className="font-bold">
         First failing: {failing ?? 'none'} {failing ? `(${outcome.corrections[failing]})` : ''}
       </p>

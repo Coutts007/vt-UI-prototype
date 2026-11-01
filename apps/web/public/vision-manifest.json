@@ -1,0 +1,35 @@
+{
+  "version": "8b188a42c89c",
+  "files": [
+    {
+      "url": "/models/pose_landmarker_lite.task",
+      "bytes": 5777746,
+      "sha256": "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a",
+      "tier": "core"
+    },
+    {
+      "url": "/models/pose_landmarker_full.task",
+      "bytes": 9398198,
+      "sha256": "5134a3aad27a58b93da0088d431f366da362b44e3ccfbe3462b3827a839011b1",
+      "tier": "full"
+    },
+    {
+      "url": "/wasm/vision_wasm_internal.js",
+      "bytes": 204284,
+      "sha256": "4a97e2520ba506c680ecd6ba6acfb146888afa0e2746d57f205352bc6ebb82eb",
+      "tier": "core"
+    },
+    {
+      "url": "/wasm/vision_wasm_internal.wasm",
+      "bytes": 9574032,
+      "sha256": "f00ec4731faa23b3e714d00e88d4d10e2df5c0a427d3a2b4ae6e3526fdd14ef7",
+      "tier": "core"
+    },
+    {
+      "url": "/opencv/opencv.js",
+      "bytes": 3903000,
+      "sha256": "0629ca44ba84feb8bf75253cc99941aadd04af8e61baa69eb6e49f235693aa14",
+      "tier": "core"
+    }
+  ]
+}

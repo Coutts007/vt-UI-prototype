@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { CheckCircle2, Cpu, ShieldCheck } from 'lucide-react';
-import { buildProfile, disagreeingView } from '../../capture/compute';
 import { currentHost, stopRunner } from '../../capture/runnerHost';
 import { captureSession } from '../../capture/session';
 import { Button } from '../../components/ui/Button';
@@ -47,13 +46,17 @@ export const ProcessingView: React.FC<{ onNavigate: (path: string) => void }> = 
         if (captureSession.machine.state.name === 'computing') {
           void run();
         } else {
+          captureSession.releaseMasks();
           stopRunner();
         }
         return;
       }
+      const { buildProfile, disagreeingView } = await import('../../capture/compute');
       const draft = await vtStorage.loadDraft();
       const profile = buildProfile(captureSession, draft, Date.now() - started.current);
       captureSession.profile = profile;
+      // M7 computes its profiles from the masks before this line (privacy invariant 2).
+      captureSession.releaseMasks();
       stopRunner();
       captureSession.send({ type: 'COMPUTED' });
       const view = disagreeingView(captureSession, profile.session.scale_disagreement_pct);

@@ -1,10 +1,9 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Camera, Check, Circle, HelpCircle, Volume2, VolumeX, X } from 'lucide-react';
 import { voiceGuide } from '../../capture/audio';
-import { CameraManager } from '../../capture/camera';
 import { CheckId } from '../../capture/checks';
 import { CaptureRunner, RunnerSnapshot } from '../../capture/runner';
-import { attachRunner, detachRunner, stopRunner } from '../../capture/runnerHost';
+import { attachRunner, detachRunner, onCameraRelease, stopRunner } from '../../capture/runnerHost';
 import { captureSession } from '../../capture/session';
 import { Button } from '../../components/ui/Button';
 import { LevelBubble } from '../../components/ui/LevelBubble';
@@ -107,25 +106,24 @@ export const CaptureView: React.FC<{ view: View; onNavigate: (path: string) => v
     }
   }, [state, view, onNavigate]);
 
-  // The preview only. No frame is read from this stream until M6.
+  // The camera outlives the move from front to side. A screen that is redirecting never opens it,
+  // and leaving while it is still opening stops the stream as soon as it arrives.
   useEffect(() => {
-    const camera = new CameraManager();
-    if (videoRef.current) void camera.start(videoRef.current).catch(() => {});
-    return () => camera.stop();
-  }, []);
-
-  // Keep the screen on, and ask again when the phone comes back (9.7).
-  useEffect(() => {
-    let lock: WakeLockSentinel | null = null;
-    const acquire = () => {
-      if (document.visibilityState !== 'visible' || !('wakeLock' in navigator)) return;
-      void navigator.wakeLock.request('screen').then((next) => (lock = next)).catch(() => {});
-    };
-    acquire();
-    document.addEventListener('visibilitychange', acquire);
+    if (['idle', 'permissions', 'leveling', 'saved', 'discarded'].includes(captureSession.machine.state.name)) return;
+    let live = true;
+    let release = () => {};
+    void import('../../capture/cameraManager').then(({ captureCamera, keepScreenOn }) => {
+      if (!live) return;
+      onCameraRelease(() => captureCamera.stop());
+      captureCamera.mount(videoRef.current);
+      void captureCamera.start().catch(() => {
+        if (live) captureSession.send({ type: 'VISION_UNAVAILABLE' });
+      });
+      release = keepScreenOn();
+    });
     return () => {
-      document.removeEventListener('visibilitychange', acquire);
-      void lock?.release().catch(() => {});
+      live = false;
+      release();
     };
   }, []);
 

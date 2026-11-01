@@ -1,6 +1,6 @@
 // Every capture threshold (frontend-spec 10.3), versioned. Nothing here is inlined elsewhere.
 export const CAPTURE_CONFIG = {
-  version: 'capture-1',
+  version: 'capture-2',
   level: { betaMin: 88, betaMax: 92, gammaMax: 2 },
   visibilityMin: 0.5,
   frame: { topMin: 0.03, bottomMax: 0.97, sideMargin: 0.03 },
@@ -26,11 +26,17 @@ export const CAPTURE_CONFIG = {
     doneMs: 1200,
     liveTimeoutMs: 1000,
     burstTimeoutMs: 10000,
+    // Real models: reading them from the cache takes seconds on a floor phone (D37).
+    modelLoadMs: 60000,
+    realLiveMs: 2500,
+    stillTimeoutMs: 2000,
   },
   // A3 item 3.
   pacing: { correctionGapMs: 3000, repeatMs: 6000, goodGapMs: 1000 },
-  burst: { frames: 5, spacingMs: 200, maxBadFrames: 2 },
+  burst: { frames: 5, spacingMs: 200, maxBadFrames: 2, stillAgreeSides: 0.05 },
   scale: { disagreePct: 4 },
+  // Frame sizes (10.2). Floor phones use the live size for the burst too.
+  frames: { liveLongEdge: 1280, burstLongEdge: 1920, lowMemoryGb: 3, minLongEdge: 1280, fullModelMinGb: 4 },
 } as const;
 
 export type CaptureConfig = typeof CAPTURE_CONFIG;
