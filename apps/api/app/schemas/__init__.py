@@ -236,7 +236,14 @@ FlagReason = Literal[
 ClothingFit = Literal["fitted", "loose"]
 CheckState = Literal["pass", "fail", "skipped"]
 MmProfile = Annotated[list[Mm | None], Field(min_length=101, max_length=101)]
-ProfileIds = Annotated[list[uuid.UUID], Field(min_length=1, max_length=200)]
+
+
+def _whole_tenths(values: list[float | None]) -> list[float | None]:
+    """The phone rounds to 0.1 (F1). Anything finer is room to hide other data, so this is exact."""
+    for value in values:
+        if value is not None and round(value, 1) != value:
+            raise ValueError("Finer than 0.1 is not accepted")
+    return values
 
 
 class Landmark(Input):
@@ -276,6 +283,8 @@ class SilhouetteFront(Input):
     crotch_y_px: Pixel | None
     centre_x_px: Annotated[list[Pixel | None], Field(min_length=101, max_length=101)] = None  # type: ignore[assignment]
 
+    _tenths = field_validator("half_width_mm", "centre_x_px")(_whole_tenths)
+
 
 class SilhouetteSide(Input):
     samples: Literal[101]
@@ -285,6 +294,8 @@ class SilhouetteSide(Input):
     image_h: ImageSide
     half_depth_mm: MmProfile
     anterior_mm: MmProfile
+
+    _tenths = field_validator("half_depth_mm", "anterior_mm")(_whole_tenths)
 
 
 class ViewChecks(Input):
@@ -418,6 +429,8 @@ class MeasurementProfilePayload(Input):
     def nine_different_sites(cls, value: list[Measurement]) -> list[Measurement]:
         if len({row.site_code for row in value}) != 9:
             raise ValueError("Each site appears once")
+        if any(row.method != "auto" for row in value):
+            raise ValueError("An override comes from the tailor, not from a phone")
         return value
 
     @field_validator("captured_at")
@@ -444,7 +457,6 @@ class ProfileAccepted(BaseModel):
 
 class DeletionRequestInput(Input):
     client_code: ClientCode
-    profile_ids: ProfileIds
     reason: Literal["delete", "withdraw_consent"]
 
 
@@ -456,7 +468,6 @@ class DeletionRequestReceipt(BaseModel):
 
 class AccessRequestInput(Input):
     client_code: ClientCode
-    profile_ids: ProfileIds
 
 
 class MeasurementProfile(BaseModel):

@@ -41,9 +41,9 @@ The tailor directory (D27) is behind the web switch `VITE_FEATURE_DIRECTORY` and
 
 | Endpoint | What it does |
 |---|---|
-| `POST /profiles` | Sends a saved profile from the phone: numbers, body outlines as number lists, consent and capture details. Sending the same one twice is safe. If the server already holds the same or a higher version number, the profile is kept as a conflict for the tailor to resolve. Audited |
-| `POST /deletion-requests` | Asks to delete a client's data or withdraw consent. The client proves ownership with the code and their profile IDs. Unused profiles go first. A profile used by an order stays until 30 days after that order is collected (D10). Audited |
-| `POST /data-requests/access` | Gives the client a copy of their stored data, with the same proof. Audited |
+| `POST /profiles` | Sends a saved profile from the phone: numbers, body outlines as number lists, consent and capture details. Sending the same one twice is safe. The phone's secret for the code goes in a header: the first accepted upload claims a code that holds no profiles, and later ones need the same secret. A code that holds profiles can be claimed only by an exact replay of a stored body (D45). A deleted profile cannot come back. If the server already holds the same or a higher version number, the profile is kept as a conflict for the tailor to resolve. Audited |
+| `POST /deletion-requests` | Asks to delete a client's data or withdraw consent. The phone proves ownership with its secret for the code (D45). On an unclaimed code with no profiles it replies done, and nothing changes. Unused profiles go first. A profile used by an order stays until 30 days after that order is collected (D10). Audited |
+| `POST /data-requests/access` | Gives the client a copy of their stored data, with the same secret. Audited |
 
 ## Signing in
 

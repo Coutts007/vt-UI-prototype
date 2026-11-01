@@ -42,6 +42,11 @@ export interface MockDb {
   participants: Row[];
   readings: Row[];
   deletionRequests: Row[];
+  clientSecrets: Record<string, string>;
+  /** Each stored body as sent, so a replay can be told from a reuse. */
+  profileBodies: Record<string, string>;
+  /** Deleted profile id to the client it belonged to. */
+  deletedProfiles: Record<string, string>;
   settings: Row;
   rules: Row[];
   sheets: Row[];
@@ -69,6 +74,9 @@ export function createDb(rulesArtifact: Row, now = new Date()): MockDb {
     participants: data.participants,
     readings: data.reference_readings,
     deletionRequests: data.deletion_requests,
+    clientSecrets: {},
+    profileBodies: {},
+    deletedProfiles: {},
     settings: data.settings,
     rules: [{ ...rulesArtifact }],
     sheets: [],

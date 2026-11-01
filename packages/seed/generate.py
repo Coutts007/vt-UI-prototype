@@ -182,6 +182,15 @@ def build_profile(entry: tuple, rng: random.Random, rules: dict[str, Any]) -> di
         level_unchecked=scenario == "level_unchecked",
         crotch=scenario != "inleg_fail",
     )
+    # A phone sends profiles in tenths of a millimetre (F1), and the server refuses anything finer.
+    for view, fields in (
+        ("silhouette_front", ("half_width_mm",)),
+        ("silhouette_side", ("half_depth_mm", "anterior_mm")),
+    ):
+        for name in fields:
+            numbers[view][name] = [
+                None if value is None else round(value, 1) for value in numbers[view][name]
+            ]
     result = derive(numbers, rules)
     level_state = "skipped" if scenario == "level_unchecked" else "pass"
     server_checks: list[dict[str, Any]] = []

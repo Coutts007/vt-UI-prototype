@@ -1,7 +1,6 @@
 """Deletion and access requests from a client, with proof of possession (backend-spec 14.5)."""
 
 import uuid
-from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -14,42 +13,55 @@ from app.models import (
     CaptureSession,
     Client,
     Consent,
+    DeletedProfile,
     DeletionRequest,
     MeasurementProfile,
     Order,
 )
 from app.schemas import DeletionRequestInput
+from app.security.client_secret import matches
 from app.security.ip_hash import ip_hash, keyed_hash
 from app.services import audit
 from app.services.profiles import consent_json, profile_json
 
 BACKUPS = "Copies leave the backups within 30 days."
 RETAINED = " Profiles on an order stay until 30 days after the order is collected."
+NOTHING_HELD = "Nothing is held for this code."
 
 
 async def _proven_client(
-    session: AsyncSession, code: str, profile_ids: Sequence[uuid.UUID], *, lock: bool = False
+    session: AsyncSession, code: str, secret: str | None, *, lock: bool = False
 ) -> Client:
-    """One answer for every failure: it must not reveal which part was wrong."""
-    query = select(Client).where(
-        Client.client_code == code,
-        Client.deleted_at.is_(None),
-        exists().where(
-            MeasurementProfile.client_id == Client.client_id,
-            MeasurementProfile.profile_id.in_(profile_ids),
-            MeasurementProfile.status != "deleted",
-        ),
-    )
+    """One answer for an unknown code, an unclaimed one and a wrong secret (D45)."""
+    query = select(Client).where(Client.client_code == code, Client.deleted_at.is_(None))
     client = await session.scalar(query.with_for_update(key_share=True) if lock else query)
-    if not client:
-        raise ApiError("not_found")
+    return _proven(client, secret)
+
+
+def _proven(client: Client | None, secret: str | None) -> Client:
+    if not matches(secret, client.secret_hash if client else None) or client is None:
+        raise ApiError("client_secret_refused")
     return client
 
 
+async def _has_profiles(session: AsyncSession, client: Client) -> bool:
+    found = await session.scalar(
+        select(exists().where(MeasurementProfile.client_id == client.client_id))
+    )
+    return bool(found)
+
+
 async def request_deletion(
-    request: Request, session: AsyncSession, body: DeletionRequestInput
+    request: Request, session: AsyncSession, body: DeletionRequestInput, secret: str | None
 ) -> dict[str, Any]:
-    client = await _proven_client(session, body.client_code, body.profile_ids, lock=True)
+    query = select(Client).where(
+        Client.client_code == body.client_code, Client.deleted_at.is_(None)
+    )
+    found = await session.scalar(query.with_for_update(key_share=True))
+    if found and found.secret_hash is None and not await _has_profiles(session, found):
+        # The upload never arrived. Nothing changes, so a stranger gains nothing by asking (D45).
+        return {"request_id": str(uuid.uuid4()), "status": "done", "note": NOTHING_HELD}
+    client = _proven(found, secret)
     moment = datetime.now(UTC)
     if body.reason == "withdraw_consent":
         await session.execute(
@@ -64,11 +76,15 @@ async def request_deletion(
             MeasurementProfile.client_id == client.client_id,
             MeasurementProfile.profile_id.not_in(on_order),
         )
-        .returning(MeasurementProfile.session_id)
+        .returning(MeasurementProfile.profile_id, MeasurementProfile.session_id)
         .execution_options(synchronize_session=False)
     )
-    sessions = [row.session_id for row in removed]
-    if sessions:
+    rows = removed.all()
+    sessions = [row.session_id for row in rows]
+    if rows:
+        session.add_all(
+            [DeletedProfile(profile_id=row.profile_id, client_id=client.client_id) for row in rows]
+        )
         await session.execute(
             delete(CaptureSession)
             .where(CaptureSession.session_id.in_(sessions))
@@ -79,6 +95,7 @@ async def request_deletion(
         .select_from(MeasurementProfile)
         .where(MeasurementProfile.client_id == client.client_id)
     )
+    # Spec 14.5. A claim only ever comes with an upload, so this caller has uploaded under it (D45).
     client.display_name = None
     client.height_mm = None
     status = "partially_done" if retained else "done"
@@ -113,9 +130,9 @@ async def request_deletion(
 
 
 async def request_access(
-    request: Request, session: AsyncSession, code: str, profile_ids: Sequence[uuid.UUID]
+    request: Request, session: AsyncSession, code: str, secret: str | None
 ) -> dict[str, Any]:
-    client = await _proven_client(session, code, profile_ids)
+    client = await _proven_client(session, code, secret)
     consents = list(
         await session.scalars(
             select(Consent).where(Consent.client_id == client.client_id).order_by(Consent.given_at)

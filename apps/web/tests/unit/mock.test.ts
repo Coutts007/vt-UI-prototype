@@ -43,6 +43,8 @@ const values = {
 const presets = [{ garment_type: 'shirt', site_code: 'chest', ease_mm: 80 }];
 const item = { site_code: 'chest', body_mm: 900, ease_mm: 80, overridden: false };
 
+const MOCK_SECRET = 'ab'.repeat(32);
+
 const {
   client_id: _c,
   received_at: _r,
@@ -51,6 +53,7 @@ const {
 } = {
   ...profileOf(wanjiruClient.client_id),
   profile_id: '00000000-0000-5000-8000-000000000001',
+  client_code: emptyClient.client_code,
   version: 9,
   status: 'final',
 } as Record<string, any>;
@@ -70,16 +73,20 @@ const CASES: Record<string, Case> = {
   getCurrentRules: {},
   getRules: { path: { version: '0.1-uncalibrated' } },
   verifyClientCode: { path: { code: 'AB1001' } },
-  syncProfile: { body: payload, headers: { 'Idempotency-Key': payload.profile_id } },
+  syncProfile: {
+    body: payload,
+    headers: { 'Idempotency-Key': payload.profile_id, 'X-Client-Secret': MOCK_SECRET },
+  },
   requestDeletion: {
     body: {
-      client_code: 'AB1003',
-      profile_ids: [profileOf(seed.clients[2].client_id).profile_id],
+      client_code: payload.client_code,
       reason: 'delete',
     },
+    headers: { 'X-Client-Secret': MOCK_SECRET },
   },
   requestDataAccess: {
-    body: { client_code: 'AB1003', profile_ids: [profileOf(seed.clients[2].client_id).profile_id] },
+    body: { client_code: payload.client_code },
+    headers: { 'X-Client-Secret': MOCK_SECRET },
   },
   register: {
     body: {

@@ -4,6 +4,7 @@ The newest entry comes first. Every change or improvement adds a line in the sam
 
 ## 2026-11-01: M8 ingest and public endpoints
 
+- The image guard could be made to take about 6 s on one unauthenticated request, by combining nested encoding with characters that expand when normalised, and it blocked the API meanwhile. Each body now has a budget of 64,000 normalised characters and is refused past it; the same request takes milliseconds and ordinary text is unaffected.
 - `POST /profiles` runs the whole of backend-spec 9: size, image guard, strict parse, the validation order, consent, study, idempotency, versions, conflict rows, then server checks in one transaction. A check that fails internally is logged by type and the profile is still kept.
 - The image guard reads every JSON key and value on every route before any schema, so a picture is refused as a picture wherever it hides.
 - The server re-derives each profile with `vt_measure` under the profile's own rules. The mismatch rate on the seed profiles is 0. Static proportion bounds, change since last and height checks warn only.
@@ -11,6 +12,20 @@ The newest entry comes first. Every change or improvement adds a line in the sam
 - `POST /deletion-requests` and `POST /data-requests/access` work with proof of possession. The API role can now delete profiles (migration 0003), for deletion requests only, and still cannot delete clients or audit rows.
 - The phone no longer reads every 409 as a conflict. `stale_app_version` means nothing reached the server, so the profile stays queued and asks for help after three tries.
 - `make e2e-real-api` runs the client suite against the API on compose, plus new tests of what the server stored: an offline save arrives once, the server's own derivation agrees with the phone, and deleting removes the data from the server.
+- **After review, the owner chose a device secret (D45).** The first version let anyone who knew a code upload a profile and then use its id to read or delete the client's data, or block them with a very high version. Now the phone holds a 256-bit secret per code and the server keeps only its hash. Forged uploads leave no row. The per-code allowance counts only uploads that passed validation and the claim check and are about to be stored; refused requests and replays do not use it. Access and deletion rest on the secret. A client on a new phone is refused and told to ask their tailor, and the tailor's reset is carried forward to M9.
+- **Limit that remains:** the first caller can still claim a code nobody has used, which blocks the honest client until a tailor reset. A lost secret also has no remedy until M9 merges. See D45.
+- **After a second independent review (D45, D49):**
+  - A code that already holds data can no longer be claimed by an upload. It gets the same reply as a wrong secret. An exact replay of a stored body can claim it, which closes a lost reply after a reset. Each claim has its own audit row, `client_code_claim`.
+  - A deletion or withdrawal by whoever holds the proof clears the name and height (spec 14.5), and an empty unclaimed code changes nothing. A stranger who claims a fresh code and uploads can therefore wipe those two fields, an accepted minor harm in favour of the right to deletion (D45).
+  - Deleting on an unclaimed code with no profiles replies done, with nothing done, so a first upload that never arrived no longer leaves a stuck deletion.
+  - The phone stops after five refusals, ends in `gave_up`, says something true for the cause, and offers Try again. A failed secret write stops only its own code.
+  - The queue holds new uploads for a code while a deletion or withdrawal for it is pending, so a late deletion cannot wipe a newer profile.
+  - Silhouette tenths are exact. The guard now decodes percent-encoding up to eight layers and HTML entities, and strips all invisible, format and combining marks.
+  - Profile ids are looked up within their client, and another client's id gets one refusal, live or deleted (migration 0005).
+  - The generated OpenAPI declares the 403s and header lengths, the drift test covers paths and responses, and the mock now matches the server (410, override refusal, tenths, secret format, claim rules, real deletion). The migration 0004 downgrade warns.
+- Other review fixes, each with a test: a replay answers before the app version check, and an updated app can send an old profile (D42); a deletion is no longer dropped on a generic 404, and only `code_not_found` rejects a profile; the public upload refuses overrides (D46); the guard's regex is linear, and it sees through zero-width characters, BOM, fullwidth forms and percent-encoding; silhouette numbers finer than 0.1 mm are refused; a deleted profile cannot return by replay (D47); a lost connection is no longer called a bad payload; a failed re-derivation keeps the other checks and records `rederive_failed`; `stale_rules` only when older; `/rules/{version}` serves frozen rules and the current one (D48).
+- The seed's silhouettes are now in tenths of a millimetre, like a real phone's, so `seed.json` changed.
+- **Open (D49):** landmarks can still carry a little hidden numeric data.
 - **Unverified:** the browser tests use the fake vision worker, so no profile from a real capture has reached the server. The 150 ms budget for server checks is not measured, and the airplane-mode check on a real phone is still the owner's. The tailor banner for a deletion request arrives with M9, and profiles on an order leave with M11's job.
 - **Open:** D40 still stands: re-derivation is only comparable while the depth correction is 0.
 

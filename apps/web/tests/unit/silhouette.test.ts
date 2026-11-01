@@ -87,6 +87,14 @@ describe('front profile', () => {
     expect(sampleProfile(out.half_width_mm, u(180))).toBeCloseTo(40, 0);
   });
 
+  it('sends only exact tenths, which is what the server accepts (D49)', () => {
+    const out = frontProfile(args(frontBody(), pose()), 'left');
+    const sent = out.half_width_mm.filter((v) => v !== null) as number[];
+    expect(sent.length).toBeGreaterThan(50);
+    // Python's round(v, 1) == v: v is the double nearest to some k / 10.
+    for (const value of sent) expect(Number(value.toFixed(1))).toBe(value);
+  });
+
   const u = (row: number) => (row * 2 - 200) / (1720 - 200);
 
   it('leaves a row null where an arm has merged, whatever the torso width, so it fails visibly', () => {

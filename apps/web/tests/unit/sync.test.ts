@@ -1,8 +1,16 @@
 // Sync queue semantics (frontend-spec 12.2) and the delete-my-data queue (9.12).
+import { APP_VERSION } from '../../src/appVersion';
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, NetworkError } from '../../src/api/http';
-import { BACKOFF_MS, GIVE_UP_MS, backoffMs, readNotice, runSync } from '../../src/db/sync';
+import {
+  BACKOFF_MS,
+  GIVE_UP_MS,
+  REFUSAL_LIMIT,
+  backoffMs,
+  readNotice,
+  runSync,
+} from '../../src/db/sync';
 import { LocalProfile, vtStorage } from '../../src/db/storage';
 
 vi.stubGlobal('localStorage', {
@@ -190,7 +198,8 @@ describe('delete my data', () => {
     const { post, done } = run(() => ({ status: 'received' }));
     await done;
     expect(post).toHaveBeenCalledWith('/deletion-requests', {
-      body: { client_code: 'AB1234', profile_ids: ['a'], reason: 'delete' },
+      body: { client_code: 'AB1234', reason: 'delete' },
+      headers: {},
     });
     expect(await vtStorage.getPendingOps()).toEqual([]);
   });
@@ -228,13 +237,11 @@ describe('delete my data', () => {
     );
   });
 
-  it('a 404 means nothing is left to delete; a network failure keeps it queued', async () => {
+  it('a network failure keeps a deletion queued', async () => {
     await vtStorage.saveProfile(profile('a', { sync_status: 'synced' }));
     await vtStorage.deleteMyData('AB1234', 'delete');
     await run(fail(new NetworkError('down'))).done;
     expect((await vtStorage.getPendingOps())[0].attempts).toBe(1);
-    await run(fail(new ApiError(404, 'not_found', {}))).done;
-    expect(await vtStorage.getPendingOps()).toEqual([]);
   });
 });
 
@@ -316,7 +323,9 @@ describe('review findings: shared phone and deletion', () => {
   ])('a left-behind profile ending %i is purged too', async (code) => {
     await vtStorage.saveProfile(profile('a'));
     await vtStorage.clearClientDetails();
-    await run(fail(new ApiError(code, 'x', {}))).done;
+    await run(
+      fail(new ApiError(code, code === 404 ? 'code_not_found' : 'profile_version_conflict', {})),
+    ).done;
     expect(await status('a')).toBeUndefined();
     await vtStorage.saveProfile(profile('b'));
     await run(() => ({})).done;
@@ -371,5 +380,224 @@ describe('review findings: shared phone and deletion', () => {
       ignoreBackoff: true,
     });
     expect(post).toHaveBeenCalledOnce();
+  });
+});
+
+describe('review findings: device secret and refusals (D45)', () => {
+  const secretOf = (post: ReturnType<typeof vi.fn>) =>
+    ((post.mock.calls[0] as unknown[])[1] as { headers: Record<string, string> }).headers[
+      'X-Client-Secret'
+    ];
+
+  it('makes one 256-bit secret per code and sends it only in a header', async () => {
+    await vtStorage.saveProfile(profile('a'));
+    await vtStorage.saveProfile(profile('b', { version: 2 }));
+    const { post, done } = run(() => ({ profile_id: 'x', version: 1, server_checks: [] }));
+    await done;
+    expect(secretOf(post)).toMatch(/^[0-9a-f]{64}$/);
+    const second = (post.mock.calls[1] as unknown[])[1] as {
+      headers: Record<string, string>;
+      body: unknown;
+    };
+    expect(second.headers['X-Client-Secret']).toBe(secretOf(post));
+    expect(JSON.stringify(second.body)).not.toContain(secretOf(post));
+    expect(JSON.stringify(await vtStorage.getProfileById('a'))).not.toContain(secretOf(post));
+  });
+
+  it('sends the running app version, not only the one that captured', async () => {
+    await vtStorage.saveProfile(profile('a'));
+    const { post, done } = run(() => ({ profile_id: 'a', version: 1, server_checks: [] }));
+    await done;
+    expect(
+      ((post.mock.calls[0] as unknown[])[1] as { headers: Record<string, string> }).headers[
+        'X-App-Version'
+      ],
+    ).toBe(APP_VERSION);
+  });
+
+  it('the secret survives deleting the data, so the same phone can measure again', async () => {
+    await vtStorage.saveProfile(profile('a'));
+    const first = await vtStorage.secretFor('AB1234');
+    await vtStorage.db.pending_sync.toCollection().modify({ started: true });
+    await vtStorage.deleteMyData('AB1234', 'delete');
+    expect(await vtStorage.secretFor('AB1234')).toBe(first);
+  });
+
+  it('a deletion names the code and the secret, and is asked once for a whole client', async () => {
+    await vtStorage.saveProfile(profile('a', { sync_status: 'synced' }));
+    await vtStorage.saveProfile(profile('b', { sync_status: 'synced', version: 2 }));
+    const secret = await vtStorage.secretFor('AB1234');
+    await vtStorage.deleteMyData('AB1234', 'delete');
+    expect(await vtStorage.getPendingOps()).toHaveLength(1);
+    const { post, done } = run(() => ({ request_id: 'r', status: 'done' }));
+    await done;
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledWith('/deletion-requests', {
+      body: { client_code: 'AB1234', reason: 'delete' },
+      headers: { 'X-Client-Secret': secret },
+    });
+  });
+
+  it('a refused secret keeps the profile queued and says to ask the tailor', async () => {
+    await vtStorage.saveProfile(profile('a'));
+    await run(fail(new ApiError(403, 'client_secret_refused', {}))).done;
+    const row = await vtStorage.getProfileById('a');
+    expect(row?.sync_status).toBe('pending');
+    expect(row?.secret_refused).toBe(true);
+    expect(await vtStorage.db.pending_sync.count()).toBe(1);
+  });
+
+  it('the flag clears once a reset lets it through', async () => {
+    await vtStorage.saveProfile(profile('a', { secret_refused: true }));
+    await run(() => ({ profile_id: 'a', version: 1, server_checks: [] })).done;
+    expect((await vtStorage.getProfileById('a'))?.secret_refused).toBeFalsy();
+  });
+
+  const refuse = fail(new ApiError(403, 'client_secret_refused', {}));
+
+  it('refused deletions stop after a bounded count and end in gave_up (decision 3)', async () => {
+    await vtStorage.saveProfile(profile('a', { sync_status: 'synced' }));
+    await vtStorage.secretFor('AB1234');
+    await vtStorage.deleteMyData('AB1234', 'delete');
+    for (let i = 0; i < REFUSAL_LIMIT; i++) await run(refuse).done;
+    const [op] = await vtStorage.getPendingOps();
+    expect(op.gave_up).toBe(true);
+    const later = run(refuse);
+    await later.done;
+    expect(later.post).not.toHaveBeenCalled();
+    const notice = await readNotice();
+    expect(notice.deletionRefused).toBe(true);
+    expect(notice.deletionNoSecret).toBe(false);
+    expect(notice.overdue).toBe(false);
+    expect(notice.refusalEnded).toBe(true);
+  });
+
+  it('refused uploads stop after a bounded count too (decision 3)', async () => {
+    await vtStorage.saveProfile(profile('a'));
+    for (let i = 0; i < REFUSAL_LIMIT; i++) await run(refuse).done;
+    const later = run(refuse);
+    await later.done;
+    expect(later.post).not.toHaveBeenCalled();
+    expect((await vtStorage.getProfileById('a'))?.sync_status).toBe('pending');
+  });
+
+  it('a phone with no secret gets its own true ending (decision 3)', async () => {
+    await vtStorage.saveProfile(profile('a', { sync_status: 'synced' }));
+    await vtStorage.deleteMyData('AB1234', 'withdraw');
+    for (let i = 0; i < REFUSAL_LIMIT; i++) await run(refuse).done;
+    const notice = await readNotice();
+    expect(notice.deletionNoSecret).toBe(true);
+    expect(notice.deletionRefused).toBe(false);
+    expect((await vtStorage.getPendingOps())[0].gave_up).toBe(true);
+  });
+
+  it('a failed secret write does not stop other clients and ends honestly (decision 3)', async () => {
+    await vtStorage.saveProfile(profile('a'));
+    await vtStorage.saveProfile(profile('b', { client_code: 'CD2001' }));
+    const spy = vi.spyOn(vtStorage, 'secretFor').mockImplementation(async (code) => {
+      if (code === 'AB1234') throw new Error('QuotaExceededError');
+      return 'ab'.repeat(32);
+    });
+    for (let i = 0; i < REFUSAL_LIMIT; i++) await run(() => ({})).done;
+    spy.mockRestore();
+    expect((await vtStorage.getProfileById('a'))?.no_secret).toBe(true);
+    expect((await vtStorage.getProfileById('b'))?.sync_status).toBe('synced');
+    expect((await readNotice()).noSecret).toBe(true);
+    expect(await vtStorage.db.pending_sync.count()).toBe(1);
+    expect((await vtStorage.getPendingOps())[0].gave_up).toBe(true);
+  });
+
+  it('asking to try again sends what a refusal ended, and sends only known fields', async () => {
+    await vtStorage.saveProfile(profile('a'));
+    for (let i = 0; i < REFUSAL_LIMIT; i++) await run(refuse).done;
+    await vtStorage.retryRefused();
+    const { post, done } = run(() => ({ profile_id: 'a', version: 1, server_checks: [] }));
+    await done;
+    expect(post).toHaveBeenCalledTimes(1);
+    const body = (post.mock.calls as unknown as [string, { body: Record<string, unknown> }][])[0][1]
+      .body;
+    expect(body).not.toHaveProperty('secret_refused');
+    expect(body).not.toHaveProperty('no_secret');
+    expect((await vtStorage.getProfileById('a'))?.sync_status).toBe('synced');
+    expect(await vtStorage.db.pending_sync.count()).toBe(0);
+  });
+
+  it('a new upload waits while a deletion for its code is pending (decision 4)', async () => {
+    await vtStorage.saveProfile(profile('old', { sync_status: 'synced' }));
+    await vtStorage.deleteMyData('AB1234', 'delete');
+    const t = Date.now();
+    await run(fail(new ApiError(503, 'x', {})), t).done;
+    await vtStorage.saveProfile(profile('new'));
+    // The deletion is in its backoff, and the upload is due: it must not overtake.
+    const during = run(() => ({}), t + 1000);
+    await during.done;
+    expect(during.post).not.toHaveBeenCalled();
+    expect((await vtStorage.getProfileById('new'))?.sync_status).toBe('pending');
+    // Past the backoff the deletion goes first, and the upload follows in the same pass.
+    const calls: string[] = [];
+    const post = vi.fn(async (path: string) => {
+      calls.push(path);
+      return {};
+    });
+    await runSync({ api: { post } as never, now: () => t + BACKOFF_MS[0] + 1, online: () => true });
+    expect(calls).toEqual(['/deletion-requests', '/profiles']);
+    expect((await vtStorage.getProfileById('new'))?.sync_status).toBe('synced');
+  });
+
+  it('a pending deletion holds only its own code (decision 4)', async () => {
+    await vtStorage.saveProfile(profile('old', { sync_status: 'synced' }));
+    await vtStorage.deleteMyData('AB1234', 'delete');
+    await vtStorage.saveProfile(profile('other', { client_code: 'CD2001' }));
+    const post = vi.fn(async (path: string) => {
+      if (path === '/deletion-requests') throw new ApiError(503, 'x', {});
+      return {};
+    });
+    await runSync({ api: { post } as never, now: Date.now, online: () => true });
+    expect(post).toHaveBeenCalledTimes(2);
+    expect((await vtStorage.getProfileById('other'))?.sync_status).toBe('synced');
+  });
+
+  it('a refused deletion stays queued and shows a notice', async () => {
+    await vtStorage.saveProfile(profile('a', { sync_status: 'synced' }));
+    await vtStorage.secretFor('AB1234');
+    await vtStorage.deleteMyData('AB1234', 'delete');
+    await run(fail(new ApiError(403, 'client_secret_refused', {}))).done;
+    expect(await vtStorage.db.pending_sync.count()).toBe(1);
+    expect((await readNotice()).deletionRefused).toBe(true);
+  });
+
+  it('a generic 404 does not drop a deletion (item 3)', async () => {
+    await vtStorage.saveProfile(profile('a', { sync_status: 'synced' }));
+    await vtStorage.deleteMyData('AB1234', 'delete');
+    await run(fail(new ApiError(404, 'not_found', {}))).done;
+    expect(await vtStorage.db.pending_sync.count()).toBe(1);
+  });
+
+  it('only code_not_found rejects a profile (item 3)', async () => {
+    await vtStorage.saveProfile(profile('a'));
+    await run(fail(new ApiError(404, 'not_found', {}))).done;
+    expect((await vtStorage.getProfileById('a'))?.sync_status).toBe('pending');
+    expect(await vtStorage.db.pending_sync.count()).toBe(1);
+  });
+
+  it('a profile the server says was deleted leaves the queue and the phone', async () => {
+    await vtStorage.saveProfile(profile('a'));
+    await run(fail(new ApiError(410, 'profile_deleted', {}))).done;
+    expect(await vtStorage.getProfileById('a')).toBeNull();
+    expect(await vtStorage.db.pending_sync.count()).toBe(0);
+  });
+
+  it('clearing the phone forgets a settled client, and keeps what an unsent profile needs', async () => {
+    await vtStorage.saveProfile(profile('a', { sync_status: 'synced' }));
+    await vtStorage.saveProfile(profile('b', { client_code: 'CD2001' }));
+    const settled = await vtStorage.secretFor('AB1234');
+    const unsent = await vtStorage.secretFor('CD2001');
+    await vtStorage.clearClientDetails();
+    expect(await vtStorage.existingSecret('AB1234')).toBeNull();
+    expect(await vtStorage.existingSecret('CD2001')).toBe(unsent);
+    expect(unsent).not.toBe(settled);
+    const { done } = run(() => ({ profile_id: 'b', version: 1, server_checks: [] }));
+    await done;
+    expect(await vtStorage.existingSecret('CD2001')).toBeNull();
   });
 });

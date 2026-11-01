@@ -31,6 +31,8 @@ function newId(): string {
   return crypto.randomUUID();
 }
 
+const WELL_FORMED_SECRET = /^[0-9a-f]{64}$/;
+
 function problem(code: Code, extra: Row = {}): Response {
   const entry = errorCodes[code];
   return HttpResponse.json(
@@ -298,14 +300,56 @@ export function createHandlers(options: MockOptions = {}) {
       if (JSON.stringify(body).includes('data:image')) return problem('image_content_rejected');
       const client = clientByCode(body.client_code);
       if (!client) return problem('code_not_found');
-      if (!body.consent?.scope?.includes('measure')) return problem('consent_missing');
+      const secret = request.headers.get('X-Client-Secret');
+      const held = db.clientSecrets[client.client_code];
+      if (held ? secret !== held : !WELL_FORMED_SECRET.test(secret ?? ''))
+        return problem('client_secret_refused');
+      const claim = () => {
+        db.clientSecrets[client.client_code] = secret!;
+      };
       const replay = profileById(body.profile_id);
-      if (replay)
+      const text = JSON.stringify(body);
+      if (
+        replay &&
+        replay.client_id === client.client_id &&
+        db.profileBodies[body.profile_id] === text
+      ) {
+        claim();
         return created({
           profile_id: replay.profile_id,
           version: replay.version,
           server_checks: replay.server_checks,
         });
+      }
+      // As on the server: a code that holds data is never claimed by an upload (D45).
+      if (!held && db.profiles.some((p) => p.client_id === client.client_id))
+        return problem('client_secret_refused');
+      const reused = () =>
+        problem('validation_failed', {
+          errors: [{ field: 'profile_id', code: 'profile_id_reused' }],
+        });
+      const deletedFrom = db.deletedProfiles[body.profile_id];
+      if (deletedFrom && deletedFrom !== client.client_id) return reused();
+      if (deletedFrom) return problem('profile_deleted');
+      if (replay) return reused();
+      if (body.measurements?.some((m: Row) => m.method !== 'auto'))
+        return problem('validation_failed', {
+          errors: [{ field: 'measurements', code: 'not_auto' }],
+        });
+      const profiles = [
+        body.silhouette_front?.half_width_mm,
+        body.silhouette_front?.centre_x_px,
+        body.silhouette_side?.half_depth_mm,
+        body.silhouette_side?.anterior_mm,
+      ];
+      const exactTenth = (v: number | null) => v === null || Number(v.toFixed(1)) === v;
+      if (profiles.some((list) => list && !list.every(exactTenth)))
+        return problem('validation_failed', {
+          errors: [{ field: 'silhouette', code: 'value_error' }],
+        });
+      if (!body.consent?.scope?.includes('measure')) return problem('consent_missing');
+      claim();
+      db.profileBodies[body.profile_id] = text;
       const versions = db.profiles
         .filter((p) => p.client_id === client.client_id && p.status === 'final')
         .map((p) => p.version);
@@ -348,29 +392,45 @@ export function createHandlers(options: MockOptions = {}) {
       db.profiles.push(stored);
       return created({ profile_id: body.profile_id, version: body.version, server_checks: [] });
     }),
-    route('post', '/deletion-requests', null, ({ body }) => {
+    route('post', '/deletion-requests', null, ({ body, request: incoming }) => {
       const client = clientByCode(body.client_code);
-      const owned =
-        client &&
-        body.profile_ids.some((id: string) => profileById(id)?.client_id === client.client_id);
-      if (!owned) return problem('not_found');
+      const secret = incoming.headers.get('X-Client-Secret');
+      const holds = client && db.profiles.some((p) => p.client_id === client.client_id);
+      if (client && !holds && !db.clientSecrets[client.client_code])
+        return created(
+          { request_id: newId(), status: 'done', note: 'Nothing is held for this code.' },
+          202,
+        );
+      if (!client || !secret || db.clientSecrets[client.client_code] !== secret)
+        return problem('client_secret_refused');
+      const onOrder = new Set(
+        db.orders.filter((o) => o.client_id === client.client_id).map((o) => o.profile_id),
+      );
+      const leaving = db.profiles.filter(
+        (p) => p.client_id === client.client_id && !onOrder.has(p.profile_id),
+      );
+      leaving.forEach((p) => {
+        db.deletedProfiles[p.profile_id] = client.client_id;
+      });
+      db.profiles = db.profiles.filter((p) => !leaving.includes(p));
+      const retained = db.profiles.some((p) => p.client_id === client.client_id);
+      const note = 'Copies leave the backups within 30 days.';
       const request = {
         request_id: newId(),
         reason: body.reason,
         received_at: new Date().toISOString(),
-        status: 'received',
-        completed_at: null,
+        status: retained ? 'partially_done' : 'done',
+        completed_at: retained ? null : new Date().toISOString(),
       };
       db.deletionRequests.push(request);
       audit(db, null, 'deletion_request', 'client', client.client_id, 'Client asked for deletion');
-      return created({ request_id: request.request_id, status: request.status }, 202);
+      return created({ request_id: request.request_id, status: request.status, note }, 202);
     }),
-    route('post', '/data-requests/access', null, ({ body }) => {
+    route('post', '/data-requests/access', null, ({ body, request }) => {
       const client = clientByCode(body.client_code);
-      const owned =
-        client &&
-        body.profile_ids.some((id: string) => profileById(id)?.client_id === client.client_id);
-      if (!owned) return problem('not_found');
+      const secret = request.headers.get('X-Client-Secret');
+      if (!client || !secret || db.clientSecrets[client.client_code] !== secret)
+        return problem('client_secret_refused');
       const profiles = db.profiles.filter((p) => p.client_id === client.client_id);
       audit(db, null, 'access_request', 'client', client.client_id, 'Client asked for a copy');
       return {

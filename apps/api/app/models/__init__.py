@@ -150,6 +150,8 @@ class Client(Base):
     sex: Mapped[str | None] = mapped_column(String(12))
     clothing_fit: Mapped[str | None] = mapped_column(String(10))
     created_at: Mapped[datetime] = now()
+    # The hash of the phone's secret, set by the first accepted upload (D45).
+    secret_hash: Mapped[str | None] = mapped_column(String(64))
     deleted_at: Mapped[datetime | None] = stamp()
     previous_code: Mapped[str | None] = mapped_column(String(6))
     source: Mapped[str] = mapped_column(String(10), server_default="tailor")
@@ -301,6 +303,7 @@ class ServerCheck(Base):
             "rules_version_unknown",
             "stale_rules",
             "height_mismatch",
+            "rederive_failed",
         ),
         one_of("severity", "info", "check"),
     )
@@ -427,6 +430,17 @@ class SheetShare(Base):
     via: Mapped[str] = mapped_column(String(16))
     shared_at: Mapped[datetime] = now()
     user_id: Mapped[uuid.UUID | None] = fk("user_account.user_id", nullable=True)
+
+
+class DeletedProfile(Base):
+    """Identifiers only, so a phone's replay cannot bring back what a client deleted (D45)."""
+
+    __tablename__ = "deleted_profile"
+    profile_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    deleted_at: Mapped[datetime] = now()
+    client_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("client.client_id", ondelete="CASCADE")
+    )
 
 
 class Conflict(Base):

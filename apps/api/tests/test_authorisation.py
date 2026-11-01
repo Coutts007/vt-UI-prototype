@@ -120,6 +120,49 @@ def test_field_names_match_the_contract(
             assert set(generated[name]["properties"]) == set(declared), name
 
 
+def _contract_operations() -> dict[tuple[str, str], dict[str, Any]]:
+    return {
+        (path, method): operation
+        for path, item in CONTRACT["paths"].items()
+        for method, operation in item.items()
+        if method in {"get", "post", "put", "patch", "delete"}
+    }
+
+
+def _parameters(operation: dict[str, Any]) -> dict[str, Any]:
+    named = {}
+    for parameter in operation.get("parameters", []):
+        if "$ref" in parameter:
+            parameter = CONTRACT["components"]["parameters"][parameter["$ref"].rsplit("/", 1)[1]]
+        named[parameter["name"]] = parameter
+    return named
+
+
+def _max_length(schema: dict[str, Any]) -> int | None:
+    found = [schema.get("maxLength")] + [o.get("maxLength") for o in schema.get("anyOf", [])]
+    return next((length for length in found if length is not None), None)
+
+
+def test_generated_paths_responses_and_headers_match_the_contract(app: FastAPI) -> None:
+    generated = {
+        (path.removeprefix("/api/v1"), method): operation
+        for path, item in app.openapi()["paths"].items()
+        for method, operation in item.items()
+    }
+    contract = _contract_operations()
+    # The contract is written first, so it may hold routes that later milestones build.
+    assert set(generated) <= set(contract), set(generated) - set(contract)
+    for place, operation in generated.items():
+        declared = contract[place]
+        assert operation["operationId"] == declared["operationId"], place
+        assert set(operation["responses"]) - {"422"} <= set(declared["responses"]), place
+        ours, theirs = _parameters(operation), _parameters(declared)
+        for name in ours.keys() & theirs.keys():
+            if ours[name]["in"] != "header":
+                continue
+            assert _max_length(ours[name]["schema"]) == _max_length(theirs[name]["schema"]), name
+
+
 async def test_a_tailor_reaches_only_their_own_clients(session: AsyncSession) -> None:
     wanjiru = await session.scalar(
         select(UserAccount).where(UserAccount.email == ACCOUNTS["tailor"])

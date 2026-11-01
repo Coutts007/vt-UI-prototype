@@ -1,5 +1,5 @@
 // What only the real API can show: what the server stored and said about a phone's profile.
-import { expect, Page, test } from '@playwright/test';
+import { APIRequestContext, devices, expect, Page, test } from '@playwright/test';
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { en } from '../../src/i18n/en';
@@ -51,19 +51,29 @@ async function save(page: Page) {
   await expect(page).toHaveURL(/\/saved/);
 }
 
-const profileIds = (page: Page): Promise<string[]> =>
+const readTable = (page: Page, table: string): Promise<Record<string, string>[]> =>
   page.evaluate(
-    () =>
+    (name) =>
       new Promise((resolve, reject) => {
         const open = indexedDB.open('virtual_tailor');
         open.onerror = () => reject(open.error);
         open.onsuccess = () => {
-          const all = open.result.transaction('profiles').objectStore('profiles').getAllKeys();
-          all.onsuccess = () => resolve(all.result as string[]);
+          const all = open.result.transaction(name).objectStore(name).getAll();
+          all.onsuccess = () => resolve(all.result as Record<string, string>[]);
           all.onerror = () => reject(all.error);
         };
       }),
+    table,
   );
+
+const secretOf = async (page: Page, code: string) =>
+  (await readTable(page, 'client_secrets')).find((row) => row.client_code === code)?.secret ?? '';
+
+const askAccess = (request: APIRequestContext, code: string, secret: string) =>
+  request.post('/api/v1/data-requests/access', {
+    data: { client_code: code },
+    headers: { 'X-Client-Secret': secret },
+  });
 
 test('offline, then online: the profile arrives once, and the server agrees with the phone', async ({
   page,
@@ -72,6 +82,19 @@ test('offline, then online: the profile arrives once, and the server agrees with
 }) => {
   test.setTimeout(150_000);
   const code = await freshCode(request);
+  const sends: string[] = [];
+  page.on('request', (sent) => {
+    if (sent.method() === 'POST' && new URL(sent.url()).pathname === '/api/v1/profiles') {
+      sends.push(sent.url());
+    }
+  });
+  const created: number[] = [];
+  page.on('response', (reply) => {
+    const asked = reply.request();
+    if (asked.method() === 'POST' && new URL(reply.url()).pathname === '/api/v1/profiles') {
+      created.push(reply.status());
+    }
+  });
   await toReview(page, code);
   const names = readdirSync(ASSETS).filter((n) =>
     /^(SavedView|MyMeasurementsView|sync)-.*\.js$/.test(n),
@@ -86,17 +109,21 @@ test('offline, then online: the profile arrives once, and the server agrees with
   await expect(page.getByRole('heading', { name: en.savedTitleSynced })).toBeVisible({
     timeout: 30_000,
   });
-  // Back and forward wake the queue again; nothing further may arrive.
-  await page.evaluate(() => window.dispatchEvent(new Event('online')));
-  const ids = await profileIds(page);
-  expect(ids).toHaveLength(1);
-
-  const reply = await request.post('/api/v1/data-requests/access', {
-    data: { client_code: code, profile_ids: ids },
+  // Every trigger the app has, then long enough for any send they start to show.
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('online'));
+    document.dispatchEvent(new Event('visibilitychange'));
   });
+  await page.reload();
+  await page.waitForTimeout(3_000);
+  expect(await readTable(page, 'pending_sync')).toEqual([]);
+
+  const reply = await askAccess(request, code, await secretOf(page, code));
   expect(reply.status()).toBe(200);
   const data = await reply.json();
   expect(data.profiles).toHaveLength(1);
+  expect(sends.length).toBeLessThanOrEqual(2); // One lost to going offline at most, one that arrived.
+  expect(created.filter((status) => status === 201)).toHaveLength(1);
   expect(data.profiles[0].status).toBe('final');
   expect(data.profiles[0].measurements).toHaveLength(9);
   const kinds = data.profiles[0].server_checks.map((c: { kind: string }) => c.kind);
@@ -112,22 +139,44 @@ test('delete my data removes the profile from the server', async ({ page, reques
   await expect(page.getByRole('heading', { name: en.savedTitleSynced })).toBeVisible({
     timeout: 15_000,
   });
-  const ids = await profileIds(page);
+  const secret = await secretOf(page, code);
   await page.getByRole('button', { name: en.done, exact: true }).click();
   await page.getByTestId('profile-list').getByRole('button').first().click();
   await page.getByRole('button', { name: en.deleteMyData }).click();
   await page.getByRole('dialog').getByRole('button', { name: en.confirm }).click();
   await page.getByRole('button', { name: en.deleteYes }).click();
   await expect(page.getByText(en.noMeasurementsYet)).toBeVisible();
+  // The secret survives, so the phone can still prove who asks, and now there is nothing to read.
   await expect
-    .poll(
-      async () =>
-        (
-          await request.post('/api/v1/data-requests/access', {
-            data: { client_code: code, profile_ids: ids },
-          })
-        ).status(),
-      { timeout: 45_000 },
-    )
-    .toBe(404);
+    .poll(async () => (await (await askAccess(request, code, secret)).json()).profiles?.length, {
+      timeout: 45_000,
+    })
+    .toBe(0);
+});
+
+test('a second phone is refused, stores nothing, and is told to ask the tailor', async ({
+  page,
+  browser,
+  request,
+}) => {
+  test.setTimeout(240_000);
+  const code = await freshCode(request);
+  await toReview(page, code);
+  await save(page);
+  await expect(page.getByRole('heading', { name: en.savedTitleSynced })).toBeVisible({
+    timeout: 15_000,
+  });
+  const secret = await secretOf(page, code);
+
+  const other = await browser.newContext({ ...devices['Pixel 7'], serviceWorkers: 'block' });
+  const second = await other.newPage();
+  await toReview(second, code);
+  await save(second);
+  await expect(second.getByRole('alert').filter({ hasText: en.syncSecretRefused })).toBeVisible({
+    timeout: 15_000,
+  });
+  const data = await (await askAccess(request, code, secret)).json();
+  expect(data.profiles).toHaveLength(1);
+  expect((await askAccess(request, code, await secretOf(second, code))).status()).toBe(403);
+  await other.close();
 });
