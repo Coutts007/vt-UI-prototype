@@ -8,6 +8,8 @@ const MINUTE = 60_000;
 export const BACKOFF_MS = [MINUTE / 2, MINUTE, 2 * MINUTE, 5 * MINUTE, 15 * MINUTE, 60 * MINUTE];
 export const GIVE_UP_MS = 24 * 60 * MINUTE;
 export const HELP_AFTER_ATTEMPTS = 3;
+/** About eight minutes of backoff. A refusal will not change by itself, so asking again is noise. */
+export const REFUSAL_LIMIT = 5;
 const TIMER_MS = 30_000;
 
 export function backoffMs(attempts: number): number {
@@ -25,21 +27,36 @@ export interface SyncDeps {
 }
 
 function toPayload(profile: LocalProfile) {
-  const { sync_status: _status, needs_help: _help, secret_refused: _refused, ...payload } = profile;
+  const {
+    sync_status: _status,
+    needs_help: _help,
+    secret_refused: _refused,
+    no_secret: _none,
+    ...payload
+  } = profile;
   return payload;
 }
 
-type Outcome = 'done' | 'retry' | 'stop';
+type Outcome = 'done' | 'retry' | 'stop' | 'refused';
 
 async function sendCreate(op: PendingSyncOp, api: SyncDeps['api']): Promise<Outcome> {
   const profile = await vtStorage.getProfileById(op.profile_id);
   if (!profile) return 'done';
+  let secret: string;
+  try {
+    secret = await vtStorage.secretFor(profile.client_code);
+  } catch {
+    // Storage is full or broken. Only this code is stuck, so the others still go.
+    console.warn('profile_sync_refused', 'no_secret');
+    await vtStorage.db.profiles.update(profile.profile_id, { no_secret: true }).catch(() => 0);
+    return 'refused';
+  }
   try {
     await api.post('/profiles', {
       body: toPayload(profile),
       headers: {
         'Idempotency-Key': profile.profile_id,
-        'X-Client-Secret': await vtStorage.secretFor(profile.client_code),
+        'X-Client-Secret': secret,
         'X-App-Version': APP_VERSION,
       },
     } as never);
@@ -47,6 +64,7 @@ async function sendCreate(op: PendingSyncOp, api: SyncDeps['api']): Promise<Outc
       sync_status: 'synced',
       needs_help: false,
       secret_refused: false,
+      no_secret: false,
     });
     await vtStorage.purgeAfterSync(profile.profile_id);
     return 'done';
@@ -54,10 +72,10 @@ async function sendCreate(op: PendingSyncOp, api: SyncDeps['api']): Promise<Outc
     if (error instanceof NetworkError) return 'stop';
     if (!(error instanceof ApiError)) throw error;
     if (error.code === 'client_secret_refused') {
-      // Another phone claimed this code. It stays queued, so it sends once the tailor frees the code.
+      // It stays on this phone, and the client can try again once the tailor has helped.
       console.warn('profile_sync_refused', error.code);
-      await vtStorage.db.profiles.update(profile.profile_id, { secret_refused: true });
-      return 'retry';
+      await vtStorage.db.profiles.update(profile.profile_id, { secret_refused: true, no_secret: false });
+      return 'refused';
     }
     if (error.code === 'profile_deleted') {
       // The client already asked for this to go, so it must not linger here either.
@@ -96,7 +114,8 @@ async function sendCreate(op: PendingSyncOp, api: SyncDeps['api']): Promise<Outc
 
 async function sendDeletion(op: PendingSyncOp, api: SyncDeps['api']): Promise<Outcome> {
   if (!op.client_code) return 'done';
-  const secret = await vtStorage.existingSecret(op.client_code);
+  // No secret still asks: the server has nothing to prove against if the code never received data.
+  const secret = await vtStorage.existingSecret(op.client_code).catch(() => null);
   try {
     await api.post('/deletion-requests', {
       body: {
@@ -110,10 +129,15 @@ async function sendDeletion(op: PendingSyncOp, api: SyncDeps['api']): Promise<Ou
     if (error instanceof NetworkError) return 'stop';
     if (!(error instanceof ApiError)) throw error;
     // Never dropped on a refusal: the client asked for this, and it has not happened.
-    if (error.code === 'client_secret_refused') await vtStorage.updateOp(op.op_id!, { secret_refused: true });
+    if (error.code === 'client_secret_refused') {
+      await vtStorage.updateOp(op.op_id!, { secret_refused: !!secret, no_secret: !secret });
+      return 'refused';
+    }
     return 'retry';
   }
 }
+
+const refusalEnded = (op: PendingSyncOp) => (op.refusals ?? 0) >= REFUSAL_LIMIT;
 
 /** One pass over the queue. Returns how many operations were sent or settled. */
 export async function runSync(deps: SyncDeps): Promise<number> {
@@ -121,7 +145,17 @@ export async function runSync(deps: SyncDeps): Promise<number> {
   const online = deps.online ?? (() => navigator.onLine);
   if (!online()) return 0;
   let settled = 0;
-  for (const op of await vtStorage.getPendingOps()) {
+  const ops = await vtStorage.getPendingOps();
+  // A deletion wipes all of a client's data, so a later upload must not arrive before it runs (D45).
+  const clearing = new Map<string, number>();
+  for (const op of ops) {
+    if (op.operation !== 'create' && op.client_code) {
+      clearing.set(op.client_code, (clearing.get(op.client_code) ?? 0) + 1);
+    }
+  }
+  for (const op of ops) {
+    if (refusalEnded(op)) continue;
+    if (op.operation === 'create' && op.client_code && clearing.get(op.client_code)) continue;
     if (op.gave_up && !deps.includeGaveUp) continue;
     if (!op.gave_up && !deps.ignoreBackoff && Date.parse(op.next_attempt_at) > now()) continue;
     if (op.operation === 'create') await vtStorage.updateOp(op.op_id!, { started: true });
@@ -130,12 +164,17 @@ export async function runSync(deps: SyncDeps): Promise<number> {
     if (outcome === 'done') {
       await vtStorage.removeOp(op.op_id!);
       settled += 1;
+      if (op.operation !== 'create' && op.client_code) {
+        clearing.set(op.client_code, (clearing.get(op.client_code) ?? 1) - 1);
+      }
       continue;
     }
     const attempts = op.attempts + 1;
-    const gaveUp = now() - Date.parse(op.created_at) >= GIVE_UP_MS;
+    const refusals = (op.refusals ?? 0) + (outcome === 'refused' ? 1 : 0);
+    const gaveUp = refusals >= REFUSAL_LIMIT || now() - Date.parse(op.created_at) >= GIVE_UP_MS;
     await vtStorage.updateOp(op.op_id!, {
       attempts,
+      refusals,
       gave_up: gaveUp,
       next_attempt_at: new Date(now() + backoffMs(attempts)).toISOString(),
     });
@@ -148,10 +187,16 @@ export async function runSync(deps: SyncDeps): Promise<number> {
 export interface SyncNotice {
   /** The server refused a profile three times (12.2). */
   needsHelp: boolean;
-  /** Another phone holds this code, so only the tailor can free it (D45). */
+  /** The server would not accept this phone for a code, so a profile has not been sent (D45). */
   secretRefused: boolean;
-  /** A deletion could not be proved from this phone, so it has not happened yet. */
+  /** This phone could not make or keep a secret, so a profile has not been sent. */
+  noSecret: boolean;
+  /** The server refused this phone's secret, so a deletion has not happened yet. */
   deletionRefused: boolean;
+  /** This phone has no secret to prove a deletion with, so it has not happened yet. */
+  deletionNoSecret: boolean;
+  /** Refusals used up the retries, so only asking again will send anything. */
+  refusalEnded: boolean;
   /** A code was refused and can be corrected on My measurements. */
   rejected: boolean;
   /** Something has waited past the 24-hour window. */
@@ -168,9 +213,12 @@ export async function readNotice(): Promise<SyncNotice> {
   return {
     needsHelp: visible.some((p) => p.needs_help),
     secretRefused: visible.some((p) => p.secret_refused),
+    noSecret: visible.some((p) => p.no_secret),
     deletionRefused: ops.some((op) => op.operation !== 'create' && op.secret_refused),
+    deletionNoSecret: ops.some((op) => op.operation !== 'create' && op.no_secret),
+    refusalEnded: ops.some(refusalEnded),
     rejected: visible.some((p) => p.sync_status === 'rejected'),
-    overdue: ops.some((op) => op.gave_up),
+    overdue: ops.some((op) => op.gave_up && !refusalEnded(op)),
     unsent: profiles.filter((p) => p.sync_status === 'pending').length,
   };
 }

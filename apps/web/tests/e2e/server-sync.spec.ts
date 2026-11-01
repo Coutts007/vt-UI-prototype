@@ -88,6 +88,13 @@ test('offline, then online: the profile arrives once, and the server agrees with
       sends.push(sent.url());
     }
   });
+  const created: number[] = [];
+  page.on('response', (reply) => {
+    const asked = reply.request();
+    if (asked.method() === 'POST' && new URL(reply.url()).pathname === '/api/v1/profiles') {
+      created.push(reply.status());
+    }
+  });
   await toReview(page, code);
   const names = readdirSync(ASSETS).filter((n) =>
     /^(SavedView|MyMeasurementsView|sync)-.*\.js$/.test(n),
@@ -116,6 +123,7 @@ test('offline, then online: the profile arrives once, and the server agrees with
   const data = await reply.json();
   expect(data.profiles).toHaveLength(1);
   expect(sends.length).toBeLessThanOrEqual(2); // One lost to going offline at most, one that arrived.
+  expect(created.filter((status) => status === 201)).toHaveLength(1);
   expect(data.profiles[0].status).toBe('final');
   expect(data.profiles[0].measurements).toHaveLength(9);
   const kinds = data.profiles[0].server_checks.map((c: { kind: string }) => c.kind);

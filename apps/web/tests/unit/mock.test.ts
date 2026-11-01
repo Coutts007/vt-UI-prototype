@@ -53,6 +53,7 @@ const {
 } = {
   ...profileOf(wanjiruClient.client_id),
   profile_id: '00000000-0000-5000-8000-000000000001',
+  client_code: emptyClient.client_code,
   version: 9,
   status: 'final',
 } as Record<string, any>;

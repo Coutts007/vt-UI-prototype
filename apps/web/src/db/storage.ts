@@ -11,8 +11,10 @@ export interface LocalProfile extends Payload {
   sync_status: SyncStatus;
   /** The server refused it three times, so the client is told to contact their tailor. */
   needs_help?: boolean;
-  /** The server holds another phone's secret for this code, so only the tailor can free it (D45). */
+  /** The server would not accept this phone for this code. Why is not known here (D45). */
   secret_refused?: boolean;
+  /** This phone could not make or keep the secret for this code. */
+  no_secret?: boolean;
 }
 
 /** One per client code on this phone. Never in a profile, a payload or a log (D45). */
@@ -38,6 +40,10 @@ export interface PendingSyncOp {
   started?: boolean;
   /** The server refused this deletion's secret, so the client is told to ask their tailor. */
   secret_refused?: boolean;
+  /** Refused with no secret to send: this phone never had one, or could not read it. */
+  no_secret?: boolean;
+  /** How many refusals so far. At the limit nothing retries until someone asks (D45). */
+  refusals?: number;
 }
 
 export interface PreflightRecord {
@@ -314,6 +320,26 @@ class VTStorage {
 
   async updateOp(opId: number, changes: Partial<PendingSyncOp>): Promise<void> {
     await this.db.pending_sync.update(opId, changes);
+  }
+
+  /** Someone asked to try again, perhaps after their tailor freed the code. */
+  async retryRefused(): Promise<void> {
+    const now = new Date().toISOString();
+    await this.db.transaction('rw', this.db.pending_sync, this.db.profiles, async () => {
+      const ended = (await this.db.pending_sync.toArray()).filter((op) => op.refusals);
+      for (const op of ended) {
+        await this.db.pending_sync.update(op.op_id!, {
+          refusals: 0,
+          gave_up: false,
+          secret_refused: false,
+          no_secret: false,
+          next_attempt_at: now,
+        });
+        if (op.operation === 'create') {
+          await this.db.profiles.update(op.profile_id, { secret_refused: false, no_secret: false });
+        }
+      }
+    });
   }
 
   async removeOp(opId: number): Promise<void> {

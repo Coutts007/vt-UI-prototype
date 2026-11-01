@@ -16,7 +16,6 @@ const ASSETS = join(
   REAL_API ? '../../dist-real-api/assets' : '../../dist/assets',
 );
 let FREE_CODE = 'AB1008';
-const TAKEN_CODE = 'AB1004';
 
 // The real API remembers between tests, so each test needs a code nobody has measured under.
 test.beforeEach(async ({ request }) => {
@@ -243,9 +242,32 @@ test('saved offline, then sent when back online', async ({ page, context }) => {
 });
 
 test('a conflict tells the client a newer version is saved', async ({ page }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   await fake(page);
-  await toReview(page, en, TAKEN_CODE);
+  await toReview(page, en, FREE_CODE);
+  await saveAndSee(page, en);
+  await expect(page.getByRole('heading', { name: en.savedTitleSynced })).toBeVisible({
+    timeout: 30_000,
+  });
+  // As if this phone lost its local copy: the next capture repeats a version the server holds.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open('virtual_tailor');
+        open.onsuccess = () => {
+          const cleared = open.result
+            .transaction('profiles', 'readwrite')
+            .objectStore('profiles')
+            .clear();
+          cleared.onsuccess = () => {
+            open.result.close();
+            resolve();
+          };
+          cleared.onerror = () => reject(cleared.error);
+        };
+      }),
+  );
+  await toReview(page, en, FREE_CODE);
   await saveAndSee(page, en);
   await expect(page.getByRole('heading', { name: en.savedTitleConflict })).toBeVisible({
     timeout: 15_000,

@@ -20,15 +20,21 @@ export const MyMeasurementsView: React.FC<{ onNavigate: (path: string) => void; 
   const [action, setAction] = useState<Action | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [deletionRefused, setDeletionRefused] = useState(false);
-
-  const [secretRefused, setSecretRefused] = useState(false);
+  const [problems, setProblems] = useState<string[]>([]);
+  const [canRetry, setCanRetry] = useState(false);
 
   const load = useCallback(() => {
     void vtStorage.getVisibleProfiles().then(setProfiles);
     void readNotice().then((found) => {
-      setDeletionRefused(found.deletionRefused);
-      setSecretRefused(found.secretRefused);
+      setProblems(
+        [
+          found.secretRefused && 'syncSecretRefused',
+          found.noSecret && 'syncNoSecret',
+          found.deletionRefused && 'deletionSecretRefused',
+          found.deletionNoSecret && 'deletionNoSecret',
+        ].filter((key): key is string => !!key),
+      );
+      setCanRetry(found.refusalEnded);
     });
   }, []);
   useEffect(() => {
@@ -64,15 +70,19 @@ export const MyMeasurementsView: React.FC<{ onNavigate: (path: string) => void; 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 flex flex-col gap-5">
       <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">{t('myMeasurementsTitle')}</h1>
-      {secretRefused && (
-        <p role="alert" className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 font-medium text-amber-900">
-          {t('syncSecretRefused')}
+      {problems.map((key) => (
+        <p key={key} role="alert" className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 font-medium text-amber-900">
+          {t(key as Parameters<typeof t>[0])}
         </p>
-      )}
-      {deletionRefused && (
-        <p role="alert" className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 font-medium text-amber-900">
-          {t('deletionSecretRefused')}
-        </p>
+      ))}
+      {canRetry && (
+        <button
+          type="button"
+          onClick={() => void vtStorage.retryRefused().then(() => syncNow(true, true))}
+          className="min-h-12 px-4 rounded-xl border border-[var(--vt-line)] font-medium cursor-pointer self-start"
+        >
+          {t('retry')}
+        </button>
       )}
       {notice && (
         <p role="status" className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 font-medium text-emerald-900">
