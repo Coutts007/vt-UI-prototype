@@ -147,7 +147,19 @@ test('typing a different code drops the consent, on disk before moving on', asyn
 });
 
 test('retyping the same code keeps the consent', async ({ page }) => {
-  const code = await giveConsentThroughTheDirectory(page);
+  // A seeded code: the mock forgets issued codes on reload, which would make this a race with its 404.
+  const code = 'AB1008';
+  await page.goto('/start');
+  await page.getByLabel(en.clientCodeLabel).fill(code);
+  await page.getByLabel(en.heightLabel).fill('170');
+  await page.getByText(en.sexFemale, { exact: true }).click();
+  await page.getByRole('button', { name: en.continue, exact: true }).click();
+  for (const box of [en.consentBox1, en.consentBox2, en.consentBox3]) {
+    await page.getByText(box, { exact: true }).click();
+  }
+  await page.getByRole('button', { name: en.openCamera }).click();
+  await expect(page).toHaveURL(/\/check/);
+
   await page.goto('/start');
   const input = page.getByLabel(en.clientCodeLabel);
   await expect(input).toHaveValue(code);
