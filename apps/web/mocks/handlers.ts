@@ -122,6 +122,12 @@ export function createHandlers(options: MockOptions = {}) {
 
   const clientsOf = (user: Row) =>
     user.role === 'admin' ? db.clients : db.clients.filter((c) => c.tailor_id === user.user_id);
+  const directoryClients = (user: Row) =>
+    clientsOf(user).filter((c) => c.source === 'directory' && !c.deletion_requested);
+  const unusedClient = (client: Row) =>
+    !db.profiles.some((p) => p.client_id === client.client_id) &&
+    !db.orders.some((o) => o.client_id === client.client_id) &&
+    !db.participants.some((p) => p.client_code === client.client_code);
   const ownsClient = (user: Row, client: Row) =>
     user.role === 'admin' || client.tailor_id === user.user_id;
   const clientById = (id: string) => db.clients.find((c) => c.client_id === id);
@@ -461,20 +467,38 @@ export function createHandlers(options: MockOptions = {}) {
       return body;
     }),
 
-    route('get', '/me/directory-clients', ['tailor'], ({ user, url }) =>
-      page(
-        url,
-        clientsOf(user!)
-          .filter((c) => c.source === 'directory' && !c.deletion_requested)
-          .sort((a, b) => b.created_at.localeCompare(a.created_at))
-          .map((c) => ({
-            client_id: c.client_id,
-            client_code: c.client_code,
-            created_at: c.created_at,
-            has_profile: db.profiles.some((p) => p.client_id === c.client_id),
-          })),
-      ),
-    ),
+    route('get', '/me/directory-clients', ['tailor'], ({ user, url }) => {
+      const rows = directoryClients(user!);
+      return {
+        ...page(
+          url,
+          rows
+            .sort((a, b) => b.created_at.localeCompare(a.created_at))
+            .map((c) => ({
+              client_id: c.client_id,
+              client_code: c.client_code,
+              created_at: c.created_at,
+              has_profile: db.profiles.some((p) => p.client_id === c.client_id),
+            })),
+        ),
+        unused_total: rows.filter(unusedClient).length,
+      };
+    }),
+    route('post', '/me/directory-clients/remove-unused', ['tailor'], ({ user }) => {
+      const rows = directoryClients(user!).filter(unusedClient);
+      for (const client of rows) client.deletion_requested = true;
+      if (rows.length) {
+        audit(
+          db,
+          user,
+          'deletion',
+          'tailor',
+          user!.user_id,
+          `Removed unused codes: ${rows.length}`,
+        );
+      }
+      return { removed: rows.length };
+    }),
     route('get', '/clients', staff, ({ user, url }) => {
       const search = url.searchParams.get('search')?.toLowerCase() ?? '';
       const filter = url.searchParams.get('filter');
@@ -556,6 +580,12 @@ export function createHandlers(options: MockOptions = {}) {
       if (!ownsClient(user!, client)) return problem('forbidden');
       if (db.orders.some((o) => o.client_id === client.client_id && o.status !== 'collected')) {
         return problem('client_has_orders');
+      }
+      if (
+        db.orders.some((o) => o.client_id === client.client_id) ||
+        db.participants.some((p) => p.client_code === client.client_code)
+      ) {
+        return problem('client_records_retained');
       }
       client.deletion_requested = true;
       audit(db, user, 'deletion', 'client', client.client_id, 'Marked for deletion');

@@ -118,7 +118,7 @@ export interface paths {
         };
         /**
          * Browse the tailors who chose to be listed
-         * @description Active tailors who opted in, and only what they chose to publish. Never an email, a user id, a client count or anything about clients. Off in production builds until D27's flag is on.
+         * @description Active tailors who opted in, and only what they chose to publish. Never an email, a user id, a client count or anything about clients. Off in production until D27's flag and the server setting directory_enabled are on; with the setting off it answers 404.
          */
         get: operations["listTailors"];
         put?: never;
@@ -140,7 +140,7 @@ export interface paths {
         put?: never;
         /**
          * Get a new client code under the chosen tailor
-         * @description Each call creates a new client with its own code, at once and without tailor approval (D27). It takes no name or phone. A tailor who is not listed, or not active, answers 404.
+         * @description Each call creates a new client with its own code, at once and without tailor approval (D27). It takes no name or phone. A tailor who is not listed, or not active, answers 404, and so does every tailor while the server setting directory_enabled is off.
          */
         post: operations["issueDirectoryCode"];
         delete?: never;
@@ -321,6 +321,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/directory-clients/remove-unused": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove the signed-in tailor's directory clients with no profile, no orders and no participant
+         * @description Marks them for deletion, like deleteClient. One audit row holds the count and no codes.
+         */
+        post: operations["removeUnusedDirectoryClients"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/clients": {
         parameters: {
             query?: never;
@@ -354,7 +374,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a client's data
-         * @description The API marks the client for deletion at once, and the retention job removes the rows.
+         * @description The API marks the client for deletion at once, and the retention job removes the rows. Active orders answer client_has_orders. Collected orders or a study participant answer client_records_retained: those records leave only through the retention job.
          */
         delete: operations["deleteClient"];
         options?: never;
@@ -1371,6 +1391,11 @@ export interface components {
             page: number;
             page_size: number;
             total: number;
+            /** @description Across every page, how many removeUnusedDirectoryClients would remove now */
+            unused_total: number;
+        };
+        DirectoryClientsRemoved: {
+            removed: number;
         };
         ClientInput: {
             display_name?: string | null;
@@ -1943,6 +1968,7 @@ export interface operations {
                     "application/json": components["schemas"]["TailorListingPage"];
                 };
             };
+            404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
             429: components["responses"]["RateLimited"];
         };
@@ -2268,6 +2294,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DirectoryClientPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    removeUnusedDirectoryClients: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many were removed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectoryClientsRemoved"];
                 };
             };
             401: components["responses"]["Problem"];

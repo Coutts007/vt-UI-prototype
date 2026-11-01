@@ -312,7 +312,7 @@ test('nothing leaves the phone but numbers: no image, no outside request', async
   page.on('request', (request) => {
     const url = request.url();
     if (
-      !url.startsWith('http://localhost:4173') &&
+      !url.startsWith(`http://localhost:${process.env.VT_E2E_PORT ?? 4173}`) &&
       !url.startsWith('data:') &&
       !url.startsWith('blob:')
     ) {

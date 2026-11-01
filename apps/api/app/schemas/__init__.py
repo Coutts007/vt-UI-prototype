@@ -167,3 +167,8 @@ class DirectoryClientPage(BaseModel):
     page: int
     page_size: int
     total: int
+    unused_total: int
+
+
+class DirectoryClientsRemoved(BaseModel):
+    removed: int

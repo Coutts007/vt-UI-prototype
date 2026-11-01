@@ -10,6 +10,7 @@ export default tseslint.config(
       'public/opencv/**',
       'dist',
       'dist-directory-off',
+      'dist-directory-default',
       'coverage',
       'playwright-report',
       'test-results',
