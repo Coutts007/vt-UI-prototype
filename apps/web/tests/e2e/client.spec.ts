@@ -244,26 +244,53 @@ test('saved offline, then sent when back online', async ({ page, context }) => {
 test('a conflict tells the client a newer version is saved', async ({ page }) => {
   test.setTimeout(180_000);
   await fake(page);
+  if (!REAL_API) {
+    // The mock forgets on reload, and answers in a service worker page.route cannot see.
+    await page.addInitScript(() => {
+      const real = window.fetch.bind(window);
+      window.fetch = (input, init) =>
+        String(input instanceof Request ? input.url : input).endsWith('/api/v1/profiles')
+          ? Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  type: 'about:blank',
+                  title: 'Conflict',
+                  status: 409,
+                  code: 'profile_version_conflict',
+                  server_version: 2,
+                  conflict_id: '00000000-0000-5000-8000-000000000009',
+                }),
+                { status: 409, headers: { 'Content-Type': 'application/problem+json' } },
+              ),
+            )
+          : real(input, init);
+    });
+    await toReview(page, en, FREE_CODE);
+    await saveAndSee(page, en);
+    await expect(page.getByRole('heading', { name: en.savedTitleConflict })).toBeVisible({
+      timeout: 15_000,
+    });
+    return;
+  }
   await toReview(page, en, FREE_CODE);
   await saveAndSee(page, en);
   await expect(page.getByRole('heading', { name: en.savedTitleSynced })).toBeVisible({
     timeout: 30_000,
   });
-  // As if this phone lost its local copy: the next capture repeats a version the server holds.
+  // As if this phone lost its local copy but kept its secret: the next capture repeats a version.
   await page.evaluate(
     () =>
       new Promise<void>((resolve, reject) => {
         const open = indexedDB.open('virtual_tailor');
         open.onsuccess = () => {
-          const cleared = open.result
-            .transaction('profiles', 'readwrite')
-            .objectStore('profiles')
-            .clear();
-          cleared.onsuccess = () => {
+          const tx = open.result.transaction(['profiles', 'settings'], 'readwrite');
+          tx.objectStore('profiles').clear();
+          tx.objectStore('settings').clear();
+          tx.oncomplete = () => {
             open.result.close();
             resolve();
           };
-          cleared.onerror = () => reject(cleared.error);
+          tx.onerror = () => reject(tx.error);
         };
       }),
   );

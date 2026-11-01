@@ -239,7 +239,7 @@ MmProfile = Annotated[list[Mm | None], Field(min_length=101, max_length=101)]
 
 
 def _whole_tenths(values: list[float | None]) -> list[float | None]:
-    """The phone rounds to 0.1 (F1). Anything finer is room to hide other data in, so it is exact."""
+    """The phone rounds to 0.1 (F1). Anything finer is room to hide other data, so this is exact."""
     for value in values:
         if value is not None and round(value, 1) != value:
             raise ValueError("Finer than 0.1 is not accepted")
