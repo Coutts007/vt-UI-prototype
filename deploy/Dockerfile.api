@@ -7,7 +7,8 @@ COPY packages/py packages/py
 COPY packages/contracts/error-codes.json packages/contracts/error-codes.json
 COPY packages/seed/seed.json packages/seed/seed.json
 COPY packages/rules packages/rules
-RUN uv sync --frozen --no-dev --package vt-api
+# Slow links time out at the default 30 s with many downloads at once.
+RUN UV_HTTP_TIMEOUT=300 UV_CONCURRENT_DOWNLOADS=3 uv sync --frozen --no-dev --package vt-api
 USER nobody
 ENV UV_CACHE_DIR=/tmp/uv
 # Access logs stay off: request paths can carry client codes (backend-spec 2.1 item 7).

@@ -6,9 +6,12 @@ import copy
 import json
 import uuid
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import pytest
+import structlog.testing
+from app.config import Settings
 from app.models import (
     AuditLog,
     CaptureSession,
@@ -19,6 +22,7 @@ from app.models import (
     MeasurementProfile,
     ServerCheck,
 )
+from app.services.rules import load_rules
 from fastapi import FastAPI
 from httpx import AsyncClient
 from ingest_support import FREE_CODE, ROUTE, SEED, key, payload
@@ -475,3 +479,33 @@ async def test_checks_are_stored(client: AsyncClient, session: AsyncSession) -> 
         select(ServerCheck.kind).where(ServerCheck.profile_id == uuid.UUID(body["profile_id"]))
     )
     assert "rules_version_unknown" in list(rows)
+
+
+async def test_logs_hold_no_code_or_measurement(client: AsyncClient) -> None:
+    body = payload()
+    with structlog.testing.capture_logs() as logs:
+        await post(client, body)
+        await post(client, payload(code="ZZ9999"))
+    text = str(logs)
+    assert FREE_CODE not in text and "ZZ9999" not in text and "value_mm" not in text
+    assert body["profile_id"] not in text
+
+
+def test_a_wrong_rules_checksum_stops_the_start(tmp_path: Path) -> None:
+    (tmp_path / "rules-1.0-bad.json").write_text(
+        '{"rules_version": "1.0-bad", "checksum": "sha256:00"}'
+    )
+    with pytest.raises(ValueError, match="checksum"):
+        load_rules(tmp_path)
+
+
+def test_production_keeps_its_rate_limits() -> None:
+    with pytest.raises(ValueError, match="rate limits"):
+        Settings(  # type: ignore[call-arg]
+            env="production",
+            jwt_secret="x" * 40,
+            ip_pepper="p",
+            vt_app_db_password="q",
+            rate_limits_off=True,
+            _env_file=None,
+        )

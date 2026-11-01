@@ -1,4 +1,4 @@
-.PHONY: setup dev-web dev-api up down seed lint typecheck test test-web test-api parity contract e2e licences build
+.PHONY: setup dev-web dev-api up down seed lint typecheck test test-web test-api parity contract e2e e2e-real-api licences build
 
 COMPOSE = docker compose -f deploy/docker-compose.yml
 
@@ -58,6 +58,14 @@ contract:
 
 e2e:
 	pnpm --filter @vt/web e2e
+
+# The client suite against the API on compose (M8). Demo data, rate limits off, local only.
+E2E_COMPOSE = docker compose -p vt-e2e -f deploy/docker-compose.yml -f deploy/docker-compose.e2e.yml
+e2e-real-api:
+	$(E2E_COMPOSE) up -d --build --wait api
+	$(E2E_COMPOSE) exec -T api .venv/bin/vt seed demo
+	pnpm --filter @vt/web exec playwright test -c playwright.real-api.config.ts; status=$$?; \
+		$(E2E_COMPOSE) down -v; exit $$status
 
 licences:
 	node scripts/licences.mjs

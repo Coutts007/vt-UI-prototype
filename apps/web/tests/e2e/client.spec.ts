@@ -3,15 +3,25 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, Page, test } from '@playwright/test';
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { freshCode } from './real-api';
 import { en } from '../../src/i18n/en';
 import { sw } from '../../src/i18n/sw';
 
 test.use({ actionTimeout: 15_000 });
 
 type Dict = typeof en;
-const ASSETS = join(import.meta.dirname, '../../dist/assets');
-const FREE_CODE = 'AB1008';
+const REAL_API = process.env.VT_E2E_REAL_API === '1';
+const ASSETS = join(
+  import.meta.dirname,
+  REAL_API ? '../../dist-real-api/assets' : '../../dist/assets',
+);
+let FREE_CODE = 'AB1008';
 const TAKEN_CODE = 'AB1004';
+
+// The real API remembers between tests, so each test needs a code nobody has measured under.
+test.beforeEach(async ({ request }) => {
+  if (REAL_API) FREE_CODE = await freshCode(request);
+});
 
 interface Fake {
   scenario?: string;
@@ -304,7 +314,10 @@ for (const [name, d] of [
   });
 }
 
-test('nothing leaves the phone but numbers: no image, no outside request', async ({ page }) => {
+test('nothing leaves the phone but numbers: no image, no outside request', async ({
+  page,
+  baseURL,
+}) => {
   test.setTimeout(120_000);
   await fake(page);
   const outside: string[] = [];
@@ -312,7 +325,7 @@ test('nothing leaves the phone but numbers: no image, no outside request', async
   page.on('request', (request) => {
     const url = request.url();
     if (
-      !url.startsWith(`http://localhost:${process.env.VT_E2E_PORT ?? 4173}`) &&
+      !url.startsWith(baseURL ?? 'missing base URL') &&
       !url.startsWith('data:') &&
       !url.startsWith('blob:')
     ) {
