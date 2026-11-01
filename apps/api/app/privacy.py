@@ -15,8 +15,12 @@ MAX_STRING = 2048
 MAX_BASE64_RUN = 1024
 # Matches each whole run once and moves on, so the cost is linear in the text's length.
 BASE64_RUN = re.compile(r"[A-Za-z0-9+/_-]+")
-# Enough for any honest text. A string is at most 2048 characters, so this stays cheap.
+# Enough for any honest text.
 ENCODED_LAYERS = 8
+# Normalising runs before any rate limit, and one character can expand eighteenfold on every layer.
+# Each body may have this many characters normalised; honest text with accents or a % is far below
+# it. Past it the body is refused, so the worst case stays near 30 ms.
+MAX_NORMALISED = 64_000
 HIDDEN_CATEGORIES = {"Cf", "Cc", "Cs", "Co", "Cn", "Mn", "Me", "Mc"}
 # Letters and symbols by category, yet blank on screen: Hangul fillers, Braille blank, Khmer vowels.
 BLANK_MARKS = frozenset("\u115f\u1160\u17b4\u17b5\u2800\u3164\uffa0")
@@ -32,11 +36,25 @@ def _visible(text: str) -> str:
     )
 
 
-def _normalised(text: str) -> str:
+class _Budget:
+    def __init__(self) -> None:
+        self.left = MAX_NORMALISED
+
+    def spend(self, text: str) -> bool:
+        self.left -= len(text)
+        return self.left >= 0
+
+
+def _normalised(text: str, budget: _Budget) -> str | None:
+    """The text as a reader sees it, or None once the body has used up its budget."""
     if text.isascii() and "%" not in text and "&" not in text and text.isprintable():
         return text
+    if not budget.spend(text):
+        return None
     plain = _visible(text)
     for _ in range(ENCODED_LAYERS):
+        if not budget.spend(plain):
+            return None
         decoded = html.unescape(unquote(plain))
         if decoded == plain:
             break
@@ -44,10 +62,12 @@ def _normalised(text: str) -> str:
     return plain
 
 
-def _looks_like_image(text: str) -> bool:
+def _looks_like_image(text: str, budget: _Budget) -> bool:
     if len(text) > MAX_STRING:
         return True
-    plain = _normalised(text)
+    plain = _normalised(text, budget)
+    if plain is None:
+        return True
     return plain.lstrip().lower().startswith("data:") or any(
         match.end() - match.start() > MAX_BASE64_RUN for match in BASE64_RUN.finditer(plain)
     )
@@ -56,10 +76,11 @@ def _looks_like_image(text: str) -> bool:
 def _scan(value: Any) -> bool:
     # A stack, so a deeply nested body cannot exhaust the interpreter here.
     stack = [value]
+    budget = _Budget()
     while stack:
         item = stack.pop()
         if isinstance(item, str):
-            if _looks_like_image(item):
+            if _looks_like_image(item, budget):
                 return True
         elif isinstance(item, list):
             stack.extend(item)

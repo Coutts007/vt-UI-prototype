@@ -4,6 +4,7 @@ The newest entry comes first. Every change or improvement adds a line in the sam
 
 ## 2026-11-01: M8 ingest and public endpoints
 
+- The image guard could be made to take about 6 s on one unauthenticated request, by combining nested encoding with characters that expand when normalised, and it blocked the API meanwhile. Each body now has a budget of 64,000 normalised characters and is refused past it; the same request takes milliseconds and ordinary text is unaffected.
 - `POST /profiles` runs the whole of backend-spec 9: size, image guard, strict parse, the validation order, consent, study, idempotency, versions, conflict rows, then server checks in one transaction. A check that fails internally is logged by type and the profile is still kept.
 - The image guard reads every JSON key and value on every route before any schema, so a picture is refused as a picture wherever it hides.
 - The server re-derives each profile with `vt_measure` under the profile's own rules. The mismatch rate on the seed profiles is 0. Static proportion bounds, change since last and height checks warn only.

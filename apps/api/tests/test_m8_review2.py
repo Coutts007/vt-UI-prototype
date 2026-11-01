@@ -322,3 +322,25 @@ def test_the_secret_header_and_refusal_are_declared(app: FastAPI, path: str) -> 
     header = next(p for p in operation["parameters"] if p["name"] == "X-Client-Secret")
     assert "maxLength" in str(header["schema"]) and "64" in str(header["schema"])
     assert "403" in operation["responses"]
+
+
+def test_guard_time_is_bounded_on_nested_expanding_text() -> None:
+    import json
+    import time
+
+    from app.privacy import has_image_content
+
+    text = ("%25" * 7 + "41" + "\ufdfa" * 2048)[:2048]
+    body = json.dumps([text] * 40).encode()
+    started = time.perf_counter()
+    assert has_image_content(body) is True
+    assert time.perf_counter() - started < 0.5
+
+
+def test_guard_budget_leaves_honest_text_alone() -> None:
+    import json
+
+    from app.privacy import has_image_content
+
+    honest = ["Wanjik\u0169 & Halima, kifua 100% sawa \U0001f600"] * 40
+    assert has_image_content(json.dumps({"notes": honest}).encode()) is False
