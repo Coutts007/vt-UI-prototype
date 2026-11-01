@@ -235,7 +235,6 @@ def _claim(
     request: Request, session: AsyncSession, client: Client, secret: str, *, over_data: bool
 ) -> None:
     client.secret_hash = hash_secret(secret)
-    client.claimed_over_data = over_data
     audit.record(
         session,
         actor_type="client",

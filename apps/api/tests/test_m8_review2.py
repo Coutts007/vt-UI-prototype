@@ -69,25 +69,34 @@ async def test_an_upload_cannot_claim_a_code_that_holds_data(
     assert read.status_code == 403
 
 
-# --- Decision 2: a first caller's deletion cannot erase what the tailor typed ---
+# --- Decision 2, corrected: the proof and an upload are enough to clear the details (spec 14.5) ---
 
 
 @pytest.mark.parametrize("reason", ["delete", "withdraw_consent"])
-async def test_a_first_callers_deletion_keeps_the_tailors_details(
+async def test_an_honest_clients_deletion_clears_the_details(
     client: AsyncClient, session: AsyncSession, owner_url: str, reason: str
 ) -> None:
     await owner_execute(owner_url, NAME_AND_HEIGHT)
     assert (await post(client, payload())).status_code == 201
     assert (await ask_delete(client, reason=reason)).status_code == 202
     row = await row_of(session)
-    assert (row.display_name, row.height_mm) == ("Halima", 1700)
-    assert await saved(session, row.client_id) == 0, "their own upload still goes"
+    assert (row.display_name, row.height_mm) == (None, None)
+    assert await saved(session, row.client_id) == 0
 
 
-async def test_a_claim_over_data_can_clear_the_details(
+async def test_a_wrong_secret_leaves_the_details(
     client: AsyncClient, session: AsyncSession, owner_url: str
 ) -> None:
-    """The replay proved they sent the data, so the client's deletion reaches everything."""
+    await owner_execute(owner_url, NAME_AND_HEIGHT)
+    assert (await post(client, payload())).status_code == 201
+    assert (await ask_delete(client, secret=OTHER_SECRET)).status_code == 403
+    row = await row_of(session)
+    assert (row.display_name, row.height_mm) == ("Halima", 1700)
+
+
+async def test_a_replay_claim_can_clear_the_details(
+    client: AsyncClient, session: AsyncSession, owner_url: str
+) -> None:
     body = payload()
     assert (await post(client, body)).status_code == 201
     await owner_execute(owner_url, NAME_AND_HEIGHT, FORGET_CLAIM)

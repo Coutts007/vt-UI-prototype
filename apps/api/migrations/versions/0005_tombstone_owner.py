@@ -1,4 +1,4 @@
-"""how a code was claimed, and whose a deleted profile id was (D45)
+"""whose a deleted profile id was (D45)
 
 Revision ID: 0005
 Revises: 0004
@@ -15,10 +15,6 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "client",
-        sa.Column("claimed_over_data", sa.Boolean(), server_default=sa.false(), nullable=False),
-    )
     # Nullable for ids deleted before this column: those still answer as deleted to anyone.
     op.add_column(
         "deleted_profile",
@@ -33,4 +29,3 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_column("deleted_profile", "client_id")
-    op.drop_column("client", "claimed_over_data")

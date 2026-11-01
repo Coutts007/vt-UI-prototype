@@ -15,7 +15,7 @@ The newest entry comes first. Every change or improvement adds a line in the sam
 - **Limit that remains:** the first caller can still claim a code nobody has used, which blocks the honest client until a tailor reset. A lost secret also has no remedy until M9 merges. See D45.
 - **After a second independent review (D45, D49):**
   - A code that already holds data can no longer be claimed by an upload. It gets the same reply as a wrong secret. An exact replay of a stored body can claim it, which closes a lost reply after a reset. Each claim has its own audit row, `client_code_claim`.
-  - A first caller's deletion or withdrawal no longer erases the name and height the tailor typed. As a result, an honest client's deletion leaves those two fields too (migration 0005 records how a code was claimed).
+  - A deletion or withdrawal by whoever holds the proof clears the name and height (spec 14.5), and an empty unclaimed code changes nothing. A stranger who claims a fresh code and uploads can therefore wipe those two fields, an accepted minor harm in favour of the right to deletion (D45).
   - Deleting on an unclaimed code with no profiles replies done, with nothing done, so a first upload that never arrived no longer leaves a stuck deletion.
   - The phone stops after five refusals, ends in `gave_up`, says something true for the cause, and offers Try again. A failed secret write stops only its own code.
   - The queue holds new uploads for a code while a deletion or withdrawal for it is pending, so a late deletion cannot wipe a newer profile.

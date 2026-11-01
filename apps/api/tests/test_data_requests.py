@@ -51,9 +51,7 @@ def request(reason: str = "delete", code: str = FREE_CODE) -> dict[str, Any]:
 async def claim(session: AsyncSession, code: str) -> None:
     """Seed clients come unclaimed, as a client would after a tailor's reset."""
     await session.execute(
-        update(Client)
-        .where(Client.client_code == code)
-        .values(secret_hash=hash_secret(SECRET), claimed_over_data=True)
+        update(Client).where(Client.client_code == code).values(secret_hash=hash_secret(SECRET))
     )
     await session.commit()
 

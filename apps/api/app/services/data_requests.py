@@ -95,10 +95,9 @@ async def request_deletion(
         .select_from(MeasurementProfile)
         .where(MeasurementProfile.client_id == client.client_id)
     )
-    # What the tailor typed goes only if a replay proved this caller sent the client's data (D45).
-    if client.claimed_over_data:
-        client.display_name = None
-        client.height_mm = None
+    # Spec 14.5. A claim only ever comes with an upload, so this caller has uploaded under it (D45).
+    client.display_name = None
+    client.height_mm = None
     status = "partially_done" if retained else "done"
     note = BACKUPS + (RETAINED if retained else "")
     row = DeletionRequest(
