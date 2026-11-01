@@ -53,6 +53,10 @@ const {
 } = {
   ...profileOf(wanjiruClient.client_id),
   profile_id: '00000000-0000-5000-8000-000000000001',
+  session: {
+    ...profileOf(wanjiruClient.client_id).session,
+    session_id: '00000000-0000-5000-8000-000000000002',
+  },
   client_code: emptyClient.client_code,
   version: 9,
   status: 'final',
@@ -118,6 +122,13 @@ const CASES: Record<string, Case> = {
   },
   deleteClient: { role: 'tailor', path: { client_id: emptyClient.client_id } },
   rotateClientCode: { role: 'tailor', path: { client_id: seed.clients[1].client_id } },
+  getClientClaim: { role: 'tailor', path: { client_id: wanjiruClient.client_id } },
+  freeClientClaim: { role: 'tailor', path: { client_id: wanjiruClient.client_id } },
+  reviewClientClaim: {
+    role: 'tailor',
+    path: { client_id: wanjiruClient.client_id },
+    body: { close_request_ids: [] },
+  },
   listClientProfiles: { role: 'tailor', path: { client_id: wanjiruClient.client_id } },
   getProfile: {
     role: 'tailor',

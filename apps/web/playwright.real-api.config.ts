@@ -7,7 +7,7 @@ process.env.VT_E2E_REAL_API = '1';
 
 export default defineConfig({
   testDir: 'tests/e2e',
-  testMatch: /(client|server-sync)\.spec/,
+  testMatch: /(client|server-sync|tailor)\.spec/,
   workers: 2,
   use: {
     ...devices['Pixel 7'],

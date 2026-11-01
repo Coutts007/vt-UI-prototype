@@ -90,7 +90,15 @@ function Shell() {
     },
     onLogout: () => {
       sessionStorage.removeItem('vt_session_user');
-      apiClient.auth.clear();
+      // Revoke on the server before the token goes. Signed out on this phone either way.
+      const token = apiClient.auth.getToken();
+      void apiClient
+        .post('/auth/logout')
+        .catch(() => undefined)
+        .finally(() => {
+          // Not a sign-in that came after this one.
+          if (apiClient.auth.getToken() === token) apiClient.auth.clear();
+        });
       void import('./api/client').then(({ api }) => api.logout());
       setUser(null);
       navigate('/login');

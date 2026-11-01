@@ -114,13 +114,16 @@ async def test_a_replay_claim_can_clear_the_details(
 async def test_deleting_an_empty_unclaimed_code_is_done_with_nothing_done(
     client: AsyncClient, session: AsyncSession, owner_url: str, secret: str | None, reason: str
 ) -> None:
-    await owner_execute(owner_url, NAME_AND_HEIGHT)
+    await owner_execute(
+        owner_url,
+        f"UPDATE client SET display_name=NULL, height_mm=NULL WHERE client_code='{FREE_CODE}'",
+    )
     reply = await ask_delete(client, secret=secret, reason=reason)
     assert reply.status_code == 202 and reply.json()["status"] == "done"
+    assert reply.json()["note"] == "Nothing is held for this code."
     uuid.UUID(reply.json()["request_id"])
     row = await row_of(session)
     assert row.secret_hash is None, "a deletion must not claim"
-    assert (row.display_name, row.height_mm) == ("Halima", 1700)
     query = select(func.count()).select_from(Consent).where(Consent.client_id == row.client_id)
     assert not await session.scalar(query.where(Consent.withdrawn_at.isnot(None)))
     requests = select(func.count()).select_from(DeletionRequest)
@@ -128,12 +131,24 @@ async def test_deleting_an_empty_unclaimed_code_is_done_with_nothing_done(
     assert (await post(client, payload())).status_code == 201, "a real client can still claim"
 
 
-async def test_deleting_an_unclaimed_code_with_data_or_an_unknown_code_is_refused(
-    client: AsyncClient,
+async def test_deleting_an_unknown_code_is_refused(client: AsyncClient) -> None:
+    reply = await ask_delete(client, code="ZZ9999")
+    assert reply.status_code == 403 and reply.json()["code"] == REFUSED
+
+
+async def test_a_held_name_is_not_called_nothing_and_the_tailor_is_told(
+    client: AsyncClient, session: AsyncSession, owner_url: str
 ) -> None:
-    for code in (HAS_DATA, "ZZ9999"):
-        reply = await ask_delete(client, code=code)
-        assert reply.status_code == 403 and reply.json()["code"] == REFUSED
+    await owner_execute(owner_url, NAME_AND_HEIGHT)
+    reply = await ask_delete(client)
+    assert reply.status_code == 202 and reply.json()["status"] == "received"
+    assert "Nothing is held" not in reply.json()["note"]
+    assert (await ask_delete(client)).json()["request_id"] == reply.json()["request_id"]
+    row = await row_of(session)
+    assert (row.display_name, row.height_mm, row.secret_hash) == ("Halima", 1700, None)
+    requests = select(func.count()).select_from(DeletionRequest)
+    assert await session.scalar(requests.where(DeletionRequest.client_id == row.client_id)) == 1
+    assert (await post(client, payload())).status_code == 201, "a real client can still claim"
 
 
 async def test_a_replay_of_the_stored_body_claims_an_unclaimed_code(
@@ -283,13 +298,23 @@ async def test_a_claim_is_audited_on_its_own(
     await post(client, body)
     await post(client, payload(version=2))
     row = await row_of(session)
+    client_id = row.client_id
     query = select(AuditLog).where(
-        AuditLog.client_id == row.client_id, AuditLog.action == "client_code_claim"
+        AuditLog.client_id == client_id, AuditLog.action == "client_code_claim"
     )
     claims = list(await session.scalars(query))
     assert [(c.actor_type, c.detail) for c in claims] == [("client", {"over_data": False})]
     assert SECRET not in str(claims[0].detail)
     await owner_execute(owner_url, FORGET_CLAIM)
+    await post(client, body)
+    session.expire_all()
+    claims = list(await session.scalars(query.order_by(AuditLog.log_id)))
+    assert [c.detail for c in claims] == [{"over_data": False}], "two rows: a replay cannot claim"
+    await owner_execute(
+        owner_url,
+        f"DELETE FROM measurement_profile WHERE profile_id != '{body['profile_id']}'"
+        f" AND client_id = '{client_id}'",
+    )
     await post(client, body)
     session.expire_all()
     claims = list(await session.scalars(query.order_by(AuditLog.log_id)))

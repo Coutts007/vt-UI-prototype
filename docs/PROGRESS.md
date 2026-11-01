@@ -2,6 +2,18 @@
 
 The newest entry comes first. Every change or improvement adds a line in the same commit.
 
+## 2026-11-02: M9 tailor slice
+
+- The API now serves the tailor's clients, profiles, conflicts, orders, ease suggestions and presets, and the audit list, with the role matrix covering each. Finished is always body plus ease; flagged rows must be confirmed or overridden; due dates run from today to 180 days in Nairobi time.
+- A tailor can free a client code. Each freeing starts a new claim round, so the next phone can claim the code but reads and deletes only what it uploaded itself. A replay proves only its own row: it claims nothing if another row shares the round.
+- The claim page shows profiles by round, withdrawals and deletion requests, including any that wiped the name and height. Superseding, clearing a withdrawal and closing a request happen only when the tailor names them, on a freed code.
+- The tailor's screens now use the real sign-in and API: register, pending, login, clients, issuing a code with its QR and WhatsApp text, client page with deletion banner, profile view, conflicts, the order form with ease suggestions and flagged rows, queue, order detail with status history, presets, settings and own audit. Each is tested at 360 px with axe on the mock and on the API.
+- The older shell, directory and claim-audit tests now follow the real screens and rules.
+- Sunlight mode (high contrast) is a setting for the tailor's screens. Its contrast is tested on the main screens.
+- A left-behind profile refused `code_not_found` now stays on the phone as rejected, because the server has no copy.
+- The mock follows the server on claim rounds, withdrawals, `stale_app_version`, the per-code limit and session reuse. It now separates a deleted client from a client who asked for deletion.
+- A deletion request on an unclaimed code that holds anything is now passed to the tailor and changes nothing. It no longer says "nothing is held" when a name is held, and it no longer blocks the phone's queue.
+
 ## 2026-11-01: M8 ingest and public endpoints
 
 - The image guard could be made to take about 6 s on one unauthenticated request, by combining nested encoding with characters that expand when normalised, and it blocked the API meanwhile. Each body now has a budget of 64,000 normalised characters and is refused past it; the same request takes milliseconds and ordinary text is unaffected.

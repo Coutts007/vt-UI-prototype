@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useI18n } from '../../i18n';
 import { UserAccount } from '../../types/api';
+import { apiClient } from '../../api/instance';
+import { applySunlight, readSunlight, useLoad } from './common';
+import { useTailorText } from './tailorText';
 import { Users, ClipboardList, RefreshCw, History, Settings } from 'lucide-react';
 
 interface TailorLayoutProps {
@@ -17,28 +20,40 @@ export const TailorLayout: React.FC<TailorLayoutProps> = ({
   children,
 }) => {
   const { t } = useI18n();
+  const tx = useTailorText();
+  useEffect(() => {
+    applySunlight(readSunlight());
+    return () => applySunlight(false);
+  }, []);
+  // The header's badge: refreshed on each move between screens.
+  const conflicts = useLoad(() => apiClient.get('/conflicts'), [currentPath]);
+  const conflictCount = conflicts.data?.length ?? 0;
 
   const navItems = [
     { path: '/t/orders', label: t('dashboardOrders'), icon: ClipboardList },
     { path: '/t/clients', label: t('dashboardClients'), icon: Users },
-    { path: '/t/conflicts', label: t('syncConflicts'), icon: RefreshCw },
+    {
+      path: '/t/conflicts',
+      label: conflictCount ? tx('conflictsBadge', { count: conflictCount }) : t('syncConflicts'),
+      icon: RefreshCw,
+    },
     { path: '/t/audit', label: t('dashboardAudit'), icon: History },
     { path: '/t/settings', label: t('dashboardSettings'), icon: Settings },
   ];
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row bg-[#FAF8F5]">
+    <div className="min-h-screen flex flex-col lg:flex-row bg-[var(--vt-chalk)]">
       {/* Desktop Left Sidebar (>= 1024px) */}
       <aside className="hidden lg:flex flex-col w-64 border-r border-[var(--vt-line,#DDD5C8)] bg-white p-5 shrink-0">
         <div className="mb-6">
           <span className="text-xs uppercase font-bold text-[var(--vt-ink-muted,#5C554C)] tracking-wider">
-            Tailor Workshop
+            {tx('workshopLabel')}
           </span>
           <h2 className="text-base font-bold text-[var(--vt-ink,#1F1C18)] truncate">
-            {currentUser.business_name || 'My Workshop'}
+            {currentUser.business_name || tx('workshopLabel')}
           </h2>
           <span className="text-xs text-[var(--vt-ink-muted,#5C554C)] truncate block">
-            {currentUser.area || 'Nairobi'}
+            {currentUser.area}
           </span>
         </div>
 
@@ -53,7 +68,7 @@ export const TailorLayout: React.FC<TailorLayoutProps> = ({
                 className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors cursor-pointer text-left ${
                   active
                     ? 'bg-indigo-50/80 text-[var(--vt-thread,#2E3A87)]'
-                    : 'text-[var(--vt-ink-muted,#5C554C)] hover:bg-[#FAF8F5] hover:text-[var(--vt-ink,#1F1C18)]'
+                    : 'text-[var(--vt-ink-muted,#5C554C)] hover:bg-[var(--vt-chalk)] hover:text-[var(--vt-ink,#1F1C18)]'
                 }`}
               >
                 <Icon className={`w-4 h-4 ${active ? 'text-[var(--vt-thread,#2E3A87)]' : ''}`} />
@@ -64,7 +79,6 @@ export const TailorLayout: React.FC<TailorLayoutProps> = ({
         </nav>
 
         <div className="pt-4 border-t border-[var(--vt-line,#DDD5C8)] text-[11px] text-[var(--vt-ink-muted,#5C554C)] font-mono">
-          Rules: v0.1-uncalibrated
         </div>
       </aside>
 

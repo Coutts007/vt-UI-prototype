@@ -1,90 +1,76 @@
-import React, { useState, useEffect } from 'react';
-import { useI18n } from '../../i18n';
-import { AuditEntry } from '../../types/api';
-import { api } from '../../api/client';
-import { History, Shield, Filter } from 'lucide-react';
+import React, { useState } from 'react';
+import { apiClient } from '../../api/instance';
+import { Button } from '../../components/ui/Button';
+import { AuditAction, hintClass, inputClass, labelClass, Loading, Title, useDates, useLoad } from './common';
+import { useTailorText } from './tailorText';
 
-interface AuditViewProps {
-  onNavigate: (path: string) => void;
-}
+const ACTIONS: AuditAction[] = [
+  'login', 'profile_view', 'code_issue', 'code_rotate', 'code_reset', 'claim_review', 'client_update',
+  'conflict_resolve', 'order_create', 'order_update', 'order_delete', 'status_change', 'override',
+  'export', 'share', 'deletion', 'settings_change',
+];
+const PAGE_SIZE = 25;
 
-export const AuditView: React.FC<AuditViewProps> = ({ onNavigate }) => {
-  const { t } = useI18n();
-
-  const [entries, setEntries] = useState<AuditEntry[]>([]);
-  const [filterAction, setFilterAction] = useState<string>('all');
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api.getAuditEntries().then((list) => {
-      setEntries(list);
-      setLoading(false);
-    });
-  }, []);
-
-  const filtered = entries.filter((e) =>
-    filterAction === 'all' ? true : e.action === filterAction
+export const AuditView: React.FC<{ onNavigate: (path: string) => void }> = () => {
+  const tx = useTailorText();
+  const { time } = useDates();
+  const [action, setAction] = useState<AuditAction | ''>('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [pages, setPages] = useState(1);
+  const { data, failed, reload } = useLoad(
+    () =>
+      apiClient.get('/audit', {
+        query: {
+          action: action || undefined,
+          from: from ? `${from}T00:00:00+03:00` : undefined,
+          to: to ? `${to}T23:59:59+03:00` : undefined,
+          page_size: PAGE_SIZE * pages,
+        },
+      }),
+    [action, from, to, pages],
   );
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl mx-auto">
+    <div className="flex flex-col gap-4 max-w-4xl mx-auto">
       <div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--vt-ink,#1F1C18)] tracking-tight">
-          {t('dashboardAudit')}
-        </h1>
-        <p className="text-sm text-[var(--vt-ink-muted,#5C554C)] mt-0.5">
-          Immutable audit trail of all profile views, manual overrides, code issuances, and shares
-        </p>
+        <Title>{tx('auditTitle')}</Title>
+        <p className={hintClass}>{tx('auditIntro')}</p>
       </div>
-
-      {/* Filter Tabs */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-        {[
-          { id: 'all', label: 'All Actions' },
-          { id: 'override', label: 'Overrides' },
-          { id: 'profile_view', label: 'Profile Views' },
-          { id: 'status_change', label: 'Order Status' },
-          { id: 'code_issue', label: 'Code Issuances' },
-        ].map((f) => (
-          <button
-            key={f.id}
-            onClick={() => setFilterAction(f.id)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap cursor-pointer transition-colors ${
-              filterAction === f.id
-                ? 'bg-[var(--vt-thread,#2E3A87)] text-white shadow-2xs'
-                : 'bg-white border border-[var(--vt-line,#DDD5C8)] text-[var(--vt-ink-muted,#5C554C)] hover:text-[var(--vt-ink,#1F1C18)]'
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
+      <div className="grid sm:grid-cols-3 gap-3">
+        <div>
+          <label htmlFor="audit-action" className={labelClass}>{tx('auditAction')}</label>
+          <select id="audit-action" value={action} onChange={(e) => setAction(e.target.value as AuditAction | '')} className={inputClass}>
+            <option value="">{tx('auditAll')}</option>
+            {ACTIONS.map((name) => <option key={name} value={name}>{name.replaceAll('_', ' ')}</option>)}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="audit-from" className={labelClass}>{tx('auditFrom')}</label>
+          <input id="audit-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label htmlFor="audit-to" className={labelClass}>{tx('auditTo')}</label>
+          <input id="audit-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inputClass} />
+        </div>
       </div>
-
-      {/* Entries List */}
-      <div className="rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white divide-y divide-[var(--vt-line,#DDD5C8)]/50 shadow-2xs overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-sm text-slate-600">Loading audit records…</div>
-        ) : filtered.length === 0 ? (
-          <div className="p-8 text-center text-xs text-slate-600">No audit entries found.</div>
-        ) : (
-          filtered.map((item) => (
-            <div key={item.log_id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-[#FAF8F5]">
-              <div>
-                <span className="text-sm font-semibold text-[var(--vt-ink,#1F1C18)] block">
-                  {item.summary}
-                </span>
-                <span className="text-xs text-[var(--vt-ink-muted,#5C554C)]">
-                  User: {item.user_email} · Entity: {item.entity_type}
-                </span>
-              </div>
-
-              <span className="text-xs font-mono text-[var(--vt-ink-muted,#5C554C)] shrink-0">
-                {new Date(item.occurred_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })} · {new Date(item.occurred_at).toLocaleDateString('en-KE')}
-              </span>
-            </div>
-          ))
-        )}
-      </div>
+      {!data ? (
+        <Loading failed={failed} onRetry={reload} />
+      ) : data.items.length === 0 ? (
+        <p className="p-8 text-center text-sm rounded-2xl border border-[var(--vt-line)] bg-white">{tx('auditEmpty')}</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {data.items.map((row) => (
+            <li key={row.log_id} className="p-3 rounded-xl border border-[var(--vt-line)] bg-white">
+              <p className="text-sm font-semibold">{row.summary}</p>
+              <p className={hintClass}>{time(row.occurred_at)} · {row.entity_type}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {data && data.total > data.items.length && (
+        <Button variant="outline" onClick={() => setPages((count) => count + 1)}>{tx('loadMore')}</Button>
+      )}
     </div>
   );
 };

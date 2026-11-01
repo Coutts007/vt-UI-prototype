@@ -97,8 +97,8 @@ async function sendCreate(op: PendingSyncOp, api: SyncDeps['api']): Promise<Outc
       return 'done';
     }
     if (error.code === 'code_not_found') {
+      // Kept, even when an earlier client left it: a wrong code can be corrected or deleted (9.11).
       await vtStorage.updateProfileSyncStatus(profile.profile_id, 'rejected');
-      await vtStorage.purgeAfterSync(profile.profile_id);
       return 'done';
     }
     if (error.status === 413 || error.status === 415 || error.status === 422) {

@@ -31,6 +31,7 @@ function newId(): string {
   return crypto.randomUUID();
 }
 
+const CODE_LIMIT = 10;
 const WELL_FORMED_SECRET = /^[0-9a-f]{64}$/;
 
 function problem(code: Code, extra: Row = {}): Response {
@@ -125,7 +126,7 @@ export function createHandlers(options: MockOptions = {}) {
   const clientsOf = (user: Row) =>
     user.role === 'admin' ? db.clients : db.clients.filter((c) => c.tailor_id === user.user_id);
   const directoryClients = (user: Row) =>
-    clientsOf(user).filter((c) => c.source === 'directory' && !c.deletion_requested);
+    clientsOf(user).filter((c) => c.source === 'directory' && !c.deleted_at);
   const unusedClient = (client: Row) =>
     !db.profiles.some((p) => p.client_id === client.client_id) &&
     !db.orders.some((o) => o.client_id === client.client_id) &&
@@ -133,8 +134,50 @@ export function createHandlers(options: MockOptions = {}) {
   const ownsClient = (user: Row, client: Row) =>
     user.role === 'admin' || client.tailor_id === user.user_id;
   const clientById = (id: string) => db.clients.find((c) => c.client_id === id);
+  const roundOf = (client: Row) => db.claimRounds[client.client_id] ?? 0;
+  const rowRound = (profile: Row) => db.profileRounds[profile.profile_id] ?? 0;
+  const freeClaim = (client: Row) => {
+    delete db.clientSecrets[client.client_code];
+    db.claimRounds[client.client_id] = roundOf(client) + 1;
+  };
+  const claimView = (client: Row) => ({
+    claimed: Boolean(db.clientSecrets[client.client_code]),
+    claim_round: roundOf(client),
+    profiles: db.profiles
+      .filter((p) => p.client_id === client.client_id)
+      .map((p) => ({
+        profile_id: p.profile_id,
+        version: p.version,
+        captured_at: p.captured_at,
+        received_at: p.received_at,
+        status: p.status,
+        claim_round: rowRound(p),
+        on_order: db.orders.some((o) => o.profile_id === p.profile_id),
+      })),
+    withdrawals: db.withdrawals
+      .filter((w) => w.client_id === client.client_id)
+      .map(({ client_id: _client, ...row }) => row),
+    deletion_requests: db.deletionRequests
+      .filter((r) => r.client_id === client.client_id)
+      .map((r) => ({
+        request_id: r.request_id,
+        reason: r.reason,
+        status: r.status,
+        received_at: r.received_at,
+        details_cleared: Boolean(r.details_cleared),
+      })),
+  });
+  const olderVersion = (version: string, minimum: string) => {
+    const parts = (text: string) => text.split('.').map(Number);
+    const [a, b] = [parts(version), parts(minimum)];
+    if (a.some(Number.isNaN)) return true;
+    for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+      if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) < (b[i] ?? 0);
+    }
+    return false;
+  };
   const clientByCode = (code: string) =>
-    db.clients.find((c) => c.client_code === code && !c.deletion_requested);
+    db.clients.find((c) => c.client_code === code && !c.deleted_at);
   const profileById = (id: string) => db.profiles.find((p) => p.profile_id === id);
   const orderOf = (user: Row, id: string) => {
     const order = db.orders.find((o) => o.order_id === id);
@@ -307,6 +350,9 @@ export function createHandlers(options: MockOptions = {}) {
       const claim = () => {
         db.clientSecrets[client.client_code] = secret!;
       };
+      const round = roundOf(client);
+      const rowsThisRound = () =>
+        db.profiles.filter((p) => p.client_id === client.client_id && rowRound(p) === round);
       const replay = profileById(body.profile_id);
       const text = JSON.stringify(body);
       if (
@@ -314,16 +360,16 @@ export function createHandlers(options: MockOptions = {}) {
         replay.client_id === client.client_id &&
         db.profileBodies[body.profile_id] === text
       ) {
-        claim();
+        // As on the server: a replay proves only its own row (D45).
+        if (!held && rowRound(replay) === round && rowsThisRound().length === 1) claim();
         return created({
           profile_id: replay.profile_id,
           version: replay.version,
           server_checks: replay.server_checks,
         });
       }
-      // As on the server: a code that holds data is never claimed by an upload (D45).
-      if (!held && db.profiles.some((p) => p.client_id === client.client_id))
-        return problem('client_secret_refused');
+      // As on the server: data in this round is never claimed by an upload (D45).
+      if (!held && rowsThisRound().length) return problem('client_secret_refused');
       const reused = () =>
         problem('validation_failed', {
           errors: [{ field: 'profile_id', code: 'profile_id_reused' }],
@@ -347,9 +393,31 @@ export function createHandlers(options: MockOptions = {}) {
         return problem('validation_failed', {
           errors: [{ field: 'silhouette', code: 'value_error' }],
         });
-      if (!body.consent?.scope?.includes('measure')) return problem('consent_missing');
+      const sending = request.headers.get('X-App-Version') ?? body.session?.app_version ?? '';
+      if (olderVersion(sending, db.settings.min_app_version)) return problem('stale_app_version');
+      if (
+        !body.consent?.scope?.includes('measure') ||
+        body.consent?.withdrawn_at ||
+        db.withdrawals.some((w) => w.client_id === client.client_id && w.withdrawn_at)
+      )
+        return problem('consent_missing');
+      if (db.profiles.some((p) => p.session?.session_id === body.session?.session_id))
+        return problem('validation_failed', {
+          errors: [{ field: 'session.session_id', code: 'session_id_reused' }],
+        });
+      const hourAgo = Date.now() - 3_600_000;
+      const recent = (db.codeUploads[client.client_code] ?? []).filter((at) => at > hourAgo);
+      if (recent.length >= CODE_LIMIT) return problem('rate_limited');
+      db.codeUploads[client.client_code] = [...recent, Date.now()];
       claim();
       db.profileBodies[body.profile_id] = text;
+      db.profileRounds[body.profile_id] = round;
+      if (
+        !db.consentRecords.some(
+          (c) => c.client_id === client.client_id && c.given_at === body.consent?.given_at,
+        )
+      )
+        db.consentRecords.push({ client_id: client.client_id, ...body.consent });
       const versions = db.profiles
         .filter((p) => p.client_id === client.client_id && p.status === 'final')
         .map((p) => p.version);
@@ -396,18 +464,40 @@ export function createHandlers(options: MockOptions = {}) {
       const client = clientByCode(body.client_code);
       const secret = incoming.headers.get('X-Client-Secret');
       const holds = client && db.profiles.some((p) => p.client_id === client.client_id);
-      if (client && !holds && !db.clientSecrets[client.client_code])
-        return created(
-          { request_id: newId(), status: 'done', note: 'Nothing is held for this code.' },
-          202,
+      if (client && !db.clientSecrets[client.client_code]) {
+        if (!holds && !client.display_name && client.height_mm == null)
+          return created(
+            { request_id: newId(), status: 'done', note: 'Nothing is held for this code.' },
+            202,
+          );
+        // As on the server: passed to the tailor, and nothing changes (D45).
+        const note = 'Your tailor has been told. Nothing changes until they act.';
+        const waiting = db.deletionRequests.find(
+          (r) =>
+            r.client_id === client.client_id && r.status === 'received' && r.reason === body.reason,
         );
+        const row = waiting ?? {
+          request_id: newId(),
+          client_id: client.client_id,
+          reason: body.reason,
+          received_at: new Date().toISOString(),
+          status: 'received',
+          completed_at: null,
+          details_cleared: false,
+        };
+        if (!waiting) db.deletionRequests.push(row);
+        client.deletion_requested = true;
+        return created({ request_id: row.request_id, status: 'received', note }, 202);
+      }
       if (!client || !secret || db.clientSecrets[client.client_code] !== secret)
         return problem('client_secret_refused');
       const onOrder = new Set(
         db.orders.filter((o) => o.client_id === client.client_id).map((o) => o.profile_id),
       );
+      const round = roundOf(client);
       const leaving = db.profiles.filter(
-        (p) => p.client_id === client.client_id && !onOrder.has(p.profile_id),
+        (p) =>
+          p.client_id === client.client_id && rowRound(p) === round && !onOrder.has(p.profile_id),
       );
       leaving.forEach((p) => {
         db.deletedProfiles[p.profile_id] = client.client_id;
@@ -415,8 +505,30 @@ export function createHandlers(options: MockOptions = {}) {
       db.profiles = db.profiles.filter((p) => !leaving.includes(p));
       const retained = db.profiles.some((p) => p.client_id === client.client_id);
       const note = 'Copies leave the backups within 30 days.';
+      if (body.reason === 'withdraw_consent') {
+        const stamp = new Date().toISOString();
+        const mine = db.consentRecords.filter((c) => c.client_id === client.client_id);
+        for (const consent of mine) {
+          const row = {
+            consent_id: consent.consent_id ?? newId(),
+            client_id: client.client_id,
+            consent_version: consent.consent_version,
+            given_at: consent.given_at,
+            withdrawn_at: stamp,
+          };
+          consent.consent_id = row.consent_id;
+          db.withdrawals = db.withdrawals.filter((w) => w.consent_id !== row.consent_id);
+          db.withdrawals.push(row);
+        }
+      }
+      const detailsCleared = Boolean(client.display_name) || client.height_mm != null;
+      client.display_name = null;
+      client.height_mm = null;
+      client.deletion_requested = true;
       const request = {
         request_id: newId(),
+        client_id: client.client_id,
+        details_cleared: detailsCleared,
         reason: body.reason,
         received_at: new Date().toISOString(),
         status: retained ? 'partially_done' : 'done',
@@ -431,7 +543,9 @@ export function createHandlers(options: MockOptions = {}) {
       const secret = request.headers.get('X-Client-Secret');
       if (!client || !secret || db.clientSecrets[client.client_code] !== secret)
         return problem('client_secret_refused');
-      const profiles = db.profiles.filter((p) => p.client_id === client.client_id);
+      const profiles = db.profiles.filter(
+        (p) => p.client_id === client.client_id && rowRound(p) === roundOf(client),
+      );
       audit(db, null, 'access_request', 'client', client.client_id, 'Client asked for a copy');
       return {
         client_code: client.client_code,
@@ -546,7 +660,7 @@ export function createHandlers(options: MockOptions = {}) {
     }),
     route('post', '/me/directory-clients/remove-unused', ['tailor'], ({ user }) => {
       const rows = directoryClients(user!).filter(unusedClient);
-      for (const client of rows) client.deletion_requested = true;
+      for (const client of rows) client.deleted_at = new Date().toISOString();
       if (rows.length) {
         audit(
           db,
@@ -563,7 +677,7 @@ export function createHandlers(options: MockOptions = {}) {
       const search = url.searchParams.get('search')?.toLowerCase() ?? '';
       const filter = url.searchParams.get('filter');
       const rows = clientsOf(user!)
-        .filter((c) => !c.deletion_requested)
+        .filter((c) => !c.deleted_at)
         .map((client) => {
           const own = db.profiles
             .filter((p) => p.client_id === client.client_id && p.status !== 'superseded')
@@ -647,7 +761,7 @@ export function createHandlers(options: MockOptions = {}) {
       ) {
         return problem('client_records_retained');
       }
-      client.deletion_requested = true;
+      client.deleted_at = new Date().toISOString();
       audit(db, user, 'deletion', 'client', client.client_id, 'Marked for deletion');
       return null;
     }),
@@ -655,6 +769,7 @@ export function createHandlers(options: MockOptions = {}) {
       const client = clientById(params.client_id);
       if (!client) return problem('not_found');
       if (!ownsClient(user!, client)) return problem('forbidden');
+      freeClaim(client);
       client.client_code = `RT${String(1000 + db.audit.length).slice(-4)}`;
       audit(db, user, 'code_rotate', 'client', client.client_id, 'Replaced a client code');
       return { client_code: client.client_code };
@@ -675,6 +790,47 @@ export function createHandlers(options: MockOptions = {}) {
           flag_counts: flagCounts(p),
           server_check_count: p.server_checks.length,
         }));
+    }),
+    route('get', '/clients/:client_id/claim', ['tailor'], ({ user, params }) => {
+      const client = clientById(params.client_id);
+      if (!client) return problem('not_found');
+      return ownsClient(user!, client) ? claimView(client) : problem('forbidden');
+    }),
+    route('post', '/clients/:client_id/claim/free', ['tailor'], ({ user, params }) => {
+      const client = clientById(params.client_id);
+      if (!client) return problem('not_found');
+      if (!ownsClient(user!, client)) return problem('forbidden');
+      freeClaim(client);
+      audit(db, user, 'code_reset', 'client', client.client_id, 'Freed a client code');
+      return claimView(client);
+    }),
+    route('post', '/clients/:client_id/claim/review', ['tailor'], ({ user, params, body }) => {
+      const client = clientById(params.client_id);
+      if (!client) return problem('not_found');
+      if (!ownsClient(user!, client)) return problem('forbidden');
+      const refuse = (field: string, code: string) =>
+        problem('validation_failed', { errors: [{ field, code }] });
+      if (db.clientSecrets[client.client_code]) return refuse('client_id', 'claim_not_freed');
+      for (const id of body.supersede_profile_ids ?? []) {
+        const row = profileById(id);
+        if (!row || row.client_id !== client.client_id)
+          return refuse('supersede_profile_ids', 'not_this_client');
+        if (db.orders.some((o) => o.profile_id === id))
+          return refuse('supersede_profile_ids', 'profile_on_order');
+      }
+      for (const id of body.supersede_profile_ids ?? []) profileById(id)!.status = 'superseded';
+      db.withdrawals = db.withdrawals.filter(
+        (w) => !(body.clear_consent_ids ?? []).includes(w.consent_id),
+      );
+      for (const id of body.close_request_ids ?? []) {
+        const row = db.deletionRequests.find((r) => r.request_id === id);
+        if (row?.status === 'received') row.status = 'rejected';
+      }
+      client.deletion_requested = db.deletionRequests.some(
+        (r) => r.client_id === client.client_id && r.status !== 'rejected',
+      );
+      audit(db, user, 'claim_review', 'client', client.client_id, 'Reviewed a freed code');
+      return claimView(client);
     }),
     route('get', '/profiles/:profile_id', staff, ({ user, params }) => {
       const profile = profileById(params.profile_id);
@@ -914,7 +1070,9 @@ export function createHandlers(options: MockOptions = {}) {
       audit(db, user, 'settings_change', 'settings', 'admin', 'Changed admin settings');
       return db.settings;
     }),
-    route('get', '/admin/deletion-requests', ['admin'], () => db.deletionRequests),
+    route('get', '/admin/deletion-requests', ['admin'], () =>
+      db.deletionRequests.map(({ client_id: _client, details_cleared: _cleared, ...row }) => row),
+    ),
     route('get', '/admin/rules', ['admin'], () =>
       db.rules.map((r) => ({
         rules_version: r.rules_version,

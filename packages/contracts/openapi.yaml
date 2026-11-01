@@ -494,6 +494,69 @@ paths:
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
+  /clients/{client_id}/claim:
+    parameters:
+      - { $ref: '#/components/parameters/ClientId' }
+    get:
+      operationId: getClientClaim
+      tags: [clients]
+      summary: Who holds this code, and what was done under each claim (D45)
+      x-roles: [tailor]
+      x-ownership: own clients only
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: The claim and what was done under it
+          content: { application/json: { schema: { $ref: '#/components/schemas/ClientClaim' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /clients/{client_id}/claim/free:
+    parameters:
+      - { $ref: '#/components/parameters/ClientId' }
+    post:
+      operationId: freeClientClaim
+      tags: [clients]
+      summary: Free the code, so a client on a new phone can claim it again
+      description: >
+        The next phone to upload claims the code, and it can read and delete only what it uploads
+        itself. Nothing already stored changes, and a withdrawal stays until the tailor clears it.
+      x-audit: code_reset
+      x-roles: [tailor]
+      x-ownership: own clients only
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: The claim after freeing
+          content: { application/json: { schema: { $ref: '#/components/schemas/ClientClaim' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /clients/{client_id}/claim/review:
+    parameters:
+      - { $ref: '#/components/parameters/ClientId' }
+    post:
+      operationId: reviewClientClaim
+      tags: [clients]
+      summary: Explicitly supersede profiles, clear withdrawals or close requests on a freed code
+      description: >
+        Only what the tailor names changes, and never automatically. A held code answers
+        validation_failed: free it first. A profile on an order cannot be superseded.
+      x-audit: claim_review
+      x-roles: [tailor]
+      x-ownership: own clients only
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ClaimReviewInput' } } }
+      responses:
+        '200':
+          description: The claim after the review
+          content: { application/json: { schema: { $ref: '#/components/schemas/ClientClaim' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
   /profiles/{profile_id}:
     get:
       operationId: getProfile
@@ -1274,6 +1337,8 @@ components:
         - deletion
         - code_issue
         - code_rotate
+        - code_reset
+        - claim_review
         - client_update
         - conflict_resolve
         - order_create
@@ -1905,6 +1970,64 @@ components:
         created_at: { type: string, format: date-time, maxLength: 32 }
         deletion_requested: { type: boolean }
         source: { $ref: '#/components/schemas/ClientSource' }
+
+    ClaimProfile:
+      type: object
+      additionalProperties: false
+      required: [profile_id, version, captured_at, received_at, status, claim_round, on_order]
+      properties:
+        profile_id: { type: string, format: uuid, maxLength: 36 }
+        version: { type: integer, minimum: 1, maximum: 100000 }
+        captured_at: { type: string, format: date-time, maxLength: 32 }
+        received_at: { type: string, format: date-time, maxLength: 32 }
+        status: { $ref: '#/components/schemas/ProfileStatus' }
+        claim_round: { type: integer, minimum: 0 }
+        on_order: { type: boolean }
+    ClaimWithdrawal:
+      type: object
+      additionalProperties: false
+      required: [consent_id, consent_version, given_at, withdrawn_at]
+      properties:
+        consent_id: { type: string, format: uuid, maxLength: 36 }
+        consent_version: { type: string, maxLength: 20 }
+        given_at: { type: string, format: date-time, maxLength: 32 }
+        withdrawn_at: { type: string, format: date-time, maxLength: 32 }
+    ClaimDeletionRequest:
+      type: object
+      additionalProperties: false
+      required: [request_id, reason, status, received_at, details_cleared]
+      properties:
+        request_id: { type: string, format: uuid, maxLength: 36 }
+        reason: { type: string, enum: [delete, withdraw_consent] }
+        status: { type: string, enum: [received, partially_done, done, rejected] }
+        received_at: { type: string, format: date-time, maxLength: 32 }
+        details_cleared: { type: boolean }
+    ClientClaim:
+      type: object
+      additionalProperties: false
+      required: [claimed, claim_round, profiles, withdrawals, deletion_requests]
+      properties:
+        claimed: { type: boolean }
+        claim_round: { type: integer, minimum: 0 }
+        profiles: { type: array, items: { $ref: '#/components/schemas/ClaimProfile' } }
+        withdrawals: { type: array, items: { $ref: '#/components/schemas/ClaimWithdrawal' } }
+        deletion_requests: { type: array, items: { $ref: '#/components/schemas/ClaimDeletionRequest' } }
+    ClaimReviewInput:
+      type: object
+      additionalProperties: false
+      properties:
+        supersede_profile_ids:
+          type: array
+          maxItems: 100
+          items: { type: string, format: uuid, maxLength: 36 }
+        clear_consent_ids:
+          type: array
+          maxItems: 100
+          items: { type: string, format: uuid, maxLength: 36 }
+        close_request_ids:
+          type: array
+          maxItems: 100
+          items: { type: string, format: uuid, maxLength: 36 }
 
     OrderItemInput:
       type: object

@@ -9,7 +9,7 @@ from typing import Any
 import structlog
 from fastapi import Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import exists, select
+from sqlalchemy import ColumnElement, exists, func, select
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -224,11 +224,18 @@ async def _server_checks(
     return found
 
 
-async def _holds_data(session: AsyncSession, client: Client) -> bool:
-    found = await session.scalar(
-        select(exists().where(MeasurementProfile.client_id == client.client_id))
+def _this_round(client: Client) -> tuple[ColumnElement[bool], ...]:
+    return (
+        MeasurementProfile.client_id == client.client_id,
+        MeasurementProfile.claim_round == client.claim_round,
     )
-    return bool(found)
+
+
+async def _rows_this_round(session: AsyncSession, client: Client) -> int:
+    found = await session.scalar(
+        select(func.count()).select_from(MeasurementProfile).where(*_this_round(client))
+    )
+    return found or 0
 
 
 def _claim(
@@ -277,15 +284,21 @@ async def ingest(
         and existing.client_id == client.client_id
         and existing.payload_sha256 == payload_hash
     ):
-        # Knowing a whole stored body is the proof that closes a lost reply after a reset.
-        if not claimed:
+        # A replay is proof only of its own row, so it claims only if no one else's row is there.
+        # After a tailor frees the code the row is from an old round, so this claims nothing.
+        if (
+            not claimed
+            and existing.claim_round == client.claim_round
+            and await _rows_this_round(session, client) == 1
+        ):
             assert secret is not None
             _claim(request, session, client, secret, over_data=True)
         reply = await _reply(session, existing)
         await session.commit()
         return reply
-    # A code that holds data waits for its tailor: an upload must not make anyone its owner (D45).
-    if not claimed and await _holds_data(session, client):
+    # Data in this round waits for its tailor: an upload must not make anyone its owner (D45).
+    # A freed code starts a new round, so the next phone claims it and reaches only its own rows.
+    if not claimed and await _rows_this_round(session, client):
         raise ApiError("client_secret_refused")
     # One refusal for an id that is another client's, live or deleted (D45).
     deleted = await session.get(DeletedProfile, body.profile_id)
@@ -323,15 +336,15 @@ async def ingest(
         await session.flush()
         consent = body.consent
         seen = await session.scalar(
-            select(
-                exists().where(
-                    Consent.client_id == client.client_id,
-                    Consent.consent_version == consent.consent_version,
-                    Consent.given_at == consent.given_at,
-                )
+            select(Consent).where(
+                Consent.client_id == client.client_id,
+                Consent.consent_version == consent.consent_version,
+                Consent.given_at == consent.given_at,
             )
         )
-        if not seen:
+        if seen:
+            seen.claim_round = client.claim_round
+        else:
             session.add(
                 Consent(
                     client_id=client.client_id,
@@ -339,6 +352,7 @@ async def ingest(
                     language=consent.language,
                     scope=list(consent.scope),
                     given_at=consent.given_at,
+                    claim_round=client.claim_round,
                 )
             )
         row = MeasurementProfile(
@@ -357,6 +371,7 @@ async def ingest(
             rules_version=body.rules_version,
             covariates=covariates,
             payload_sha256=payload_hash,
+            claim_round=client.claim_round,
         )
         session.add(row)
         if not claimed:

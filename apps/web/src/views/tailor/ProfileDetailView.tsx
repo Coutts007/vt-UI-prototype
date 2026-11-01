@@ -1,163 +1,109 @@
-import React, { useState, useEffect } from 'react';
-import { useI18n } from '../../i18n';
-import { MeasurementProfile } from '../../types/api';
-import { api } from '../../api/client';
+import React from 'react';
+import { Plus } from 'lucide-react';
+import { apiClient } from '../../api/instance';
 import { Button } from '../../components/ui/Button';
 import { FlagBadge } from '../../components/ui/FlagBadge';
-import { Silhouette } from '../../components/ui/Silhouette';
-import {
-  ChevronLeft,
-  Plus,
-  CheckCircle2,
-  AlertTriangle,
-  Info,
-  Smartphone,
-  Cpu,
-} from 'lucide-react';
+import { Banner } from '../../components/ui/feedback';
+import { useI18n } from '../../i18n';
+import type { TranslationKey } from '../../i18n/en';
+import { BackLink, Card, currentUnit, formatLength, hintClass, Loading, Title, useDates, useLoad } from './common';
+import { useTailorText } from './tailorText';
 
-interface ProfileDetailViewProps {
+export const ProfileDetailView: React.FC<{
   clientId: string;
   profileId: string;
   onNavigate: (path: string) => void;
-}
-
-export const ProfileDetailView: React.FC<ProfileDetailViewProps> = ({
-  clientId,
-  profileId,
-  onNavigate,
-}) => {
+}> = ({ clientId, profileId, onNavigate }) => {
+  const tx = useTailorText();
   const { t } = useI18n();
-
-  const [profile, setProfile] = useState<MeasurementProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadProfile();
-  }, [profileId]);
-
-  const loadProfile = async () => {
-    setLoading(true);
-    try {
-      const data = await api.getProfileById(profileId);
-      setProfile(data);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading || !profile) {
-    return <div className="p-8 text-center text-sm text-slate-600">Loading profile data…</div>;
-  }
-
-  const formatValue = (valMm: number | null) => {
-    if (valMm === null) return '— (Fail: Not measured)';
-    return `${(valMm / 10).toFixed(1)} cm`;
-  };
-
-  const hasFlags = profile.measurements.some((m) => m.confidence_flag !== 'pass');
+  const { time } = useDates();
+  const unit = currentUnit();
+  // Each opening is recorded by the server, as backend-spec 8 asks.
+  const { data, failed, reload } = useLoad(
+    () => apiClient.get('/profiles/{profile_id}', { path: { profile_id: profileId } }),
+    [profileId],
+  );
+  if (!data) return <Loading failed={failed} onRetry={reload} />;
+  const flagged = data.measurements.some((row) => row.confidence_flag !== 'pass');
+  const session = data.session;
+  const checks = [
+    [tx('checkFront'), session.front_checks],
+    [tx('checkSide'), session.side_checks],
+  ] as const;
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl mx-auto">
-      <button
-        onClick={() => onNavigate(`/t/clients/${clientId}`)}
-        className="text-xs text-[var(--vt-ink-muted,#5C554C)] hover:text-[var(--vt-ink,#1F1C18)] flex items-center gap-1 cursor-pointer font-medium"
-      >
-        <ChevronLeft className="w-4 h-4" />
-        <span>Back to client {profile.client_code}</span>
-      </button>
-
-      {/* Header Summary */}
-      <div className="p-6 rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="font-mono font-bold text-xl text-[var(--vt-thread,#2E3A87)]">
-              {profile.client_code} · Version {profile.version}
-            </span>
-            <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-mono font-semibold">
-              {profile.rules_version}
-            </span>
-          </div>
-
-          <div className="text-xs text-[var(--vt-ink-muted,#5C554C)] flex flex-wrap items-center gap-2">
-            <span>
-              Captured {new Date(profile.captured_at).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-            </span>
-            <span>·</span>
-            <span>Mode: {profile.session.capture_mode}</span>
-            <span>·</span>
-            <span>Device: {profile.session.device_model}</span>
-          </div>
+    <div className="flex flex-col gap-4 max-w-4xl mx-auto">
+      <BackLink onClick={() => onNavigate(`/t/clients/${clientId}`)} label={tx('back')} />
+      <Title>{tx('profileTitle')}</Title>
+      <p className={hintClass}>
+        {tx('profileSummary', {
+          date: time(data.captured_at),
+          version: data.version,
+          mode: tx(session.capture_mode === 'self' ? 'modeSelf' : 'modeAssisted'),
+        })}
+        <br />
+        {tx('profileDevice', { device: session.device_model, model: session.model_variant, rules: data.rules_version })}
+      </p>
+      {flagged && <Banner tone="warn">{tx('confirmAtFitting')}</Banner>}
+      <Card>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left">
+                <th scope="col" className="py-2 pr-2">{tx('siteColumn')}</th>
+                <th scope="col" className="py-2 pr-2">{tx('valueColumn')}</th>
+                <th scope="col" className="py-2 pr-2">{tx('flagColumn')}</th>
+                <th scope="col" className="py-2">{tx('methodColumn')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.measurements.map((row) => (
+                <tr key={row.site_code} className="border-t border-[var(--vt-line)]">
+                  <td className="py-2 pr-2">
+                    {t(`site_${row.site_code}` as TranslationKey)}
+                    <span className={`block ${hintClass}`}>{t(`iso_${row.site_code}` as TranslationKey)}</span>
+                  </td>
+                  <td className="py-2 pr-2 font-semibold whitespace-nowrap">
+                    {row.value_mm === null ? tx('notMeasured') : formatLength(row.value_mm, unit)}
+                  </td>
+                  <td className="py-2 pr-2">
+                    <FlagBadge flag={row.confidence_flag} reasons={row.flag_reasons} showReasonText />
+                  </td>
+                  <td className="py-2">{tx(row.method === 'auto' ? 'methodAuto' : 'methodOverride')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-
-        <Button
-          onClick={() => onNavigate(`/t/orders/new?profileId=${profile.profile_id}`)}
-          icon={<Plus className="w-4 h-4" />}
-          size="md"
-        >
-          New order from profile
-        </Button>
-      </div>
-
-      {/* Fitting Callout */}
-      {hasFlags && (
-        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5 shadow-2xs">
-          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-          <div>
-            <strong className="block text-sm mb-0.5">Fitting Confirmation Required</strong>
-            <span>
-              One or more body measurement sites carry a confidence flag. Confirm or override these values at the garment fitting.
-            </span>
-          </div>
-        </div>
+      </Card>
+      {data.server_checks.length > 0 && (
+        <Card title={tx('serverChecks')}>
+          <ul className="text-sm list-disc pl-5">
+            {data.server_checks.map((row, index) => (
+              <li key={`${row.kind}-${row.site_code ?? index}`}>
+                {row.kind.replaceAll('_', ' ')}
+                {row.site_code ? `: ${t(`site_${row.site_code}` as TranslationKey)}` : ''}
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
-
-      {/* Anatomical Silhouette Visualizer */}
-      <div className="mb-2">
-        <Silhouette
-          measurements={profile.measurements}
-          sex={profile.covariates.sex}
-          unit="cm"
-        />
-      </div>
-
-      {/* Tailor Measurement Sheet Table */}
-      <div className="rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white overflow-hidden shadow-2xs">
-        <div className="p-4 bg-[#FAF8F5] border-b border-[var(--vt-line,#DDD5C8)] flex items-center justify-between">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--vt-ink,#1F1C18)]">
-            Body Measurement Data
-          </h2>
-          <span className="text-xs text-[var(--vt-ink-muted,#5C554C)]">
-            Scale Disagreement: {profile.session.scale_disagreement_pct}%
-          </span>
-        </div>
-
-        <div className="divide-y divide-[var(--vt-line,#DDD5C8)]/60">
-          {profile.measurements.map((m) => (
-            <div
-              key={m.site_code}
-              className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-[#FDFBF7]"
-            >
-              <div>
-                <span className="text-sm font-bold text-[var(--vt-ink,#1F1C18)] capitalize block">
-                  {m.site_code}
-                </span>
-                <span className="text-xs text-[var(--vt-ink-muted,#5C554C)]">
-                  Method: {m.method === 'auto' ? 'Computed from Vision' : 'Manual Override'}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-4">
-                <span className="text-base font-mono font-bold text-[var(--vt-thread,#2E3A87)]">
-                  {formatValue(m.value_mm)}
-                </span>
-                <FlagBadge flag={m.confidence_flag} reasons={m.flag_reasons} showReasonText />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <Card title={tx('captureChecks')}>
+        {checks.map(([label, values]) => (
+          <p key={label} className="text-sm">
+            <strong>{label}: </strong>
+            {Object.entries(values)
+              .map(([name, state]) => `${name} ${state}`)
+              .join(' · ')}
+          </p>
+        ))}
+        <p className={hintClass}>
+          {tx('scaleDisagreement', { value: session.scale_disagreement_pct })} · {tx('retakes', { count: session.retake_count })}
+        </p>
+      </Card>
+      <Button icon={<Plus aria-hidden="true" className="w-4 h-4" />} onClick={() => onNavigate(`/t/orders/new?profileId=${profileId}`)}>
+        {tx('newOrderFromThis')}
+      </Button>
     </div>
   );
 };
