@@ -3,6 +3,7 @@ import { CheckCircle2, Cpu, ShieldCheck } from 'lucide-react';
 import { currentHost, stopRunner } from '../../capture/runnerHost';
 import { captureSession } from '../../capture/session';
 import { Button } from '../../components/ui/Button';
+import type { LocalProfile } from '../../db/storage';
 import { vtStorage } from '../../db/storage';
 import { useI18n } from '../../i18n';
 
@@ -37,8 +38,16 @@ export const ProcessingView: React.FC<{ onNavigate: (path: string) => void }> = 
         await new Promise((resolve) => setTimeout(resolve, STEP_MS * speed));
         setStep(i);
       }
+      let profile: LocalProfile;
+      let disagreeing: 'front' | 'side' | null;
       try {
+        const { buildProfile, disagreeingView, readProfiles } = await import('../../capture/compute');
+        // First, so a crash below cannot lose the masks' numbers when they are released (A5 F1).
+        readProfiles(captureSession);
         await host?.vision.compute();
+        const draft = await vtStorage.loadDraft();
+        profile = buildProfile(captureSession, draft, Date.now() - started.current);
+        disagreeing = disagreeingView(captureSession, profile.session.scale_disagreement_pct);
       } catch {
         running.current = false;
         captureSession.send({ type: 'WORKER_CRASH' });
@@ -51,16 +60,11 @@ export const ProcessingView: React.FC<{ onNavigate: (path: string) => void }> = 
         }
         return;
       }
-      const { buildProfile, disagreeingView } = await import('../../capture/compute');
-      const draft = await vtStorage.loadDraft();
-      const profile = buildProfile(captureSession, draft, Date.now() - started.current);
       captureSession.profile = profile;
-      // M7 computes its profiles from the masks before this line (privacy invariant 2).
       captureSession.releaseMasks();
       stopRunner();
       captureSession.send({ type: 'COMPUTED' });
-      const view = disagreeingView(captureSession, profile.session.scale_disagreement_pct);
-      captureSession.send(view ? { type: 'SCALE_DISAGREE', view } : { type: 'SCALE_OK' });
+      captureSession.send(disagreeing ? { type: 'SCALE_DISAGREE', view: disagreeing } : { type: 'SCALE_OK' });
       onNavigate('/review');
     };
     void run();

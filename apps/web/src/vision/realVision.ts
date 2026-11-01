@@ -5,6 +5,7 @@ import { CAPTURE_CONFIG } from '../capture/config';
 import { captureSession } from '../capture/session';
 import { Box, majorityMask } from './frameMath';
 import { untrackFrame } from './ledger';
+import { maskRows } from '../measure/silhouette';
 import { MODEL_URLS } from './paths';
 import type { MarkerResult, ModelVariant, PoseResult } from './protocol';
 import type {
@@ -27,9 +28,12 @@ export const REAL_LIMITS = { initMs: timing.modelLoadMs, liveMs: timing.realLive
 
 const nulls = (): null[] => Array.from({ length: 101 }, () => null);
 
-/** Empty profiles until M7 fills them from the mask. Null means not measured, never a made-up value. */
+/**
+ * Empty until the mask is read. Bottom 0 means a view with no mask fails, instead of the frame's own
+ * height passing for the person's. Null means not measured, never a made-up value.
+ */
 export function emptySilhouette(view: View, w: number, h: number): SilhouetteFront | SilhouetteSide {
-  const shared = { samples: 101 as const, mask_top_px: 0, mask_bottom_px: h, image_w: w, image_h: h };
+  const shared = { samples: 101 as const, mask_top_px: 0, mask_bottom_px: 0, image_w: w, image_h: h };
   return view === 'front'
     ? { ...shared, half_width_mm: nulls(), crotch_y_px: null }
     : { ...shared, half_depth_mm: nulls(), anterior_mm: nulls() };
@@ -58,16 +62,9 @@ export function boxOf(sample: PoseResult): Box | null {
 /** The top and bottom of the combined mask, in frame pixels. */
 export function withMaskBounds(frame: BurstFrame, mask: PersonMask | null, imageH: number): BurstFrame {
   if (!mask) return frame;
-  let top = -1;
-  let bottom = -1;
-  for (let row = 0; row < mask.height; row++) {
-    const start = row * mask.width;
-    if (mask.data.subarray(start, start + mask.width).some(Boolean)) {
-      if (top < 0) top = row;
-      bottom = row + 1;
-    }
-  }
-  if (top < 0) return frame;
+  const rows = maskRows(mask);
+  if (!rows) return frame;
+  const { top, bottom } = rows;
   const scale = imageH / mask.height;
   return {
     ...frame,

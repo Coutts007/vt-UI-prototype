@@ -2,6 +2,17 @@
 
 The newest entry comes first. Every change or improvement adds a line in the same commit.
 
+## 2026-11-01: M7 TypeScript measurement module (not yet run on a phone)
+
+- `src/measure/derive.ts` is a port of `vt_measure`. All 68 parity cases match in both languages, and `make parity` now runs both.
+- `src/measure/silhouette.ts` reads each person mask into the 101-sample profiles and the crotch row before the mask is released (A5 F1, A14). The prototype engine is gone, so review values now come from the same derivation the server re-runs.
+- An independent review drew hard masks and found wrong values passing. Fixed, each with a test: mask holes cutting a width, a merged arm or hand widening or undercutting the torso, a forearm adding to the side depth, a speck in the leg gap read as the crotch, a stray pixel setting the height, and a view with no mask measuring the frame instead of the person. A row where an arm has merged is now left empty, so the site fails visibly instead of showing an estimate (D39).
+- Profiles are read before compute, so a crash cannot lose them, and any failure while building the profile now reaches the error screen and releases the masks. It used to leave a stuck spinner with masks held.
+- A failed front view now reports 100% disagreement rather than 0, which read as perfect agreement.
+- **Unverified:** no real capture has run through this, and the browser tests only cover the front view on a drawn figure. Values on real people are unknown, and hole, arm and hand limits are provisional (D39). Chest may fail too often if real arms merge at chest level.
+- **Open:** profiles store millimetres at capture scale, so a later depth correction would rescale lengths but not girths (D40). This does not affect today's rules, where the correction is 0.
+- **Size:** the capture engine is now 10.9 KB, taking the real client figure to about 179.5 KB (D38).
+
 ## 2026-11-01: M6 real capture pipeline (code complete, not yet run on a phone)
 
 - Camera: rear 1080p, `zoom:1` pinned where the lens can go wider, a wide lens swapped for the main one, applied settings read back, landscape delivery turned upright in the pipeline, ImageCapture still on Android, all tracks stopped on leaving. A stream that arrives after the screen has gone is stopped at once (the M5 finding). The wake lock no longer leaks if it is granted after leaving.

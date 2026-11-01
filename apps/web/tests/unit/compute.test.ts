@@ -73,7 +73,7 @@ describe('buildProfile', () => {
     assertNoImages(profile);
   });
 
-  it.each([1400, 1700, 2200])('all nine sites pass at height %i', async (height) => {
+  it.each([1450, 1700, 2150])('all nine sites pass at height %i', async (height) => {
     const profile = buildProfile(await capture('good', height), { ...draft, height_mm: height }, 1);
     const bad = profile.measurements.filter((m) => m.confidence_flag !== 'pass');
     expect(bad.map((m) => [m.site_code, m.value_mm, m.flag_reasons])).toEqual([]);

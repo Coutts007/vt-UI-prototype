@@ -429,7 +429,11 @@ describe('burst helpers', () => {
   });
 
   it('reads the top and bottom of the combined mask in frame pixels', () => {
-    const mask = { width: 2, height: 4, data: new Uint8Array([0, 0, 1, 1, 0, 1, 0, 0]) };
+    const mask = {
+      width: 4,
+      height: 4,
+      data: new Uint8Array([0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0]),
+    };
     const out = withMaskBounds(frame(), mask, 1280);
     expect(out.silhouette.mask_top_px).toBe(320);
     expect(out.silhouette.mask_bottom_px).toBe(960);
