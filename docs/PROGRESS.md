@@ -11,6 +11,7 @@ The newest entry comes first. Every change or improvement adds a line in the sam
 - The API image installs Pango and HarfBuzz for WeasyPrint, keeps sheets in their own volume, and production refuses the development link secret. WeasyPrint is imported only when a sheet is drawn, so the API still starts without Pango. Pyphen, a WeasyPrint dependency offered under GPL, LGPL or MPL, is taken under MPL-1.1, as `scripts/licences.mjs` records; the fonts are listed with their OFL licence.
 - The sheet screen previews the server's PNG and offers Share on WhatsApp, Download picture, Download PDF and Print. Share uses the phone's share sheet with the PNG and the text when it can share files; otherwise it saves the picture and opens `wa.me` with the text, and tells the tailor to attach it. Each path records itself through the share log. An expired or cleaned-up link makes a new sheet with the same name choice and carries on (F6). The name toggle starts from the tailor's setting. Files come through a new `ApiClient.sheetFile`, with no sign-in sent, so no screen calls `fetch` itself.
 - The mock builds the real share text from the seed order and serves stand-in files. Browser tests cover both share paths, the PDF download and, on the real API, an expired link being replaced; the real API's preview is checked at 1240 px wide.
+- The mock's contract test fetches a file for a sheet it made, since files of unknown sheets now answer 404 as on the API. Formatting fixed.
 
 ## 2026-11-02: M9 review fixes
 

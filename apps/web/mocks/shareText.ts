@@ -63,7 +63,9 @@ export function buildShareText(data: ShareInput): string {
   ];
   const lines = [head.join(SEP)];
   const order = fixture.sites;
-  const items = [...data.items].sort((a, b) => order.indexOf(a.site_code) - order.indexOf(b.site_code));
+  const items = [...data.items].sort(
+    (a, b) => order.indexOf(a.site_code) - order.indexOf(b.site_code),
+  );
   for (const item of items) {
     const name = names[item.site_code];
     if (item.pending_fitting) lines.push(`${name}: ${labels.pending_fitting}`);

@@ -21,11 +21,14 @@ type Handler = (ctx: Ctx) => Result | Promise<Result>;
 const BASE = '/api/v1';
 // A 1 x 1 white PNG, so the preview loads in mock mode.
 const MOCK_PNG = Uint8Array.from(
-  atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC'),
+  atob(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC',
+  ),
   (c) => c.charCodeAt(0),
 );
 /** The calendar day in Nairobi (UTC+3, no daylight saving). */
-const nairobiDay = (iso: string) => new Date(Date.parse(iso) + 3 * 3600 * 1000).toISOString().slice(0, 10);
+const nairobiDay = (iso: string) =>
+  new Date(Date.parse(iso) + 3 * 3600 * 1000).toISOString().slice(0, 10);
 
 export interface MockOptions {
   /** Added latency in ms. Tests pass 0; dev uses 150 to 600 ms. */
@@ -1023,14 +1026,18 @@ export function createHandlers(options: MockOptions = {}) {
       });
     }),
     route('get', '/files/sheets/:sheet_file', null, ({ params, url }) => {
-      if (Number(url.searchParams.get('exp')) < Date.now() / 1000) return problem('sheet_link_invalid');
+      if (Number(url.searchParams.get('exp')) < Date.now() / 1000)
+        return problem('sheet_link_invalid');
       const stem = params.sheet_file.split('.')[0];
       if (!db.sheets.some((s) => s.sheet_id === stem)) return problem('not_found');
       const pdf = params.sheet_file.endsWith('.pdf');
       // Stand-ins: the mock does not render. The real sheet comes from the API (M10).
       const bytes = pdf ? new TextEncoder().encode('%PDF-1.4\n%mock sheet\n%%EOF\n') : MOCK_PNG;
       return new HttpResponse(bytes, {
-        headers: { 'Content-Type': pdf ? 'application/pdf' : 'image/png', 'Cache-Control': 'no-store' },
+        headers: {
+          'Content-Type': pdf ? 'application/pdf' : 'image/png',
+          'Cache-Control': 'no-store',
+        },
       });
     }),
     route('post', '/sheets/:sheet_id/shares', ['tailor'], ({ user, params, body }) => {

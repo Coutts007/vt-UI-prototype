@@ -3,9 +3,12 @@ import fixture from '../../../../packages/contracts/share-text.json';
 import { buildShareText, formatLength, type ShareInput } from '../../mocks/shareText';
 
 describe('share text (backend-spec 13)', () => {
-  it.each(fixture.cases.map((c) => [c.name, c] as const))('matches the shared fixture: %s', (_, c) => {
-    expect(buildShareText(c.input as ShareInput)).toBe(c.expected);
-  });
+  it.each(fixture.cases.map((c) => [c.name, c] as const))(
+    'matches the shared fixture: %s',
+    (_, c) => {
+      expect(buildShareText(c.input as ShareInput)).toBe(c.expected);
+    },
+  );
 
   it.each([
     [0, 'cm', '0.0 cm'],
@@ -24,14 +27,28 @@ describe('share text (backend-spec 13)', () => {
     for (let mm = 0; mm <= 3000; mm += 1) {
       const eighths = Math.round((mm * 8) / 25.4);
       const whole = Math.floor(eighths / 8);
-      expect(formatLength(mm, 'in').startsWith(eighths % 8 === 0 ? `${whole} in` : whole === 0 ? '' : `${whole} `)).toBe(true);
+      expect(
+        formatLength(mm, 'in').startsWith(
+          eighths % 8 === 0 ? `${whole} in` : whole === 0 ? '' : `${whole} `,
+        ),
+      ).toBe(true);
     }
   });
 
   it('stays under the WhatsApp link limit', () => {
-    const items = fixture.sites.map((site_code) => ({ site_code, body_mm: 9999, flag: 'check' as const, pending_fitting: false }));
+    const items = fixture.sites.map((site_code) => ({
+      site_code,
+      body_mm: 9999,
+      flag: 'check' as const,
+      pending_fitting: false,
+    }));
     for (const locale of ['en', 'sw'] as const) {
-      const text = buildShareText({ ...(fixture.cases[0].input as ShareInput), locale, name: 'N'.repeat(64), items });
+      const text = buildShareText({
+        ...(fixture.cases[0].input as ShareInput),
+        locale,
+        name: 'N'.repeat(64),
+        items,
+      });
       expect(text.length).toBeLessThanOrEqual(fixture.max_length);
     }
   });

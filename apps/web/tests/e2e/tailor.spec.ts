@@ -234,7 +234,8 @@ test('sunlight mode at 360 px passes contrast, on every main screen', async ({ p
 
 // M10: the sheet, both share paths, the PDF and the 10-minute links (frontend-spec 13.9, F6).
 const SHEET_ORDER = seed.orders.find(
-  (o: { order_no: string; client_code: string }) => o.order_no === 'ORD-0001' && o.client_code === 'AB1001',
+  (o: { order_no: string; client_code: string }) =>
+    o.order_no === 'ORD-0001' && o.client_code === 'AB1001',
 );
 const REAL_API = Boolean(process.env.VT_E2E_REAL_API);
 
@@ -290,9 +291,11 @@ test('without file sharing the picture downloads and WhatsApp opens with the tex
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'canShare', { value: undefined, configurable: true });
   });
-  await page.context().route('https://wa.me/**', (route) =>
-    route.fulfill({ status: 200, contentType: 'text/plain', body: 'whatsapp' }),
-  );
+  await page
+    .context()
+    .route('https://wa.me/**', (route) =>
+      route.fulfill({ status: 200, contentType: 'text/plain', body: 'whatsapp' }),
+    );
   await openSheet(page, false);
   const download = page.waitForEvent('download');
   const popup = page.waitForEvent('popup');
