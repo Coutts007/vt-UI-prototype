@@ -112,6 +112,8 @@ export function buildProfile(
       processing_ms: Math.round(processingMs),
       retake_count: context.retakeCount,
       config_hash: `${CAPTURE_CONFIG.version}-${configHash()}`,
+      // Only the researcher's study capture carries this (frontend-spec 15.1).
+      ...(draft.study && { study: draft.study }),
     },
     landmarks_front: front.landmarks,
     landmarks_side: side.landmarks,

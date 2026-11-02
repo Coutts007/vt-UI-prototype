@@ -3,7 +3,7 @@
 import hashlib
 import json
 import uuid
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -29,6 +29,7 @@ from app.schemas import MeasurementProfilePayload
 from app.security.client_secret import hash_secret, matches, well_formed
 from app.security.ip_hash import ip_hash
 from app.services import audit
+from app.services.approvals import require_approvals
 from app.services.profile_checks import (
     Check,
     change_since_last,
@@ -45,6 +46,8 @@ log = structlog.get_logger()
 HOUR = 3600
 CODE_LIMIT = 10
 KNOWN_CONSENT_VERSIONS = frozenset({"1.0"})
+# The paper form a participant signs (frontend-spec 15.1). It counts only with a study block.
+STUDY_PAPER_CONSENT = "study-paper-1.0"
 CHANGE_WINDOW = timedelta(days=90)
 
 
@@ -115,7 +118,16 @@ async def _check_consent(
     session: AsyncSession, body: MeasurementProfilePayload, client: Client, current: str
 ) -> None:
     consent = body.consent
-    known = consent.consent_version == current or consent.consent_version in KNOWN_CONSENT_VERSIONS
+    paper = (
+        consent.consent_version == STUDY_PAPER_CONSENT
+        and body.session.study is not None
+        and "study_paper" in consent.scope
+    )
+    known = (
+        consent.consent_version == current
+        or consent.consent_version in KNOWN_CONSENT_VERSIONS
+        or paper
+    )
     withdrawn = await session.scalar(
         select(
             exists().where(Consent.client_id == client.client_id, Consent.withdrawn_at.isnot(None))
@@ -311,6 +323,9 @@ async def ingest(
         raise ApiError("stale_app_version")
     await _check_consent(session, body, client, settings["consent_version"])
     participant = await _participant_for(session, body, client, settings["study_mode"])
+    if participant is not None:
+        # A study set is study data: in production it waits for the approvals too (A9).
+        require_approvals(request.app.state.settings.env, settings, datetime.now(UTC).date())
 
     if await session.get(CaptureSession, body.session.session_id):
         raise invalid("session.session_id", "session_id_reused")
@@ -357,6 +372,9 @@ async def ingest(
                     scope=list(consent.scope),
                     given_at=consent.given_at,
                     claim_round=client.claim_round,
+                    source="study_paper"
+                    if consent.consent_version == STUDY_PAPER_CONSENT
+                    else "app",
                 )
             )
         row = MeasurementProfile(

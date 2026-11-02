@@ -348,6 +348,7 @@ def test_production_needs_its_own_link_secret() -> None:
             jwt_secret="x" * 40,
             ip_pepper="p",
             vt_app_db_password="q",
+            vt_retention_db_password="r",
             _env_file=None,
         )
 

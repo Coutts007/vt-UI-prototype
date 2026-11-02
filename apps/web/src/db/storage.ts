@@ -68,6 +68,18 @@ export interface ClientDraftSettings {
   print_check_ok?: boolean;
   audio_muted?: boolean;
   capture_mode?: 'self' | 'assisted';
+  /** The researcher's study block (frontend-spec 15.1). Absent on every client's own capture. */
+  study?: components['schemas']['StudyBlock'];
+}
+
+/** One measurer's tape readings waiting to reach the server (frontend-spec 15.2). Numbers only. */
+export interface QueuedReading {
+  id?: number;
+  participant_code: string;
+  reading_no: 1 | 2;
+  values: components['schemas']['SiteValues'];
+  taken_at: string;
+  measurer_code: string;
 }
 
 const MAX_BINARY_BYTES = 65536;
@@ -122,6 +134,7 @@ class VTDatabase extends Dexie {
   pending_sync!: Table<PendingSyncOp, number>;
   settings!: Table<{ key: string; value: unknown }, string>;
   client_secrets!: Table<ClientSecretRow, string>;
+  study_readings!: Table<QueuedReading, number>;
 
   constructor() {
     super('virtual_tailor');
@@ -131,6 +144,7 @@ class VTDatabase extends Dexie {
       settings: 'key',
     });
     this.version(2).stores({ client_secrets: 'client_code' });
+    this.version(3).stores({ study_readings: '++id, participant_code' });
     // The guard sits on the tables, so no write can go around it.
     for (const table of this.tables) {
       table.hook('creating', (_key, row) => assertNoImages(row, table.name));
@@ -352,13 +366,27 @@ class VTStorage {
       this.db.pending_sync.clear(),
       this.db.settings.clear(),
       this.db.client_secrets.clear(),
+      this.db.study_readings.clear(),
     ]);
     this.draft = null;
     localStorage.removeItem(LEGACY_DRAFT_KEY);
-    // The prototype client keeps its copies here until M9 to M11.
+    // Copies the prototype client kept before M11, on phones that ran it.
     for (const key of ['users', 'clients', 'profiles', 'orders', 'audit', 'participants', 'readings']) {
       localStorage.removeItem(`vt_api_${key}`);
     }
+  }
+
+  async queueReading(reading: QueuedReading): Promise<void> {
+    await this.db.study_readings.add(reading);
+  }
+
+  async queuedReadings(measurerCode: string): Promise<QueuedReading[]> {
+    const rows = await this.db.study_readings.toArray();
+    return rows.filter((row) => row.measurer_code === measurerCode);
+  }
+
+  async removeQueuedReading(id: number): Promise<void> {
+    await this.db.study_readings.delete(id);
   }
 
   /**

@@ -17,11 +17,13 @@ from app.models import (
     DeletionRequest,
     MeasurementProfile,
     Order,
+    Participant,
 )
 from app.schemas import DeletionRequestInput
 from app.security.client_secret import matches
 from app.security.ip_hash import ip_hash, keyed_hash
 from app.services import audit
+from app.services.erasure import study_set
 from app.services.profiles import consent_json, for_phone, profile_json
 
 BACKUPS = "Copies leave the backups within 30 days."
@@ -29,6 +31,23 @@ RETAINED = " Profiles on an order stay until 30 days after the order is collecte
 EARLIER = " Your tailor holds earlier records for this code and has been told."
 NOTHING_HELD = "Nothing is held for this code."
 PASSED_ON = "Your tailor has been told. Nothing changes until they act."
+STUDY_KEPT = " Study records are kept, unused, and left out of the study (D44)."
+
+
+async def withdraw_participant(
+    session: AsyncSession, client_id: uuid.UUID, moment: datetime
+) -> bool:
+    """D44 default: a participant who asks to delete or withdraw is withdrawn from the study.
+    Their rows stay, unused. Returns whether the code was a participant's."""
+    found = await session.execute(
+        update(Participant)
+        .where(Participant.client_id == client_id, Participant.withdrawn_at.is_(None))
+        .values(withdrawn_at=moment)
+        .returning(Participant.participant_id)
+    )
+    if found.first():
+        return True
+    return bool(await session.scalar(select(exists().where(Participant.client_id == client_id))))
 
 
 async def _proven_client(
@@ -73,6 +92,7 @@ async def _pass_to_tailor(
             reason=body.reason,
             status="received",
             note=PASSED_ON,
+            claim_round=client.claim_round,
         )
         session.add(open_request)
         await session.flush()
@@ -98,9 +118,13 @@ async def request_deletion(
     )
     found = await session.scalar(query.with_for_update(key_share=True))
     if found and found.secret_hash is None:
+        is_participant = await session.scalar(
+            select(exists().where(Participant.client_id == found.client_id))
+        )
         if (
             not found.display_name
             and found.height_mm is None
+            and not is_participant
             and not await _has_profiles(session, found)
         ):
             # The upload never arrived, so a stranger gains nothing by asking (D45).
@@ -108,6 +132,7 @@ async def request_deletion(
         return await _pass_to_tailor(request, session, found, body)
     client = _proven(found, secret)
     moment = datetime.now(UTC)
+    participant = await withdraw_participant(session, client.client_id, moment)
     if body.reason == "withdraw_consent":
         await session.execute(
             update(Consent)
@@ -121,6 +146,7 @@ async def request_deletion(
             MeasurementProfile.client_id == client.client_id,
             MeasurementProfile.claim_round == client.claim_round,
             MeasurementProfile.profile_id.not_in(on_order),
+            ~study_set(),
         )
         .returning(MeasurementProfile.profile_id, MeasurementProfile.session_id)
         .execution_options(synchronize_session=False)
@@ -142,6 +168,7 @@ async def request_deletion(
         .where(
             MeasurementProfile.client_id == client.client_id,
             MeasurementProfile.claim_round == client.claim_round,
+            ~study_set(),
         )
     )
     earlier = await session.scalar(
@@ -150,6 +177,7 @@ async def request_deletion(
         .where(
             MeasurementProfile.client_id == client.client_id,
             MeasurementProfile.claim_round != client.claim_round,
+            ~study_set(),
         )
     )
     # Spec 14.5. A claim only ever comes with an upload, so this caller has uploaded under it (D45).
@@ -157,7 +185,12 @@ async def request_deletion(
     client.display_name = None
     client.height_mm = None
     status = "partially_done" if retained or earlier else "done"
-    note = BACKUPS + (RETAINED if retained else "") + (EARLIER if earlier else "")
+    note = (
+        BACKUPS
+        + (RETAINED if retained else "")
+        + (EARLIER if earlier else "")
+        + (STUDY_KEPT if participant else "")
+    )
     row = DeletionRequest(
         client_id=client.client_id,
         client_code_hash=keyed_hash(request, body.client_code),
@@ -165,6 +198,7 @@ async def request_deletion(
         status=status,
         completed_at=None if status == "partially_done" else moment,
         note=note,
+        claim_round=client.claim_round,
     )
     session.add(row)
     await session.flush()

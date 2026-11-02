@@ -20,6 +20,14 @@ for (const name of readdirSync(assets)) {
   ) {
     failures.push(`mock code is in ${name}`);
   }
+  // M11: the seed's sign-ins live only in a dev chunk, never in a shipped file.
+  if (
+    !process.argv[3] &&
+    name.endsWith('.js') &&
+    /vt-demo-2026|@vt\.test/.test(readFileSync(join(assets, name), 'utf8'))
+  ) {
+    failures.push(`demo sign-ins are in ${name}`);
+  }
 }
 
 if (!process.argv[3] && readdirSync(assets).some((name) => name.startsWith('fakeVision')))

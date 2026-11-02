@@ -546,10 +546,20 @@ SUMMARIES = {
     "override": "Overrode a measurement",
     "export": "Exported",
     "share": "Shared",
+    "approve": "Approved an account",
+    "account_reject": "Rejected an account",
+    "account_disable": "Disabled an account",
+    "account_enable": "Re-enabled an account",
+    "account_create": "Created a measurer account",
+    "participant_create": "Enrolled a participant",
+    "participant_update": "Changed a participant",
+    "reference_entry": "Saved tape readings",
+    "reference_correction": "Corrected a tape reading",
+    "retention": "Ran the retention job",
 }
 
 
-def _summary(row: AuditLog) -> str:
+def summary_of(row: AuditLog) -> str:
     text = SUMMARIES.get(row.action, row.action)
     number = row.detail.get("order_no")
     return f"{text}: {number}" if number else text
@@ -607,7 +617,7 @@ async def list_audit(
                 action=row.AuditLog.action,
                 entity_type=row.AuditLog.entity_type,
                 entity_id=row.AuditLog.entity_id,
-                summary=_summary(row.AuditLog),
+                summary=summary_of(row.AuditLog),
             )
             for row in rows
         ],

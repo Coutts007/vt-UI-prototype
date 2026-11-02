@@ -2,6 +2,7 @@
 import { delay, http, HttpResponse } from 'msw';
 import errorCodes from '../../../packages/contracts/error-codes.json';
 import rulesArtifact from '../../../packages/rules/rules-0.1-uncalibrated.json';
+import exportColumns from '../../../packages/contracts/study-export-columns.json';
 import { buildShareText } from './shareText';
 import { createDb, MockDb } from './store';
 
@@ -196,6 +197,12 @@ export function createHandlers(options: MockOptions = {}) {
     return clientById(order.client_id)?.tailor_id === user.user_id ? order : null;
   };
   const participant = (code: string) => db.participants.find((p) => p.participant_code === code);
+  // D44 default: a participant whose client withdrew consent is kept but not used.
+  const withdrawnParticipant = (row: Row) => {
+    if (row.withdrawn_at) return true;
+    const client = db.clients.find((c) => c.client_code === row.client_code);
+    return Boolean(client && db.withdrawals.some((w) => w.client_id === client.client_id));
+  };
   const listingOf = (tailorId: string) => db.listings.find((l) => l.tailor_id === tailorId);
   const asUser = (row: Row) => toUser(row, listingOf(row.user_id));
   const issued: number[] = [];
@@ -1101,7 +1108,28 @@ export function createHandlers(options: MockOptions = {}) {
     }),
     route('get', '/admin/settings', ['admin'], () => db.settings),
     route('put', '/admin/settings', ['admin'], ({ user, body }) => {
-      Object.assign(db.settings, body);
+      const { confirm_study_deletion: confirmed, ...changes } = body;
+      if (
+        changes.study_collection_end &&
+        changes.study_collection_end !== db.settings.study_collection_end &&
+        !confirmed
+      )
+        return problem('validation_failed', {
+          errors: [{ field: 'confirm_study_deletion', code: 'required' }],
+        });
+      if (changes.approvals) {
+        // As on the server: who confirmed, and when, come from the signed-in admin.
+        const filled =
+          changes.approvals.ierc_ref &&
+          changes.approvals.nacosti_licence_no &&
+          changes.approvals.dpia_submitted_on;
+        changes.approvals = {
+          ...changes.approvals,
+          approvals_confirmed_by: filled ? user!.email : null,
+          confirmed_at: filled ? new Date().toISOString() : null,
+        };
+      }
+      Object.assign(db.settings, changes);
       if (body.approvals) {
         const required = [
           'ierc_ref',
@@ -1116,8 +1144,53 @@ export function createHandlers(options: MockOptions = {}) {
       return db.settings;
     }),
     route('get', '/admin/deletion-requests', ['admin'], () =>
-      db.deletionRequests.map(({ client_id: _client, details_cleared: _cleared, ...row }) => row),
+      db.deletionRequests.map(({ client_id, details_cleared: _cleared, ...row }) => ({
+        ...row,
+        client_code: db.clients.find((c) => c.client_id === client_id)?.client_code ?? null,
+      })),
     ),
+    // As on the server: every round's free profiles go, the typed details go, withdrawal is recorded.
+    route('post', '/admin/deletion-requests/:request_id/honour', ['admin'], ({ user, params }) => {
+      const request = db.deletionRequests.find((r) => r.request_id === params.request_id);
+      if (!request) return problem('not_found');
+      const client = db.clients.find((c) => c.client_id === request.client_id);
+      if (!client || !['received', 'partially_done'].includes(request.status))
+        return problem('forbidden');
+      const onOrder = new Set(
+        db.orders.filter((o) => o.client_id === client.client_id).map((o) => o.profile_id),
+      );
+      const leaving = db.profiles.filter(
+        (p) => p.client_id === client.client_id && !onOrder.has(p.profile_id),
+      );
+      leaving.forEach((p) => {
+        db.deletedProfiles[p.profile_id] = client.client_id;
+      });
+      db.profiles = db.profiles.filter((p) => !leaving.includes(p));
+      if (request.reason === 'withdraw_consent') {
+        const stamp = new Date().toISOString();
+        for (const consent of db.consentRecords.filter((c) => c.client_id === client.client_id)) {
+          consent.consent_id = consent.consent_id ?? newId();
+          db.withdrawals = db.withdrawals.filter((w) => w.consent_id !== consent.consent_id);
+          db.withdrawals.push({
+            consent_id: consent.consent_id,
+            client_id: client.client_id,
+            consent_version: consent.consent_version,
+            given_at: consent.given_at,
+            withdrawn_at: stamp,
+          });
+        }
+      }
+      client.display_name = null;
+      client.height_mm = null;
+      const person = db.participants.find((p) => p.client_code === client.client_code);
+      if (person && !person.withdrawn_at) person.withdrawn_at = new Date().toISOString();
+      const retained = db.profiles.some((p) => p.client_id === client.client_id);
+      request.status = retained ? 'partially_done' : 'done';
+      request.completed_at = retained ? null : new Date().toISOString();
+      audit(db, user, 'deletion', 'client', client.client_id, 'Carried out a deletion request');
+      const { client_id: _client, details_cleared: _cleared, ...row } = request;
+      return { ...row, client_code: client.client_code };
+    }),
     route('get', '/admin/rules', ['admin'], () =>
       db.rules.map((r) => ({
         rules_version: r.rules_version,
@@ -1193,18 +1266,34 @@ export function createHandlers(options: MockOptions = {}) {
       },
     ),
 
+    // As on the server: the list stays readable when study mode is off; writes need it on.
     route('get', '/study/participants', ['admin'], () =>
-      db.settings.study_mode ? db.participants : problem('study_mode_off'),
+      db.participants.map(({ withdrawn_at: _w, ...p }) => ({
+        ...p,
+        withdrawn: withdrawnParticipant(p),
+      })),
     ),
     route('post', '/study/participants', ['admin'], ({ user, body }) => {
       if (!db.settings.study_mode) return problem('study_mode_off');
-      const client = db.clients.find(
-        (c) => !db.participants.some((p) => p.client_code === c.client_code),
-      );
+      if (participant(body.participant_code))
+        return problem('validation_failed', {
+          errors: [{ field: 'participant_code', code: 'taken' }],
+        });
+      // As on the server: a new code of the admin's own, holding only the participant's sex.
+      const client = {
+        client_id: newId(),
+        client_code: newCode(),
+        tailor_id: user!.user_id,
+        display_name: null,
+        height_mm: null,
+        created_at: new Date().toISOString(),
+        deletion_requested: false,
+      };
+      db.clients.push(client);
       const row = {
         participant_id: newId(),
         participant_code: body.participant_code,
-        client_code: client?.client_code ?? 'AB1001',
+        client_code: client.client_code,
         sex: body.sex,
         age_band: body.age_band,
         venue: body.venue,
@@ -1212,6 +1301,7 @@ export function createHandlers(options: MockOptions = {}) {
         enrolled_at: new Date().toISOString(),
         sets_captured: 0,
         readings_entered: 0,
+        withdrawn: false,
       };
       db.participants.push(row);
       audit(
@@ -1240,10 +1330,29 @@ export function createHandlers(options: MockOptions = {}) {
       );
       return row;
     }),
+    route('post', '/study/participants/:participant_id/withdraw', ['admin'], ({ user, params }) => {
+      const row = db.participants.find((p) => p.participant_id === params.participant_id);
+      if (!row) return problem('not_found');
+      if (!row.withdrawn_at) {
+        row.withdrawn_at = new Date().toISOString();
+        audit(
+          db,
+          user,
+          'participant_update',
+          'participant',
+          row.participant_id,
+          'Withdrew a participant',
+        );
+      }
+      const { withdrawn_at: _w, ...shown } = row;
+      return { ...shown, withdrawn: true };
+    }),
     route('post', '/study/reference-readings', ['measurer'], ({ user, body }) => {
       if (!db.settings.study_mode) return problem('study_mode_off');
       const row = participant(body.participant_code);
       if (!row) return problem('not_found');
+      // D44 default: a participant who withdrew gets no new readings.
+      if (withdrawnParticipant(row)) return problem('consent_missing');
       const taken = db.readings.some(
         (r) =>
           r.participant_code === body.participant_code &&
@@ -1293,18 +1402,31 @@ export function createHandlers(options: MockOptions = {}) {
           taken_at: r.taken_at,
         }));
     }),
+    // The server's columns exactly (backend-spec 12.1); the mock holds no capture sets, so no rows.
     route('get', '/study/export/captures.csv', ['admin'], ({ user }) => {
       audit(db, user, 'export', 'study', 'captures.csv', 'Exported captures');
-      return csv('participant_code,cohort,set_no\n');
+      return csv(`${exportColumns.captures.join(',')}\n`);
     }),
     route('get', '/study/export/reference.csv', ['admin'], ({ user }) => {
       audit(db, user, 'export', 'study', 'reference.csv', 'Exported tape readings');
-      const lines = db.readings.map((r) =>
-        [r.participant_code, r.measurer_code, r.reading_no, r.site_code, r.value_mm].join(','),
-      );
-      return csv(
-        ['participant_code,measurer_code,reading_no,site_code,value_mm', ...lines].join('\n'),
-      );
+      const kept = db.readings.filter((r) => {
+        const person = participant(r.participant_code);
+        return person && !withdrawnParticipant(person);
+      });
+      const lines = kept.map((r) => {
+        const person = participant(r.participant_code)!;
+        const mm = r.correction?.value_mm ?? r.value_mm;
+        return [
+          r.participant_code,
+          person.cohort,
+          r.site_code,
+          r.measurer_code,
+          r.reading_no,
+          (mm / 10).toFixed(1),
+          r.taken_at,
+        ].join(',');
+      });
+      return csv([exportColumns.reference.join(','), ...lines].join('\n') + '\n');
     }),
   ];
 }

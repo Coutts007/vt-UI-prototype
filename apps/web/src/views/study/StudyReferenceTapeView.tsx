@@ -1,189 +1,247 @@
-import React, { useState } from 'react';
-import { SiteCode } from '../../types/api';
-import { api } from '../../api/client';
+// Reference tape entry (frontend-spec 15.2). Blind: this screen never asks for, receives or shows a system
+// value. It posts the measurer's own readings, which lock on save; a typo goes to the admin's correction.
+import React, { useCallback, useEffect, useState } from 'react';
+import { Info } from 'lucide-react';
+import { ApiError, NetworkError } from '../../api/http';
+import { apiClient } from '../../api/instance';
 import { Button } from '../../components/ui/Button';
-import { PLAUSIBLE_RANGES_MM } from '../../measure/rules';
-import { Ruler, Lock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { QueuedReading, vtStorage } from '../../db/storage';
+import { Page, SiteValues, TAPE_SITES, problemKey } from '../admin/adminCommon';
+import { AdminKey, useAdminText } from '../admin/adminText';
+import { Card, chipClass, hintClass, inputClass, labelClass } from '../tailor/common';
 
-interface StudyReferenceTapeViewProps {
-  onNavigate: (path: string) => void;
-  measurerCode?: string;
+/** Plausible adult ranges in cm. Outside them the measurer confirms, never is refused. */
+export const TAPE_RANGE: Record<keyof SiteValues, [number, number]> = {
+  stature: [120, 220], shoulder: [28, 60], chest: [60, 160], waist: [50, 160], hip: [60, 170],
+  sleeve: [40, 85], outleg: [70, 130], inleg: [55, 100], neck: [28, 55],
+};
+
+/** "86.4" becomes 864 mm; anything that is not a number to 0.1 cm is null. */
+export function tapeMm(text: string): number | null {
+  const trimmed = text.trim().replace(',', '.');
+  if (!/^\d{2,3}(\.\d)?$/.test(trimmed)) return null;
+  return Math.round(Number(trimmed) * 10);
 }
 
-export const StudyReferenceTapeView: React.FC<StudyReferenceTapeViewProps> = ({
-  onNavigate,
-  measurerCode = 'A',
-}) => {
-  const [participantCode, setParticipantCode] = useState('P001');
-  const [readingNo, setReadingNo] = useState<1 | 2>(1);
-  const [submitted, setSubmitted] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+/** The measurer's own saved values for this reading equal the queued ones, site for site. */
+export async function sameAsSaved(reading: QueuedReading): Promise<boolean> {
+  try {
+    const saved = await apiClient.get('/study/reference-readings/mine', {
+      query: { participant_code: reading.participant_code },
+    });
+    const mine = saved.filter((row) => row.reading_no === reading.reading_no);
+    return (
+      mine.length === TAPE_SITES.length &&
+      mine.every((row) => reading.values[row.site_code as keyof SiteValues] === row.value_mm)
+    );
+  } catch {
+    return false;
+  }
+}
 
-  // 9 sites in Appendix C order
-  const siteList: { code: SiteCode; label: string; desc: string }[] = [
-    { code: 'stature', label: '1. Stature / Height', desc: 'Barefoot, head in Frankfort horizontal plane' },
-    { code: 'shoulder', label: '2. Across Shoulder Width', desc: 'Distance between left and right acromion processes' },
-    { code: 'chest', label: '3. Chest / Bust Girth', desc: 'Circumference at maximum bust or mid-sternum' },
-    { code: 'waist', label: '4. Natural Waist Girth', desc: 'Circumference at natural narrowing above iliac crest' },
-    { code: 'hip', label: '5. Hip Girth', desc: 'Maximum horizontal circumference across buttocks' },
-    { code: 'sleeve', label: '6. Sleeve Length', desc: 'From acromion over bent elbow to wrist styloid' },
-    { code: 'outleg', label: '7. Outside Leg Length', desc: 'From natural waist level down to lateral malleolus / floor' },
-    { code: 'inleg', label: '8. Inside Leg Length (Inseam)', desc: 'From perineum crotch point along medial axis to floor' },
-    { code: 'neck', label: '9. Neck Girth', desc: 'Circumference at base of neck just above clavicle' },
-  ];
+type Receipt = { code: string; n: number; outOfOrder: boolean } | { queued: true };
 
-  const [values, setValues] = useState<Record<SiteCode, string>>({
-    stature: '170.0',
-    shoulder: '41.5',
-    chest: '94.0',
-    waist: '78.0',
-    hip: '101.0',
-    sleeve: '58.5',
-    outleg: '102.0',
-    inleg: '77.5',
-    neck: '36.5',
+async function send(reading: QueuedReading) {
+  return apiClient.post('/study/reference-readings', {
+    body: {
+      participant_code: reading.participant_code,
+      reading_no: reading.reading_no,
+      values: reading.values,
+      taken_at: reading.taken_at,
+    },
   });
+}
 
-  const handleValChange = (code: SiteCode, str: string) => {
-    setValues((prev) => ({ ...prev, [code]: str }));
-  };
+export const StudyReferenceTapeView: React.FC<{ measurerCode: string; onNavigate: (path: string) => void }> = ({
+  measurerCode,
+}) => {
+  const ax = useAdminText();
+  const [code, setCode] = useState('');
+  const [readingNo, setReadingNo] = useState<1 | 2>(1);
+  const [entries, setEntries] = useState<Record<string, string>>({});
+  const [open, setOpen] = useState<string | null>(null);
+  const [error, setError] = useState<AdminKey | null>(null);
+  const [confirming, setConfirming] = useState<string[]>([]);
+  const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [pending, setPending] = useState(0);
+  const [differs, setDiffers] = useState<{ code: string; n: number } | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
+  const countPending = useCallback(async () => {
+    setPending((await vtStorage.queuedReadings(measurerCode).catch(() => [])).length);
+  }, [measurerCode]);
 
+  const flush = useCallback(async () => {
+    for (const reading of await vtStorage.queuedReadings(measurerCode).catch(() => [])) {
+      try {
+        await send(reading);
+        await vtStorage.removeQueuedReading(reading.id!);
+      } catch (problem) {
+        // Already saved: drop the queued copy only if it is exactly what the server holds (a
+        // retry after a lost reply). A different saved reading keeps the copy and says so.
+        if (problem instanceof ApiError && problem.code === 'reading_locked') {
+          if (await sameAsSaved(reading)) await vtStorage.removeQueuedReading(reading.id!);
+          else setDiffers({ code: reading.participant_code, n: reading.reading_no });
+        } else break;
+      }
+    }
+    await countPending();
+  }, [measurerCode, countPending]);
+
+  useEffect(() => {
+    void flush();
+    window.addEventListener('online', flush);
+    return () => window.removeEventListener('online', flush);
+  }, [flush]);
+
+  const values = Object.fromEntries(TAPE_SITES.map((site) => [site, tapeMm(entries[site] ?? '')]));
+  const complete = /^P\d{3}$/.test(code) && TAPE_SITES.every((site) => values[site] !== null);
+
+  const submit = async (confirmed: boolean) => {
+    setError(null);
+    if (!complete) return setError('checkFields');
+    const outside = TAPE_SITES.filter((site) => {
+      const cm = values[site]! / 10;
+      return cm < TAPE_RANGE[site][0] || cm > TAPE_RANGE[site][1];
+    });
+    if (outside.length > 0 && !confirmed) return setConfirming(outside);
+    setConfirming([]);
+    const reading: QueuedReading = {
+      participant_code: code,
+      reading_no: readingNo,
+      values: values as unknown as SiteValues,
+      taken_at: new Date().toISOString(),
+      measurer_code: measurerCode,
+    };
+    setBusy(true);
     try {
-      const parsedValues: Record<SiteCode, number> = {} as any;
-      Object.entries(values).forEach(([c, s]) => {
-        parsedValues[c as SiteCode] = Math.round(parseFloat(s) * 10);
-      });
-
-      await api.submitReferenceReading({
-        participant_code: participantCode,
-        reading_no: readingNo,
-        values_mm: parsedValues,
-      });
-
-      setSubmitted(true);
-    } catch {
-      // ignore
+      const saved = await send(reading);
+      setReceipt({ code: saved.participant_code, n: saved.reading_no, outOfOrder: saved.out_of_order });
+      setEntries({});
+    } catch (problem) {
+      if (problem instanceof NetworkError) {
+        await vtStorage.queueReading(reading);
+        setReceipt({ queued: true });
+        setEntries({});
+        await countPending();
+      } else {
+        const notFound = problem instanceof ApiError && problem.code === 'not_found';
+        setError(notFound ? 'notStudyParticipant' : problemKey(problem));
+      }
     } finally {
-      setSubmitting(false);
+      setBusy(false);
     }
   };
 
+  if (receipt) {
+    return (
+      <Page title={ax('tapeTitle')}>
+        <Card>
+          <p role="status" className="text-base font-semibold">
+            {'queued' in receipt
+              ? ax('queued')
+              : ax('savedReadings', { code: receipt.code, n: receipt.n, measurer: measurerCode })}
+          </p>
+          {'outOfOrder' in receipt && receipt.outOfOrder && <p className={hintClass}>{ax('outOfOrderNote')}</p>}
+          <Button onClick={() => setReceipt(null)}>{ax('enterAnother')}</Button>
+        </Card>
+      </Page>
+    );
+  }
+
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8 flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-[var(--vt-line,#DDD5C8)] pb-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--vt-ink,#1F1C18)] tracking-tight">
-            Double-Blind Reference Tape Entry
-          </h1>
-          <p className="text-sm text-[var(--vt-ink-muted,#5C554C)]">
-            Measurer {measurerCode} · Reading {readingNo} · Strictly blind to computer vision values
-          </p>
+    <Page title={ax('tapeTitle')} intro={ax('tapeIntro', { code: measurerCode })}>
+      {differs && (
+        <p role="alert" className="p-3 rounded-xl border border-rose-300 bg-rose-50 text-sm font-semibold">
+          {ax('queuedDiffers', differs)}
+        </p>
+      )}
+      {pending > 0 && (
+        <div role="status" className="flex items-center justify-between gap-3 p-3 rounded-xl border border-amber-300 bg-amber-50">
+          <span className="text-sm font-semibold">{ax('pendingCount', { n: pending })}</span>
+          <Button size="sm" variant="outline" onClick={() => void flush()}>{ax('sendNow')}</Button>
         </div>
-
-        <div className="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 flex items-center gap-1.5">
-          <Lock className="w-3.5 h-3.5" />
-          <span>Blind Protocol Enforced</span>
-        </div>
-      </div>
-
-      {submitted ? (
-        <div className="p-8 rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white text-center shadow-sm">
-          <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto mb-3" />
-          <h2 className="text-xl font-bold text-[var(--vt-ink,#1F1C18)] mb-1">
-            Readings Saved &amp; Locked
-          </h2>
-          <p className="text-xs text-[var(--vt-ink-muted,#5C554C)] mb-6">
-            Participant {participantCode}, Reading {readingNo} by Measurer {measurerCode} has been permanently written to research audit.
-          </p>
-          <Button
-            onClick={() => {
-              setSubmitted(false);
-              setReadingNo(readingNo === 1 ? 2 : 1);
-            }}
-          >
-            Enter Next Reading
-          </Button>
-        </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-          {/* Participant code and reading selector */}
-          <div className="grid grid-cols-2 gap-4 p-5 rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white shadow-2xs">
+      )}
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submit(false);
+        }}
+        className="flex flex-col gap-4"
+      >
+        <Card>
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="studyreferencetapeview-1" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
-                Participant Code
-              </label>
-              <input id="studyreferencetapeview-1"
-                type="text"
-                value={participantCode}
-                onChange={(e) => setParticipantCode(e.target.value.toUpperCase())}
-                className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] font-mono font-bold text-base"
-              />
+              <label htmlFor="tape-code" className={labelClass}>{ax('participantCode')}</label>
+              <input id="tape-code" value={code} maxLength={4} autoComplete="off" onChange={(e) => setCode(e.target.value.toUpperCase())} className={`${inputClass} font-mono`} />
             </div>
-
-            <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
-                Reading Number
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {[1, 2].map((num) => (
-                  <button
-                    key={num}
-                    type="button"
-                    onClick={() => setReadingNo(num as any)}
-                    className={`h-12 rounded-xl border text-xs font-bold cursor-pointer ${
-                      readingNo === num
-                        ? 'bg-[var(--vt-thread,#2E3A87)] text-white'
-                        : 'border-[var(--vt-line,#DDD5C8)] hover:bg-[#FAF8F5]'
-                    }`}
-                  >
-                    Reading {num}
+            <fieldset>
+              <legend className={labelClass}>{ax('readingNumber')}</legend>
+              <div className="flex gap-2">
+                {([1, 2] as const).map((n) => (
+                  <button key={n} type="button" aria-pressed={readingNo === n} className={chipClass(readingNo === n)} onClick={() => setReadingNo(n)}>
+                    {n}
                   </button>
                 ))}
               </div>
-            </div>
+            </fieldset>
           </div>
-
-          {/* 9 Tape Reading Inputs in Appendix C Order */}
-          <div className="rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white divide-y divide-[var(--vt-line,#DDD5C8)]/50 shadow-2xs overflow-hidden">
-            {siteList.map((item) => {
-              const val = values[item.code] || '';
+        </Card>
+        <Card>
+          <ul className="flex flex-col gap-3" data-testid="tape-sites">
+            {TAPE_SITES.map((site) => {
+              const name = ax(`site_${site}` as AdminKey);
+              const entered = entries[site] ?? '';
+              const bad = entered !== '' && tapeMm(entered) === null;
               return (
-                <div key={item.code} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#FAF8F5]">
-                  <div>
-                    <label className="text-sm font-bold text-[var(--vt-ink,#1F1C18)] block">
-                      {item.label}
-                    </label>
-                    <span className="text-xs text-[var(--vt-ink-muted,#5C554C)]">
-                      {item.desc}
-                    </span>
+                <li key={site}>
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <label htmlFor={`tape-${site}`} className={labelClass}>{name} (cm)</label>
+                      <input
+                        id={`tape-${site}`}
+                        inputMode="decimal"
+                        autoComplete="off"
+                        aria-invalid={bad}
+                        value={entered}
+                        onChange={(e) => setEntries({ ...entries, [site]: e.target.value })}
+                        className={`${inputClass} font-mono ${bad ? 'border-rose-500' : ''}`}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      aria-expanded={open === site}
+                      aria-label={ax('showHow', { site: name })}
+                      onClick={() => setOpen(open === site ? null : site)}
+                      className="min-h-[48px] min-w-[48px] rounded-xl border border-[var(--vt-line)] flex items-center justify-center cursor-pointer"
+                    >
+                      <Info aria-hidden="true" className="w-5 h-5" />
+                    </button>
                   </div>
-
-                  <div className="flex items-center gap-2 self-end sm:self-center">
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={val}
-                      onChange={(e) => handleValChange(item.code, e.target.value)}
-                      required
-                      className="w-24 h-10 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-right font-mono font-bold text-sm"
-                    />
-                    <span className="text-xs text-[var(--vt-ink-muted,#5C554C)] w-6">cm</span>
-                  </div>
-                </div>
+                  {open === site && <p className={`${hintClass} mt-1`}>{ax(`how_${site}` as AdminKey)}</p>}
+                </li>
               );
             })}
+          </ul>
+        </Card>
+        {confirming.length > 0 && (
+          <div role="alertdialog" aria-labelledby="tape-confirm" className="p-3 rounded-xl border border-amber-300 bg-amber-50 flex flex-col gap-2">
+            <div id="tape-confirm">
+              {confirming.map((site) => (
+                <p key={site} className="text-sm font-semibold">
+                  {ax('outOfRange', { value: (values[site]! / 10).toFixed(1), site: ax(`site_${site}` as AdminKey) })}
+                </p>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => void submit(true)}>{ax('yes')}</Button>
+              <Button size="sm" variant="outline" onClick={() => setConfirming([])}>{ax('no')}</Button>
+            </div>
           </div>
-
-          <Button type="submit" size="xl" loading={submitting} className="w-full">
-            Submit &amp; Lock Reference Tape Readings
-          </Button>
-        </form>
-      )}
-    </div>
+        )}
+        {error && <p role="alert" className="text-sm text-rose-700">{ax(error)}</p>}
+        <Button type="submit" size="xl" className="w-full" disabled={busy || !complete}>{ax('submitReadings')}</Button>
+      </form>
+    </Page>
   );
 };

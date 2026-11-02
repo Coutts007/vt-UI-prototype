@@ -191,6 +191,11 @@ const CASES: Record<string, Case> = {
   getAdminSettings: { role: 'admin' },
   putAdminSettings: { role: 'admin', body: { retention_months: 24 } },
   listDeletionRequests: { role: 'admin' },
+  honourDeletionRequest: { role: 'admin', path: { request_id: '__request__' } },
+  withdrawParticipant: {
+    role: 'admin',
+    path: { participant_id: seed.participants[1].participant_id },
+  },
   listRules: { role: 'admin' },
   registerRules: {
     role: 'admin',
@@ -297,6 +302,17 @@ describe('every endpoint answers as the contract says', () => {
           tokens.tailor,
         );
         c.path = { sheet_id: (await made.clone().json()).sheet_id };
+      }
+      if (op.operationId === 'honourDeletionRequest') {
+        // A request the server holds for the tailor: the code has data and this phone has no secret.
+        await fetch(`${BASE}/deletion-requests`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ client_code: wanjiruClient.client_code, reason: 'delete' }),
+        });
+        const held = await call('/admin/deletion-requests', 'get', {}, tokens.admin);
+        const rows: { request_id: string; status: string }[] = await held.json();
+        c.path = { request_id: rows.find((row) => row.status === 'received')!.request_id };
       }
       if (op.operationId === 'deleteClient') {
         // Every seeded client has orders or is a participant, so this needs a fresh code.

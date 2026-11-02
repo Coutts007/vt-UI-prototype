@@ -829,6 +829,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/deletion-requests/{request_id}/honour": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Carry out a held deletion request, on every claim round of the code
+         * @description For requests the phone could not prove, such as those held on a freed code (D45). Deletes every profile no uncollected order uses, clears the typed name and height and sets the request to done or partially_done. Profiles an order still uses go 30 days after collection, through the retention job.
+         */
+        post: operations["honourDeletionRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/rules": {
         parameters: {
             query?: never;
@@ -948,6 +968,23 @@ export interface paths {
         head?: never;
         /** Change a participant's details. The cohort locks once readings exist */
         patch: operations["updateParticipant"];
+        trace?: never;
+    };
+    "/study/participants/{participant_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a participant's withdrawal (D44 default, open for the owner). Their rows are kept, left out of every export and refused for new readings. One way. */
+        post: operations["withdrawParticipant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/study/reference-readings": {
@@ -1081,7 +1118,7 @@ export interface components {
         /** @enum {string} */
         ProfileStatus: "final" | "conflict" | "superseded" | "deleted";
         /** @enum {string} */
-        AuditAction: "register" | "login" | "login_failed" | "logout" | "settings_change" | "profile_ingest" | "client_code_claim" | "profile_view" | "deletion_request" | "access_request" | "deletion" | "code_issue" | "code_rotate" | "code_reset" | "claim_review" | "client_update" | "conflict_resolve" | "order_create" | "order_update" | "order_delete" | "status_change" | "override" | "export" | "share" | "approve" | "account_reject" | "account_disable" | "account_enable" | "account_create" | "rules_register" | "rules_freeze" | "rederive" | "participant_create" | "participant_update" | "reference_entry" | "reference_correction";
+        AuditAction: "register" | "login" | "login_failed" | "logout" | "settings_change" | "profile_ingest" | "client_code_claim" | "profile_view" | "deletion_request" | "access_request" | "deletion" | "code_issue" | "code_rotate" | "code_reset" | "retention" | "claim_review" | "client_update" | "conflict_resolve" | "order_create" | "order_update" | "order_delete" | "status_change" | "override" | "export" | "share" | "approve" | "account_reject" | "account_disable" | "account_enable" | "account_create" | "rules_register" | "rules_freeze" | "rederive" | "participant_create" | "participant_update" | "reference_entry" | "reference_correction";
         PublicSettings: {
             study_mode: boolean;
             consent_version: string;
@@ -1351,6 +1388,8 @@ export interface components {
             /** Format: date-time */
             completed_at: string | null;
             note?: string;
+            /** @description The code the request was made under, for the admin only. Null once the client row is gone. */
+            client_code?: string | null;
         };
         AccessRequestInput: {
             client_code: components["schemas"]["ClientCode"];
@@ -1695,7 +1734,7 @@ export interface components {
             /** Format: date */
             trained_on: string;
         };
-        /** @description A9. Study writes are refused in production until the first five fields are filled and either 60 days have passed since dpia_submitted_on or odpc_response_on is recorded. */
+        /** @description A9. Study writes are refused in production until the first five fields are filled and either 60 days have passed since dpia_submitted_on or odpc_response_on is recorded with its reference, on or after the DPIA date. No date may be in the future. The server sets approvals_confirmed_by and confirmed_at from the signed-in admin; values sent are ignored. */
         Approvals: {
             ierc_ref: string | null;
             nacosti_licence_no: string | null;
@@ -1717,6 +1756,8 @@ export interface components {
             current_rules_version?: components["schemas"]["RulesVersion"];
             min_app_version?: string;
             approvals?: components["schemas"]["Approvals"];
+            /** @description Needed with a new study_collection_end, which schedules the deletion of study records 12 months later. A past end is refused while study mode is on. */
+            confirm_study_deletion?: boolean;
         };
         AdminSettings: {
             retention_months: number;
@@ -1772,6 +1813,8 @@ export interface components {
             enrolled_at: string;
             sets_captured: number;
             readings_entered: number;
+            /** @description The participant withdrew consent. Their readings stay on record but are left out of every export and refused for new entries (D44, open). */
+            withdrawn: boolean;
         };
         /** @enum {string} */
         AgeBand: "18-24" | "25-34" | "35-44" | "45-54" | "55+";
@@ -3318,6 +3361,32 @@ export interface operations {
             403: components["responses"]["Problem"];
         };
     };
+    honourDeletionRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request after it was carried out */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletionRequest"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
     listRules: {
         parameters: {
             query?: never;
@@ -3553,6 +3622,31 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    withdrawParticipant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                participant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Withdrawn */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Participant"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     submitReferenceReadings: {
