@@ -20,7 +20,8 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Pixel 7'] },
-      testIgnore: /directory-off|real-vision|server-sync/,
+      // csp and walkthrough need Caddy and the real API (playwright.real-api.config.ts).
+      testIgnore: /directory-off|real-vision|server-sync|csp|walkthrough/,
     },
     // A real build with the directory switched off (D27), so nothing depends on a runtime switch.
     {

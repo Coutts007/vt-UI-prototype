@@ -18,6 +18,7 @@ dist/
 dist-directory-off/
 dist-directory-default/
 dist-real-api/
+dist-stack/
 .venv/
 __pycache__/
 *.pyc
@@ -52,3 +53,6 @@ docs/device-test-log.md
 docs/i18n-review.md
 # Generated synthetic camera clips (the script that draws them is committed)
 apps/web/tests/fixtures/video/generated/
+deploy/study.env
+deploy/study-root.crt
+.schemathesis/

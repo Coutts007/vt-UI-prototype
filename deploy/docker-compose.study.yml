@@ -1,0 +1,21 @@
+# The study site (M12, AMENDMENTS A10): the whole stack on the encrypted study laptop, served on the
+# local Wi-Fi router's network with Caddy's own certificate. No cloud, no tunnel, no transfer.
+# Production mode: real secrets from deploy/study.env, no demo seed, the A9 approvals guard on.
+# Start it with `make study-up`, never by hand, so the checks in scripts/study.sh run first.
+services:
+  migrate:
+    environment:
+      ENV: production
+  api:
+    environment:
+      ENV: production
+      DIRECTORY_ENABLED: 'false'
+  jobs:
+    environment:
+      ENV: production
+  caddy:
+    environment:
+      VT_SITE_ADDRESS: ${VT_STUDY_HOST:?set VT_STUDY_HOST in deploy/study.env}
+    ports: !override
+      - '${VT_STUDY_HOST}:80:80'
+      - '${VT_STUDY_HOST}:443:443'

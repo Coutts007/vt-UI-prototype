@@ -8,9 +8,13 @@ import html
 import json
 import re
 import unicodedata
+from collections.abc import MutableMapping
 from typing import Any
 from urllib.parse import unquote
 
+# A JSON \\u0000 escape, not an escaped backslash followed by the text u0000.
+JSON_NUL = re.compile(rb"(?<!\\)(?:\\\\)*\\u0000")
+RAW_NUL = re.compile(rb"%00|\x00")
 MAX_STRING = 2048
 MAX_BASE64_RUN = 1024
 # Matches each whole run once and moves on, so the cost is linear in the text's length.
@@ -96,3 +100,13 @@ def has_image_content(body: bytes) -> bool:
     except (ValueError, RecursionError):
         return False  # Not JSON: the schema step refuses it with the right error.
     return _scan(parsed)
+
+
+def has_nul(scope: MutableMapping[str, Any], body: bytes) -> bool:
+    """A NUL character in the path, the query or a JSON string."""
+    path = scope.get("raw_path") or scope.get("path", "").encode()
+    return bool(
+        RAW_NUL.search(path)
+        or RAW_NUL.search(scope.get("query_string", b""))
+        or JSON_NUL.search(body)
+    )

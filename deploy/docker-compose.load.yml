@@ -1,0 +1,11 @@
+# Adds to docker-compose.yml and docker-compose.e2e.yml for the load test (backend-spec 16.4).
+# The API and database share 2 vCPU and 4 GB, the target VM's size. Caddy is not in the path.
+services:
+  api:
+    cpus: 1.5
+    mem_limit: 2560m
+    environment:
+      SHEETS_PER_TAILOR_HOUR: '100000'
+  db:
+    cpus: 0.5
+    mem_limit: 1536m

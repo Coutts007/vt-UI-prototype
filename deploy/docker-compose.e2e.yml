@@ -1,5 +1,7 @@
-# Adds to docker-compose.yml for the client tests against the real API, on one laptop only.
+# Adds to docker-compose.yml for the browser tests against the real API, on one laptop or CI only.
 # Demo data and no rate limits: never use this anywhere else.
+# Caddy serves a test build (fake vision, real API) with the production Caddyfile, so every
+# test runs under the real CSP and headers (M12). The API port stays open for fuzzing.
 services:
   api:
     ports:
@@ -7,6 +9,14 @@ services:
     environment:
       ENV: development
       DIRECTORY_ENABLED: 'true'
-      RATE_LIMITS_OFF: 'true'
+      RATE_LIMITS_OFF: ${VT_E2E_RATE_LIMITS_OFF:-true}
   caddy:
-    profiles: [unused]
+    build: !reset null
+    image: caddy:2.8.4-alpine
+    environment:
+      VT_SITE_ADDRESS: localhost
+    ports: !override
+      - '127.0.0.1:${VT_E2E_HTTPS_PORT:-8453}:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../apps/web/${VT_E2E_DIST:-dist-real-api}:/srv:ro

@@ -4,6 +4,7 @@ import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { en } from '../../src/i18n/en';
 import { freshCode } from './real-api';
+import { shot } from './shots';
 
 test.use({ actionTimeout: 15_000 });
 
@@ -96,6 +97,7 @@ test('offline, then online: the profile arrives once, and the server agrees with
     }
   });
   await toReview(page, code);
+  await shot(page, '03a-review');
   const names = readdirSync(ASSETS).filter((n) =>
     /^(SavedView|MyMeasurementsView|sync)-.*\.js$/.test(n),
   );
@@ -105,10 +107,12 @@ test('offline, then online: the profile arrives once, and the server agrees with
   await context.setOffline(true);
   await save(page);
   await expect(page.getByRole('heading', { name: en.savedTitlePending })).toBeVisible();
+  await shot(page, '03b-saved-offline');
   await context.setOffline(false);
   await expect(page.getByRole('heading', { name: en.savedTitleSynced })).toBeVisible({
     timeout: 30_000,
   });
+  await shot(page, '03c-synced');
   // Every trigger the app has, then long enough for any send they start to show.
   await page.evaluate(() => {
     window.dispatchEvent(new Event('online'));

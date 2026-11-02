@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request
-from sqlalchemy import case, exists, func, select, true
+from sqlalchemy import exists, func, select, true
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -140,8 +140,9 @@ async def list_clients(
             MeasurementProfile.client_id == Client.client_id,
             MeasurementProfile.status != "superseded",
         )
+        # Final first (false sorts before true), then newest: the order of ix_profile_current.
         .order_by(
-            case((MeasurementProfile.status == "final", 0), else_=1),
+            MeasurementProfile.status != "final",
             MeasurementProfile.captured_at.desc(),
         )
         .limit(1)
@@ -161,8 +162,10 @@ async def list_clients(
     elif filter == "no_profiles":
         conditions.append(latest.c.profile_id.is_(None))
     base = select(Client, latest.c.profile_id, latest.c.captured_at).outerjoin(latest, true())
+    # Without a filter the count needs only the client rows, not the latest-profile lookup.
+    counted = base if filter else select(Client.client_id)
     total = await session.scalar(
-        select(func.count()).select_from(base.where(*conditions).subquery())
+        select(func.count()).select_from(counted.where(*conditions).subquery())
     )
     order = {
         "code": (Client.client_code,),
@@ -541,6 +544,8 @@ async def _conflict_json(session: AsyncSession, row: Conflict, code: str) -> dic
     "/conflicts",
     operation_id="listConflicts",
     response_model=list[ConflictView],
+    # Optional measurement numbers are left out, never null (found by fuzzing, M12).
+    response_model_exclude_unset=True,
     tags=["profiles"],
     dependencies=[TAILOR],
 )
@@ -582,6 +587,8 @@ async def list_conflicts(
     "/conflicts/{conflict_id}/resolve",
     operation_id="resolveConflict",
     response_model=ConflictView,
+    # Optional measurement numbers are left out, never null (found by fuzzing, M12).
+    response_model_exclude_unset=True,
     tags=["profiles"],
     dependencies=[TAILOR],
 )

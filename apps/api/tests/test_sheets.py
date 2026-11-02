@@ -430,3 +430,22 @@ def test_control_characters_in_a_name_cannot_add_lines(name: str) -> None:
 
 def test_each_render_has_its_own_font_configuration() -> None:
     assert sheets.font_configuration() is not sheets.font_configuration()
+
+
+async def test_rendering_holds_no_database_connection(
+    app: FastAPI, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Load test (M12): renders wait their turn, and a connection held meanwhile starved
+    # every other request of the pool until one failed after 30 s.
+    headers = await tailor(client)
+    held: list[int] = []
+    render = sheets.render
+
+    def watched(data: Any) -> Any:
+        held.append(app.state.engine.pool.checkedout())
+        return render(data)
+
+    monkeypatch.setattr(sheets, "render", watched)
+    reply = await make_sheet(client, headers)
+    assert reply.status_code == 201, reply.text
+    assert held == [0]

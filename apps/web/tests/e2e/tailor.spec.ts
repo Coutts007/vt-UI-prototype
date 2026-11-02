@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { en } from '../../src/i18n/en';
 import { tailorEn as tx } from '../../src/views/tailor/tailorText';
+import { shot } from './shots';
 
 const seed = JSON.parse(
   readFileSync(join(import.meta.dirname, '../../../../packages/seed/seed.json'), 'utf8'),
@@ -93,6 +94,7 @@ test('issue a code and find the client', async ({ page }) => {
   await page.getByRole('button', { name: tx.codeSubmit }).click();
   await expect(page.getByText(tx.codeReady)).toBeVisible();
   await clean(page);
+  await shot(page, '02-code-issued');
   const code = await page.getByTestId('issued-code').innerText();
   expect(code).toMatch(/^[A-Z]{2}\d{4}$/);
   await go(page, '/t/clients');
@@ -107,6 +109,7 @@ test('a client page leads to a profile', async ({ page }) => {
   await expect(page).toHaveURL(/\/profile/);
   await expect(page.getByText(en.site_chest).first()).toBeVisible();
   await clean(page);
+  await shot(page, '04a-profile');
 });
 
 test('resolve a conflict', async ({ page }) => {
@@ -116,6 +119,7 @@ test('resolve a conflict', async ({ page }) => {
   const newer = page.getByRole('button', { name: tx.useNewer });
   await expect(newer.first()).toBeVisible();
   await clean(page);
+  await shot(page, '06-conflict');
   const before = await newer.count();
   await newer.first().click();
   await expect(newer).toHaveCount(before - 1);
@@ -139,6 +143,7 @@ test('an order with a flagged row needs an answer, then moves through its status
     if (!(await save.isEnabled())) await button.click();
   }
   await expect(save).toBeEnabled();
+  await shot(page, '04b-order-flagged-rows-answered');
   await save.click();
   await expect(page).toHaveURL(/\/t\/orders\/[0-9a-f-]{36}/);
   await expect(page.getByRole('button', { name: tx.status_cutting })).toBeVisible();
@@ -273,6 +278,7 @@ test('a sheet is generated, previewed and shared through the share sheet', async
   await expect(text).toContainText(`Client AB1001 · ${clientOf('AB1001').display_name} ·`);
   await expect(text).toContainText('No photo is stored.');
   await clean(page);
+  await shot(page, '04c-sheet');
   await page.getByRole('button', { name: tx.sheetShareWhatsApp }).click();
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __shared: unknown[] }).__shared))
