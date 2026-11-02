@@ -156,9 +156,11 @@ test('the measurer screen never holds a system value', async ({ page }) => {
     const attributes = [...document.querySelectorAll('*')].flatMap((el) =>
       [...el.attributes].filter((a) => a.name !== 'value').map((a) => a.value),
     );
-    return { text: document.body.innerText, attributes, html: document.documentElement.outerHTML };
+    return { text: document.body.innerText, attributes };
   });
-  const numbers = [...`${shown.text} ${shown.attributes.join(' ')}`.matchAll(/\d+(?:\.\d)?/g)].map(
+  // Whole numbers only: a digit run inside an id or hash (".1c450ab") is not a value on screen.
+  const whole = /(?<![\w.])\d+(?:\.\d)?(?![\w])/g;
+  const numbers = [...`${shown.text} ${shown.attributes.join(' ')}`.matchAll(whole)].map(
     (m) => m[0],
   );
   expect(numbers.filter((n) => system.has(n))).toEqual([]);
