@@ -6,6 +6,14 @@ import { en } from '../../src/i18n/en';
 const FREE_CODE = 'AB1008';
 
 async function real(page: Page, extra: object = {}) {
+  // Through Caddy (real-vision-csp) this proves the workers, WASM and OpenCV.js run under the CSP.
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    (window as unknown as { __csp: string[] }).__csp = seen;
+    document.addEventListener('securitypolicyviolation', (event) => {
+      seen.push(`${event.effectiveDirective} ${event.blockedURI}`);
+    });
+  });
   await page.addInitScript(
     (value) => {
       sessionStorage.setItem('vt_fake_vision', JSON.stringify(value));
@@ -48,6 +56,7 @@ test('real models and detector read the synthetic figure', async ({ page }) => {
   expect(Number(await value(page, 'fps').innerText())).toBeGreaterThan(0);
   expect(outside).toEqual([]);
   expect(posts).toEqual([]);
+  expect(await page.evaluate(() => (window as unknown as { __csp: string[] }).__csp)).toEqual([]);
 });
 
 test('leaving the page frees every frame and stops the camera', async ({ page }) => {

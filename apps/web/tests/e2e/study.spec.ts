@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { en } from '../../src/i18n/en';
 import { adminEn as ax } from '../../src/views/admin/adminText';
 import { tailorEn as tx } from '../../src/views/tailor/tailorText';
+import { shot } from './shots';
 
 const seed = JSON.parse(
   readFileSync(join(import.meta.dirname, '../../../../packages/seed/seed.json'), 'utf8'),
@@ -99,6 +100,7 @@ test('the admin enrols a participant and a measurer enters readings blind', asyn
   await expect(page.getByRole('status').filter({ hasText: code! })).toBeVisible();
   await expect(page.getByText(code!, { exact: true })).toBeVisible();
   await clean(page);
+  await shot(page, '08a-participant-enrolled');
 
   // The researcher sets the participant's first set, then the client flow takes over.
   await page.getByRole('button', { name: ax.startCapture }).last().click();
@@ -116,6 +118,7 @@ test('the admin enrols a participant and a measurer enters readings blind', asyn
   await typeReadings(page, code!, 1);
   await page.getByRole('button', { name: ax.submitReadings }).click();
   await expect(page.getByRole('status')).toContainText(`${code}, reading 1, measurer A`);
+  await shot(page, '08b-measurer-reading-saved');
   await page.getByRole('button', { name: ax.enterAnother }).click();
   // A saved reading is locked: the same one again is refused.
   await typeReadings(page, code!, 1);

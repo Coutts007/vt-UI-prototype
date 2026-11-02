@@ -1,14 +1,44 @@
-vt.localhost {
+# One origin: the web build at /, the API at /api/v1 (backend-spec 15.4).
+# VT_SITE_ADDRESS is vt.localhost on a laptop, the router address on the study site (M12),
+# and localhost for the tests. The certificate comes from Caddy's own local authority.
+{$VT_SITE_ADDRESS:vt.localhost} {
 	tls internal
 	encode gzip
 
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		Permissions-Policy "camera=(self), accelerometer=(self), gyroscope=(self), magnetometer=(self), microphone=(), geolocation=(), payment=(), usb=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		X-Frame-Options "DENY"
+		-Server
+	}
+
+	# The API sends its own stricter CSP, nosniff, referrer and no-store headers.
 	handle /api/v1/* {
 		reverse_proxy api:8000
 	}
 
 	handle {
+		# Frontend-spec 19, plus the directives a CSP should close. The API shares the origin,
+		# so connect-src is 'self' only; workers load OpenCV.js and MediaPipe from this origin.
+		header {
+			X-Content-Type-Options "nosniff"
+			Referrer-Policy "no-referrer"
+		}
+		@page not path_regexp ^/assets/marker\.worker-[A-Za-z0-9_-]+\.js$
+		header @page Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		# The marker worker alone may evaluate code: OpenCV.js's embind builds its function
+		# wrappers with the Function constructor (M12, decision M12-10). The worker reaches no
+		# page, storage or network beyond this origin, and the page itself keeps the strict policy.
+		@marker path_regexp ^/assets/marker\.worker-[A-Za-z0-9_-]+\.js$
+		header @marker Content-Security-Policy "default-src 'none'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; connect-src 'self'"
+		# The service worker and the shell must be checked on every visit, or an update never lands.
+		@fresh path /sw.js /index.html /manifest.webmanifest /
+		header @fresh Cache-Control "no-cache"
 		root * /srv
 		try_files {path} /index.html
 		file_server
 	}
+
+	# Request lines carry client codes, so Caddy writes no access log (backend-spec 2.1).
 }

@@ -1,28 +1,48 @@
-// The client suite on the real API (M8). Needs the stack from deploy/docker-compose.e2e.yml.
+// The browser suites on the real API, through Caddy with the production Caddyfile (M8, M12).
+// Needs the stack from `make e2e-real-api`: deploy/docker-compose.e2e.yml serves dist-real-api.
+import { resolve } from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 
-const PORT = Number(process.env.VT_E2E_PORT ?? 4190);
-const API = process.env.VT_API_PROXY ?? 'http://localhost:8010';
+const BASE = process.env.VT_E2E_URL ?? 'https://localhost:8453';
+const SYNTH = resolve(import.meta.dirname, 'tests/fixtures/video/generated/synth-front.y4m');
 process.env.VT_E2E_REAL_API = '1';
+
+const shared = {
+  ...devices['Pixel 7'],
+  baseURL: BASE,
+  // Caddy's local authority signs the certificate; the browser need not trust it here.
+  ignoreHTTPSErrors: true,
+  // The worker caches files between runs, and these tests must see what the server says.
+  serviceWorkers: 'block' as const,
+};
 
 export default defineConfig({
   testDir: 'tests/e2e',
-  testMatch: /(client|server-sync|tailor|study)\.spec/,
+  globalSetup: './tests/e2e/global-setup.ts',
   workers: 2,
   use: {
-    ...devices['Pixel 7'],
-    baseURL: `http://localhost:${PORT}`,
-    // The worker caches files between runs, and these tests must see what the server says.
-    serviceWorkers: 'block',
+    ...shared,
     launchOptions: {
       args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
     },
   },
-  webServer: {
-    // Mock mode keeps the fake vision worker; VITE_API_MODE=http sends every request to the API.
-    command: `pnpm build --mode mock --outDir dist-real-api && pnpm exec vite preview --outDir dist-real-api --port ${PORT} --strictPort`,
-    env: { VITE_API_MODE: 'http', VT_API_PROXY: API },
-    url: `http://localhost:${PORT}`,
-    reuseExistingServer: false,
-  },
+  projects: [
+    { name: 'real-api', testMatch: /(client|server-sync|tailor|study|csp|walkthrough)\.spec/ },
+    // OpenCV.js and MediaPipe in their workers under the real CSP, on the synthetic clip.
+    {
+      name: 'real-vision-csp',
+      testMatch: /real-vision/,
+      retries: 1,
+      use: {
+        ...shared,
+        launchOptions: {
+          args: [
+            '--use-fake-ui-for-media-stream',
+            '--use-fake-device-for-media-stream',
+            `--use-file-for-fake-video-capture=${SYNTH}`,
+          ],
+        },
+      },
+    },
+  ],
 });
