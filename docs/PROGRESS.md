@@ -4,6 +4,7 @@ The newest entry comes first. Every change or improvement adds a line in the sam
 
 ## 2026-11-02: M11 admin, study mode, approvals guard, exports, retention
 
+- The study e2e accessibility check now waits for running animations to end, so a button changing colour as it becomes enabled is not measured half-way. CI had flagged it once on a commit that passed in its other run.
 - Contract: participants say whether they withdrew (D44 default, open for the owner), an admin can carry out a held deletion request on every claim round (`POST /admin/deletion-requests/{request_id}/honour`), the admin's deletion list names the code, and the audit log gains a `retention` action.
 - Admin API: accounts (list by status, approve, reject, disable, enable; disabling ends every session; an admin cannot lock themself out; a rejection reason is never stored, only that one was given), measurer accounts, settings with the approvals and the earliest collection date, the audit export as CSV (formula-like cells quoted, the export audited), the deletion queue with codes, and carrying out a held deletion on every claim round.
 - The A9 guard: in production, enrolment and tape readings answer 409 `approvals_missing` until the five approval fields are filled and 60 days have passed since the DPIA, or the ODPC has answered. Development and staging hold seed and synthetic data only.

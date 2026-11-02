@@ -59,6 +59,10 @@ async function signOut(page: Page) {
 }
 
 async function clean(page: Page) {
+  // Colour transitions (a button turning enabled) would be measured half-way.
+  await page.waitForFunction(() =>
+    document.getAnimations().every((a) => a.playState !== 'running'),
+  );
   const found = await new AxeBuilder({ page }).analyze();
   expect(found.violations.map((v) => `${v.id}: ${v.nodes[0]?.target}`)).toEqual([]);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
