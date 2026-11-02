@@ -12,8 +12,10 @@ from app.seed import SeedRefused, load_demo
 cli = typer.Typer(no_args_is_help=True)
 db = typer.Typer(no_args_is_help=True)
 seed = typer.Typer(no_args_is_help=True)
+jobs = typer.Typer(no_args_is_help=True)
 cli.add_typer(db, name="db")
 cli.add_typer(seed, name="seed")
+cli.add_typer(jobs, name="jobs")
 
 
 @db.command("upgrade")
@@ -54,6 +56,27 @@ def seed_demo() -> None:
         typer.echo(str(error), err=True)
         raise typer.Exit(1) from error
     typer.echo("Demo data loaded" if loaded else "Demo data is already there")
+
+
+@jobs.command("clean-sheets")
+def jobs_clean_sheets() -> None:
+    """Deletes sheet files older than 30 days and files no sheet names. Prints counts only."""
+    from pathlib import Path
+
+    from app.services.sheet_cleanup import clean_sheets
+
+    settings = Settings()
+
+    async def run() -> str:
+        engine = make_engine(settings.database_url)
+        try:
+            async with make_sessions(engine)() as session:
+                report = await clean_sheets(session, Path(settings.sheets_dir))
+        finally:
+            await engine.dispose()
+        return f"expired files removed: {report.expired_files}, orphans: {report.orphan_files}"
+
+    typer.echo(asyncio.run(run()))
 
 
 def main() -> None:

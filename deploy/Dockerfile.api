@@ -1,14 +1,20 @@
 FROM python:3.12-slim
+# WeasyPrint draws text with Pango and subsets fonts with HarfBuzz (backend-spec 13).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 \
+ && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir uv==0.13.6
 WORKDIR /repo
 COPY pyproject.toml uv.lock ./
 COPY apps/api apps/api
 COPY packages/py packages/py
 COPY packages/contracts/error-codes.json packages/contracts/error-codes.json
+COPY packages/contracts/share-text.json packages/contracts/share-text.json
 COPY packages/seed/seed.json packages/seed/seed.json
 COPY packages/rules packages/rules
 # Slow links time out at the default 30 s with many downloads at once.
 RUN UV_HTTP_TIMEOUT=300 UV_CONCURRENT_DOWNLOADS=3 uv sync --frozen --no-dev --package vt-api
+RUN mkdir -p /data/sheets && chown nobody /data/sheets
 USER nobody
 ENV UV_CACHE_DIR=/tmp/uv
 # Access logs stay off: request paths can carry client codes (backend-spec 2.1 item 7).

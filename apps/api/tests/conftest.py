@@ -1,6 +1,7 @@
 """Tests run on real PostgreSQL (backend-spec 17.1) and connect as the application role."""
 
 from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
 
 import pytest
 from app.config import Settings
@@ -35,9 +36,13 @@ def app_url(owner_url: str) -> str:
 
 
 @pytest.fixture
-def settings(app_url: str) -> Settings:
+def settings(app_url: str, tmp_path: Path) -> Settings:
     return Settings(  # type: ignore[call-arg]
-        env="staging", database_url=app_url, directory_enabled=True, _env_file=None
+        env="staging",
+        database_url=app_url,
+        directory_enabled=True,
+        sheets_dir=str(tmp_path / "sheets"),
+        _env_file=None,
     )
 
 

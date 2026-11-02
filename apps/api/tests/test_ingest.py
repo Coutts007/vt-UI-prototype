@@ -520,6 +520,7 @@ def test_production_keeps_its_rate_limits() -> None:
             jwt_secret="x" * 40,
             ip_pepper="p",
             vt_app_db_password="q",
+            signed_url_secret="s" * 40,
             rate_limits_off=True,
             _env_file=None,
         )

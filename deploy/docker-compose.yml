@@ -42,10 +42,14 @@ services:
       VT_APP_DB_PASSWORD: ${VT_APP_DB_PASSWORD:-vt-app-dev-only}
       JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-me-0123456789}
       IP_PEPPER: ${IP_PEPPER:-dev-only-ip-pepper}
+      SIGNED_URL_SECRET: ${SIGNED_URL_SECRET:-dev-only-signed-url-secret-0123456789}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12,192.168.0.0/16}
       DIRECTORY_ENABLED: ${DIRECTORY_ENABLED:-false}
       DIRECTORY_CODES_PER_TAILOR_DAY: ${DIRECTORY_CODES_PER_TAILOR_DAY:-50}
       DIRECTORY_CODES_GLOBAL_DAY: ${DIRECTORY_CODES_GLOBAL_DAY:-1000}
+    # Generated sheets only, deleted after 30 days by `vt jobs clean-sheets`.
+    volumes:
+      - sheets-data:/data/sheets
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -75,3 +79,4 @@ services:
 volumes:
   db-data:
   caddy-data:
+  sheets-data:
