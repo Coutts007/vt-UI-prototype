@@ -3,7 +3,7 @@ import logging
 import structlog
 from fastapi import APIRouter, FastAPI
 
-from app.api.v1 import auth, clients, directory, orders, profiles, public, sheets
+from app.api.v1 import admin, auth, clients, directory, orders, profiles, public, sheets, study
 from app.config import Settings
 from app.db.session import make_engine, make_sessions
 from app.errors import install_error_handlers
@@ -55,6 +55,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     router.include_router(clients.router)
     router.include_router(orders.router)
     router.include_router(sheets.router)
+    router.include_router(admin.router)
+    router.include_router(study.router)
     app.include_router(router)
     return app
 

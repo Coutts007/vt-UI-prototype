@@ -478,6 +478,8 @@ class DeletionRequest(Base):
     status: Mapped[str] = mapped_column(String(14))
     completed_at: Mapped[datetime | None] = stamp()
     note: Mapped[str | None] = mapped_column(String(256))
+    # The claim round the request covers. None: every round, after an admin checked it (D45).
+    claim_round: Mapped[int | None] = mapped_column(Integer)
 
 
 class AuditLog(Base):

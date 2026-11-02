@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://vt_app:vt-app-dev-only@localhost:5432/vt"
     migration_database_url: str | None = None
     vt_app_db_password: str = "vt-app-dev-only"
+    # The nightly jobs connect as vt_retention, which alone may remove audit rows and readings.
+    retention_database_url: str = (
+        "postgresql+asyncpg://vt_retention:vt-retention-dev-only@localhost:5432/vt"
+    )
+    vt_retention_db_password: str = "vt-retention-dev-only"
+    reports_dir: str = "/data/reports"
     jwt_secret: str = DEV_JWT_SECRET
     ip_pepper: str = DEV_IP_PEPPER
     trusted_proxies: str = ""
@@ -37,6 +43,7 @@ class Settings(BaseSettings):
             self.jwt_secret == DEV_JWT_SECRET
             or self.ip_pepper == DEV_IP_PEPPER
             or self.vt_app_db_password == "vt-app-dev-only"
+            or self.vt_retention_db_password == "vt-retention-dev-only"
             or self.signed_url_secret == DEV_SIGNED_URL_SECRET
             or len(self.jwt_secret) < 32
             or len(self.signed_url_secret) < 32

@@ -1,3 +1,5 @@
+import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -28,3 +30,15 @@ DEFAULTS: dict[str, Any] = {
 async def read_settings(session: AsyncSession) -> dict[str, Any]:
     rows = await session.execute(select(AppSetting.key, AppSetting.value))
     return {**DEFAULTS, **{key: value for key, value in rows}}
+
+
+async def write_setting(
+    session: AsyncSession, key: str, value: Any, user_id: uuid.UUID | None
+) -> None:
+    row = await session.get(AppSetting, key)
+    if row is None:
+        session.add(AppSetting(key=key, value=value, updated_by=user_id))
+    else:
+        row.value = value
+        row.updated_by = user_id
+        row.updated_at = datetime.now(UTC)

@@ -769,3 +769,174 @@ class Sheet(BaseModel):
 
 class ShareInput(Input):
     via: Literal["whatsapp_share", "wa_link", "download", "print"]
+
+
+# Admin and study (backend-spec 8, frontend-spec 14 and 15, A9).
+Sex = Literal["female", "male", "unspecified"]
+AgeBand = Literal["18-24", "25-34", "35-44", "45-54", "55+"]
+Cohort = Literal["pilot", "calibration", "test"]
+DeletionStatus = Literal["received", "partially_done", "done", "rejected"]
+ReadingNo = Literal[1, 2]
+
+
+class Account(BaseModel):
+    model_config = ConfigDict(json_schema_serialization_defaults_required=False)
+
+    user_id: str
+    email: str
+    role: Role
+    status: AccountStatus
+    created_at: datetime
+    business_name: str | None = None
+    phone: str | None = None
+    area: str | None = None
+    measurer_code: str | None = None
+    trained_on: date | None = None
+
+
+class AccountPage(BaseModel):
+    items: list[Account]
+    page: int
+    page_size: int
+    total: int
+
+
+class RejectInput(Input):
+    reason: str = Field(min_length=1, max_length=256)
+
+
+class MeasurerInput(Input):
+    email: Email
+    password: str = Field(min_length=10, max_length=256)
+    measurer_code: Annotated[str, StringConstraints(strict=True, pattern=r"^[A-Z]{1,4}$")]
+    trained_on: date
+
+
+class Approvals(Input):
+    ierc_ref: str | None = Field(max_length=80)
+    nacosti_licence_no: str | None = Field(max_length=80)
+    dpia_submitted_on: date | None
+    approvals_confirmed_by: str | None = Field(max_length=120)
+    confirmed_at: datetime | None
+    odpc_response_on: date | None
+    odpc_response_ref: str | None = Field(max_length=80)
+
+
+class AdminSettings(BaseModel):
+    retention_months: int
+    audit_retention_months: int
+    study_mode: bool
+    study_collection_end: date | None
+    current_rules_version: str
+    min_app_version: str
+    consent_version: str
+    approvals: Approvals
+    approvals_missing: list[str]
+    earliest_collection_date: date | None
+
+
+class AdminSettingsInput(Input):
+    retention_months: int | None = Field(default=None, ge=1, le=120)
+    audit_retention_months: int | None = Field(default=None, ge=1, le=120)
+    study_mode: bool | None = None
+    study_collection_end: date | None = None
+    current_rules_version: RulesVersionName | None = None
+    min_app_version: str | None = Field(default=None, max_length=20, pattern=r"^\d+\.\d+\.\d+$")
+    approvals: Approvals | None = None
+
+
+class DeletionRequest(BaseModel):
+    model_config = ConfigDict(json_schema_serialization_defaults_required=False)
+
+    request_id: uuid.UUID
+    reason: Literal["delete", "withdraw_consent"]
+    received_at: datetime
+    status: DeletionStatus
+    completed_at: datetime | None
+    note: str | None = None
+    client_code: str | None = None
+
+
+class Participant(BaseModel):
+    participant_id: uuid.UUID
+    participant_code: str
+    client_code: str
+    sex: Sex
+    age_band: AgeBand
+    venue: str
+    cohort: Cohort
+    enrolled_at: datetime
+    sets_captured: int
+    readings_entered: int
+    withdrawn: bool
+
+
+class ParticipantInput(Input):
+    participant_code: ParticipantCode
+    sex: Sex
+    age_band: AgeBand
+    venue: str = Field(max_length=80)
+
+
+class ParticipantUpdate(Input):
+    sex: Sex | None = None
+    age_band: AgeBand | None = None
+    venue: str | None = Field(default=None, max_length=80)
+    cohort: Cohort | None = None
+
+
+class SiteValues(Input):
+    stature: ValueMm
+    shoulder: ValueMm
+    chest: ValueMm
+    waist: ValueMm
+    hip: ValueMm
+    sleeve: ValueMm
+    outleg: ValueMm
+    inleg: ValueMm
+    neck: ValueMm
+
+
+class ReferenceReadingInput(Input):
+    participant_code: ParticipantCode
+    reading_no: ReadingNo
+    values: SiteValues
+    taken_at: Stamp
+
+
+class ReferenceReadingReceipt(BaseModel):
+    participant_code: str
+    reading_no: ReadingNo
+    measurer_code: str
+    out_of_order: bool
+
+
+class OwnReading(BaseModel):
+    participant_code: str
+    reading_no: ReadingNo
+    site_code: SiteCode
+    value_mm: int
+    taken_at: datetime
+
+
+class ReadingCorrection(BaseModel):
+    value_mm: int
+    reason: str
+    corrected_at: datetime
+
+
+class ReferenceReading(BaseModel):
+    ref_id: uuid.UUID
+    participant_code: str
+    measurer_code: str
+    reading_no: ReadingNo
+    site_code: SiteCode
+    value_mm: int
+    taken_at: datetime
+    out_of_order: bool
+    correction: ReadingCorrection | None
+
+
+class ReadingCorrectionInput(Input):
+    value_mm: ValueMm
+    reason: str = Field(min_length=1, max_length=256)

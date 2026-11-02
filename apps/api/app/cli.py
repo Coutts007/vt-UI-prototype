@@ -31,6 +31,8 @@ def db_upgrade() -> None:
         async with engine.begin() as connection:
             quoted = settings.vt_app_db_password.replace("'", "''")
             await connection.execute(text(f"ALTER ROLE vt_app PASSWORD '{quoted}'"))
+            quoted = settings.vt_retention_db_password.replace("'", "''")
+            await connection.execute(text(f"ALTER ROLE vt_retention PASSWORD '{quoted}'"))
         await engine.dispose()
 
     asyncio.run(set_password())

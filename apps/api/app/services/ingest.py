@@ -45,6 +45,8 @@ log = structlog.get_logger()
 HOUR = 3600
 CODE_LIMIT = 10
 KNOWN_CONSENT_VERSIONS = frozenset({"1.0"})
+# The paper form a participant signs (frontend-spec 15.1). It counts only with a study block.
+STUDY_PAPER_CONSENT = "study-paper-1.0"
 CHANGE_WINDOW = timedelta(days=90)
 
 
@@ -115,7 +117,16 @@ async def _check_consent(
     session: AsyncSession, body: MeasurementProfilePayload, client: Client, current: str
 ) -> None:
     consent = body.consent
-    known = consent.consent_version == current or consent.consent_version in KNOWN_CONSENT_VERSIONS
+    paper = (
+        consent.consent_version == STUDY_PAPER_CONSENT
+        and body.session.study is not None
+        and "study_paper" in consent.scope
+    )
+    known = (
+        consent.consent_version == current
+        or consent.consent_version in KNOWN_CONSENT_VERSIONS
+        or paper
+    )
     withdrawn = await session.scalar(
         select(
             exists().where(Consent.client_id == client.client_id, Consent.withdrawn_at.isnot(None))
@@ -357,6 +368,9 @@ async def ingest(
                     scope=list(consent.scope),
                     given_at=consent.given_at,
                     claim_round=client.claim_round,
+                    source="study_paper"
+                    if consent.consent_version == STUDY_PAPER_CONSENT
+                    else "app",
                 )
             )
         row = MeasurementProfile(

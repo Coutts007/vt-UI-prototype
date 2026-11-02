@@ -5,6 +5,12 @@ The newest entry comes first. Every change or improvement adds a line in the sam
 ## 2026-11-02: M11 admin, study mode, approvals guard, exports, retention
 
 - Contract: participants say whether they withdrew (D44 default, open for the owner), an admin can carry out a held deletion request on every claim round (`POST /admin/deletion-requests/{request_id}/honour`), the admin's deletion list names the code, and the audit log gains a `retention` action.
+- Admin API: accounts (list by status, approve, reject, disable, enable; disabling ends every session; an admin cannot lock themself out; a rejection reason is never stored, only that one was given), measurer accounts, settings with the approvals and the earliest collection date, the audit export as CSV (formula-like cells quoted, the export audited), the deletion queue with codes, and carrying out a held deletion on every claim round.
+- The A9 guard: in production, enrolment and tape readings answer 409 `approvals_missing` until the five approval fields are filled and 60 days have passed since the DPIA, or the ODPC has answered. Development and staging hold seed and synthetic data only.
+- Enrolment: seeded cohort allocation balanced by sex, in blocks of eight (one pilot, two calibration, five test). The seed comes from `vt study allocate --seed` or is drawn and logged at the first enrolment. Each participant gets a new pseudonymous code with no name, phone or height. The cohort locks once readings exist.
+- Blind tape readings: all nine sites at once, locked on save (`reading_locked`), reading 2 before 1 marked, a measurer reads back only their own values and never a system value. Corrections are separate rows by the admin, audited. A withdrawn participant gets no new readings (D44 default).
+- Exports: `captures.csv` and `reference.csv` with exactly the backend-spec 12.1 columns, centimetres to one decimal, corrections applied, withdrawn participants left out (D44 default), no names, phones, emails or client codes. `?rules_version=` takes values from re-derivations under that version and refuses an unknown version.
+- Study capture with paper consent: `study-paper-1.0` counts only with a study block, and is stored with source `study_paper`.
 
 ## 2026-11-02: M10 specification sheets and sharing
 

@@ -73,6 +73,7 @@ async def _pass_to_tailor(
             reason=body.reason,
             status="received",
             note=PASSED_ON,
+            claim_round=client.claim_round,
         )
         session.add(open_request)
         await session.flush()
@@ -165,6 +166,7 @@ async def request_deletion(
         status=status,
         completed_at=None if status == "partially_done" else moment,
         note=note,
+        claim_round=client.claim_round,
     )
     session.add(row)
     await session.flush()
