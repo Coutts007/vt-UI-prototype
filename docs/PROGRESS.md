@@ -2,6 +2,10 @@
 
 The newest entry comes first. Every change or improvement adds a line in the same commit.
 
+## 2026-11-02: M10 specification sheets and sharing
+
+- The WhatsApp share text has one source: `packages/contracts/share-text.json` holds its labels in English and Kiswahili and four expected texts. The API builder and the mock's builder both pass every case character for character. Lines are the order's sites in sheet order, with the body value, a ✓ or ▲ check mark, "not measured" or "measure at fitting". Centimetres to one decimal; inches to the nearest eighth, which never ties for whole millimetres, so the two languages cannot round differently. A new error code, `sheet_link_invalid` (403), and a 429 on sheet generation are in the contract.
+
 ## 2026-11-02: M9 review fixes
 
 - After a reset the next phone was told the earlier client's measurements through `change_since_last`. Comparisons now read only the phone's own claim round. A phone is never told the height check, since holding a code's secret does not prove the typed height is theirs. A low version against an earlier round goes to the tailor as a conflict and answers 201, so the phone learns nothing about what came before.

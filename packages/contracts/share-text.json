@@ -1,0 +1,147 @@
+{
+  "description": "The WhatsApp share text (backend-spec 13). The API (services/share_text.py) and the mock (apps/web/mocks/shareText.ts) both build every case from these labels and must equal `expected` character for character. Kiswahili strings are drafts for review.",
+  "max_length": 1500,
+  "sites": ["stature", "shoulder", "chest", "waist", "hip", "sleeve", "outleg", "inleg", "neck"],
+  "labels": {
+    "en": {
+      "brand": "Virtual Tailor",
+      "client": "Client",
+      "profile": "Profile",
+      "due": "Due",
+      "check": "▲ check",
+      "pass": "✓",
+      "not_measured": "not measured",
+      "pending_fitting": "measure at fitting",
+      "no_photo": "No photo is stored.",
+      "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+      "garments": {
+        "shirt": "Shirt",
+        "dress": "Dress",
+        "trousers": "Trousers",
+        "suit_jacket": "Suit jacket",
+        "skirt": "Skirt",
+        "other": "Other"
+      },
+      "site_names": {
+        "stature": "Height",
+        "shoulder": "Shoulder width",
+        "chest": "Chest",
+        "waist": "Waist",
+        "hip": "Hip",
+        "sleeve": "Sleeve length",
+        "outleg": "Outside leg",
+        "inleg": "Inside leg",
+        "neck": "Neck"
+      }
+    },
+    "sw": {
+      "brand": "Virtual Tailor",
+      "client": "Mteja",
+      "profile": "Vipimo",
+      "due": "Tarehe ya kukabidhi",
+      "check": "▲ kagua",
+      "pass": "✓",
+      "not_measured": "hakijapimwa",
+      "pending_fitting": "pima wakati wa kujaribu",
+      "no_photo": "Hakuna picha iliyohifadhiwa.",
+      "months": ["Jan", "Feb", "Mac", "Apr", "Mei", "Jun", "Jul", "Ago", "Sep", "Okt", "Nov", "Des"],
+      "garments": {
+        "shirt": "Shati",
+        "dress": "Gauni",
+        "trousers": "Suruali",
+        "suit_jacket": "Koti la suti",
+        "skirt": "Sketi",
+        "other": "Nyingine"
+      },
+      "site_names": {
+        "stature": "Urefu",
+        "shoulder": "Upana wa mabega",
+        "chest": "Kifua",
+        "waist": "Kiuno",
+        "hip": "Nyonga",
+        "sleeve": "Urefu wa mkono",
+        "outleg": "Urefu wa mguu (nje)",
+        "inleg": "Urefu wa mguu (ndani)",
+        "neck": "Shingo"
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "spec example, English, centimetres, with name",
+      "input": {
+        "locale": "en",
+        "unit": "cm",
+        "client_code": "AB1234",
+        "name": "Amina",
+        "profile_version": 2,
+        "captured_on": "2027-05-12",
+        "garment_type": "shirt",
+        "due_date": "2027-05-26",
+        "items": [
+          { "site_code": "shoulder", "body_mm": 440, "flag": "pass", "pending_fitting": false },
+          { "site_code": "chest", "body_mm": 985, "flag": "pass", "pending_fitting": false },
+          { "site_code": "waist", "body_mm": 860, "flag": "check", "pending_fitting": false },
+          { "site_code": "inleg", "body_mm": null, "flag": "fail", "pending_fitting": false }
+        ]
+      },
+      "expected": "Virtual Tailor · Client AB1234 · Amina · Profile v2 (12 May 2027) · Shirt · Due 26 May 2027\nShoulder width 44.0 cm ✓\nChest 98.5 cm ✓\nWaist 86.0 cm ▲ check\nInside leg: not measured\nNo photo is stored."
+    },
+    {
+      "name": "no name, inches to the nearest eighth, sites in sheet order",
+      "input": {
+        "locale": "en",
+        "unit": "in",
+        "client_code": "AB1001",
+        "name": null,
+        "profile_version": 3,
+        "captured_on": "2026-10-04",
+        "garment_type": "trousers",
+        "due_date": "2026-11-16",
+        "items": [
+          { "site_code": "inleg", "body_mm": 762, "flag": "pass", "pending_fitting": false },
+          { "site_code": "waist", "body_mm": 713, "flag": "pass", "pending_fitting": false },
+          { "site_code": "hip", "body_mm": 919, "flag": "check", "pending_fitting": false },
+          { "site_code": "outleg", "body_mm": 1001, "flag": "fail", "pending_fitting": true }
+        ]
+      },
+      "expected": "Virtual Tailor · Client AB1001 · Profile v3 (4 Oct 2026) · Trousers · Due 16 Nov 2026\nWaist 28 1/8 in ✓\nHip 36 1/8 in ▲ check\nOutside leg: measure at fitting\nInside leg 30 in ✓\nNo photo is stored."
+    },
+    {
+      "name": "Kiswahili, centimetres, an override that became a pass and a small inch fraction",
+      "input": {
+        "locale": "sw",
+        "unit": "cm",
+        "client_code": "KX7Q2M",
+        "name": null,
+        "profile_version": 1,
+        "captured_on": "2026-03-01",
+        "garment_type": "dress",
+        "due_date": "2026-03-20",
+        "items": [
+          { "site_code": "chest", "body_mm": 1003, "flag": "pass", "pending_fitting": false },
+          { "site_code": "sleeve", "body_mm": 9, "flag": "check", "pending_fitting": false }
+        ]
+      },
+      "expected": "Virtual Tailor · Mteja KX7Q2M · Vipimo v1 (1 Mac 2026) · Gauni · Tarehe ya kukabidhi 20 Mac 2026\nKifua 100.3 cm ✓\nUrefu wa mkono 0.9 cm ▲ kagua\nHakuna picha iliyohifadhiwa."
+    },
+    {
+      "name": "Kiswahili, inches under one and a whole number",
+      "input": {
+        "locale": "sw",
+        "unit": "in",
+        "client_code": "AB1002",
+        "name": "Wanjikũ",
+        "profile_version": 12,
+        "captured_on": "2026-12-31",
+        "garment_type": "other",
+        "due_date": "2027-01-02",
+        "items": [
+          { "site_code": "neck", "body_mm": 9, "flag": "pass", "pending_fitting": false },
+          { "site_code": "stature", "body_mm": 1524, "flag": "pass", "pending_fitting": false }
+        ]
+      },
+      "expected": "Virtual Tailor · Mteja AB1002 · Wanjikũ · Vipimo v12 (31 Des 2026) · Nyingine · Tarehe ya kukabidhi 2 Jan 2027\nUrefu 60 in ✓\nShingo 3/8 in ✓\nHakuna picha iliyohifadhiwa."
+    }
+  ]
+}

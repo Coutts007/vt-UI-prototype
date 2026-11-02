@@ -743,12 +743,17 @@ paths:
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/RateLimited' }
   /files/sheets/{sheet_file}:
     get:
       operationId: getSheetFile
       tags: [sheets]
       summary: Download a sheet through a signed link
-      description: The only binary responses in the API. They are server-rendered sheets, never client photos.
+      description: >-
+        The only binary responses in the API. They are server-rendered sheets, never client photos.
+        No sign-in: the HMAC signature is the access check. An expired or altered link answers 403
+        `sheet_link_invalid`; a file the cleanup job removed answers 404, and the tailor generates
+        the sheet again.
       parameters:
         - name: sheet_file
           in: path
