@@ -54,6 +54,18 @@ export const AdminStudyParticipantsView: React.FC<{ onNavigate: (path: string) =
     }
   };
 
+  const withdraw = async (row: Participant) => {
+    if (!window.confirm(ax('withdrawConfirm', { code: row.participant_code }))) return;
+    try {
+      await apiClient.post('/study/participants/{participant_id}/withdraw', {
+        path: { participant_id: row.participant_id },
+      });
+    } catch (problem) {
+      setNotice(ax(problemKey(problem)));
+    }
+    void list.reload();
+  };
+
   return (
     <Page title={ax('participantsTitle')} intro={ax('participantsIntro')}>
       <ApprovalsBanner missing={settings.data?.approvals_missing ?? []} />
@@ -123,6 +135,12 @@ export const AdminStudyParticipantsView: React.FC<{ onNavigate: (path: string) =
                   {ax('readingsEntered', { n: row.readings_entered })}
                 </p>
               </div>
+              <div className="flex flex-wrap gap-2">
+              {!row.withdrawn && (
+                <Button size="sm" variant="outline" onClick={() => void withdraw(row)}>
+                  {ax('withdraw')}
+                </Button>
+              )}
               {!row.withdrawn && row.sets_captured < 3 && (
                 <Button
                   size="sm"
@@ -133,6 +151,7 @@ export const AdminStudyParticipantsView: React.FC<{ onNavigate: (path: string) =
                   {ax('startCapture')}
                 </Button>
               )}
+              </div>
             </li>
           ))}
         </ul>

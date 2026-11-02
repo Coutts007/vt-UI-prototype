@@ -31,6 +31,12 @@ The newest entry comes first. Every change or improvement adds a line in the sam
   - Triggers lock the cohort once readings exist, a capture set's participant and set number, and the allocation seed.
   - `vt_retention` may delete only from the tables it cleans (audit rows past their period included, as spec 14.6 needs). It can no longer read accounts or the migration table.
   - Migration 0007 copies the client's round onto old deletion requests. A new `all_rounds` flag marks the admin's checked requests, and a request with neither is left for the admin.
+- Review of PR #14, web:
+  - Settings asks before setting a collection end and sends the confirmation. Who confirmed the approvals and when are read-only, filled in by the server.
+  - Participants have "Record withdrawal".
+  - The tape queue keeps a locked reading whose saved values differ and tells the measurer, dropping it only on an exact match.
+  - The mock follows the API.
+  - A duplicate `hdrMenu` key from the header change, which broke the web typecheck in `0385a26`, is removed.
 
 ## 2026-11-02: M10 specification sheets and sharing
 

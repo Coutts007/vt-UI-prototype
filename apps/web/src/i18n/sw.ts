@@ -360,7 +360,6 @@ export const sw: Record<TranslationKey, string> = {
   navTapeEntry: 'Vipimo vya utepe',
   hdrMenu: 'Menyu',
   hdrSignOut: 'Toka',
-  hdrMenu: 'Menyu',
   captureFooter: 'Picha zinabaki kwenye simu hii.',
   captureUnavailable: 'Kupima hakukuweza kuanza. Unganisha intaneti mara moja ili kumaliza maandalizi, kisha jaribu tena.',
   downloadFailed: 'Unganisha intaneti mara moja ili kumaliza maandalizi.',

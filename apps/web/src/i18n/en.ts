@@ -358,7 +358,6 @@ export const en = {
   navTapeEntry: 'Tape entry',
   hdrMenu: 'Menu',
   hdrSignOut: 'Sign out',
-  hdrMenu: 'Menu',
   captureFooter: 'Photos stay on this phone.',
   captureUnavailable: 'Measuring could not start. Connect to the internet once to finish setting up, then try again.',
   downloadFailed: 'Connect to the internet once to finish setting up.',

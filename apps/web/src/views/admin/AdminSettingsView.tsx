@@ -9,12 +9,12 @@ import { AdminKey, useAdminText } from './adminText';
 /** App listens for this, so the study screens appear or go without a reload. */
 export const STUDY_MODE_EVENT = 'vt:study-mode';
 
-const APPROVAL_FIELDS: { key: keyof Approvals; label: AdminKey; type: 'text' | 'date' }[] = [
+const APPROVAL_FIELDS: { key: keyof Approvals; label: AdminKey; type: 'text' | 'date'; server?: true }[] = [
   { key: 'ierc_ref', label: 'ierc', type: 'text' },
   { key: 'nacosti_licence_no', label: 'nacosti', type: 'text' },
   { key: 'dpia_submitted_on', label: 'dpiaSubmitted', type: 'date' },
-  { key: 'approvals_confirmed_by', label: 'confirmedBy', type: 'text' },
-  { key: 'confirmed_at', label: 'confirmedAt', type: 'date' },
+  { key: 'approvals_confirmed_by', label: 'confirmedBy', type: 'text', server: true },
+  { key: 'confirmed_at', label: 'confirmedAt', type: 'date', server: true },
   { key: 'odpc_response_on', label: 'odpcOn', type: 'date' },
   { key: 'odpc_response_ref', label: 'odpcRef', type: 'text' },
 ];
@@ -49,17 +49,17 @@ export const AdminSettingsView: React.FC<{ onNavigate: (path: string) => void }>
     if (form.study_mode !== current.study_mode) {
       if (!window.confirm(ax(form.study_mode ? 'studyModeOnConfirm' : 'studyModeOffConfirm'))) return;
     }
+    const endChanged = form.study_collection_end !== current.study_collection_end && !!form.study_collection_end;
+    if (endChanged && !window.confirm(ax('collectionEndConfirm', { date: date(form.study_collection_end!) }))) return;
     setBusy(true);
     setNotice(null);
     try {
       const approvals = Object.fromEntries(
         Object.entries(form.approvals).map(([key, value]) => [key, value ? value : null]),
       ) as Approvals;
-      // The contract keeps a time on confirmed_at; the screen asks for the day only.
-      if (approvals.confirmed_at && approvals.confirmed_at.length === 10) {
-        approvals.confirmed_at = `${approvals.confirmed_at}T00:00:00+03:00`;
-      }
-      const saved = await apiClient.put('/admin/settings', { body: { ...form, approvals } });
+      const saved = await apiClient.put('/admin/settings', {
+        body: { ...form, approvals, ...(endChanged && { confirm_study_deletion: true }) },
+      });
       settings.setData(saved);
       if (saved.study_mode !== current.study_mode) {
         window.dispatchEvent(new CustomEvent(STUDY_MODE_EVENT, { detail: saved.study_mode }));
@@ -158,13 +158,16 @@ export const AdminSettingsView: React.FC<{ onNavigate: (path: string) => void }>
           {current.approvals_missing.length > 0 && current.earliest_collection_date && (
             <p className={hintClass}>{ax('approvalsWaiting', { date: date(current.earliest_collection_date) })}</p>
           )}
+          <p id="approval-server-note" className={hintClass}>{ax('confirmedByServer')}</p>
           <div className="grid sm:grid-cols-2 gap-3">
-            {APPROVAL_FIELDS.map(({ key, label, type }) => (
+            {APPROVAL_FIELDS.map(({ key, label, type, server }) => (
               <div key={key}>
                 <label htmlFor={`approval-${key}`} className={labelClass}>{ax(label)}</label>
                 <input
                   id={`approval-${key}`}
                   type={type}
+                  readOnly={server}
+                  aria-describedby={server ? 'approval-server-note' : undefined}
                   maxLength={80}
                   value={(type === 'date' ? form.approvals[key]?.slice(0, 10) : form.approvals[key]) ?? ''}
                   onChange={(e) => set('approvals', { ...form.approvals, [key]: e.target.value })}

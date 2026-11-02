@@ -181,6 +181,14 @@ export const adminEn = {
   sendNow: 'Send now',
   enterAnother: 'Enter another reading',
   notStudyParticipant: 'No participant has this code.',
+  collectionEndConfirm:
+    'Study records are deleted 12 months after {date}. A dry run must show it a week before. Set this date?',
+  confirmedByServer: 'Filled in by the server when you save the approvals.',
+  withdraw: 'Record withdrawal',
+  withdrawConfirm:
+    'Record that {code} withdrew? Their rows are kept but leave every export, and no new readings are taken. This cannot be undone.',
+  queuedDiffers:
+    'Reading {n} for {code} is already saved with different values. Your queued copy is kept here; ask the admin to correct the saved one.',
   errApprovals: 'Study approvals are missing, so study data cannot be collected (A9). See Settings.',
   errStudyOff: 'Study mode is off.',
   errWithdrawn: 'This participant withdrew consent.',
@@ -369,6 +377,14 @@ export const adminSw: Record<AdminKey, string> = {
   sendNow: 'Tuma sasa',
   enterAnother: 'Weka kipimo kingine',
   notStudyParticipant: 'Hakuna mshiriki mwenye msimbo huu.',
+  collectionEndConfirm:
+    'Rekodi za utafiti zitafutwa miezi 12 baada ya {date}. Majaribio lazima yaonyeshe hilo wiki moja kabla. Weka tarehe hii?',
+  confirmedByServer: 'Hujazwa na seva unapohifadhi vibali.',
+  withdraw: 'Rekodi kujiondoa',
+  withdrawConfirm:
+    'Rekodi kwamba {code} amejiondoa? Rekodi zake zinabaki lakini haziingii kwenye upakuaji wowote, na vipimo vipya havichukuliwi. Hili haliwezi kutenduliwa.',
+  queuedDiffers:
+    'Kipimo {n} cha {code} kimeshahifadhiwa kwa thamani tofauti. Nakala yako iliyosubiri imebaki hapa; mwombe msimamizi arekebishe kilichohifadhiwa.',
   errApprovals: 'Vibali vya utafiti vinakosekana, kwa hiyo data ya utafiti haiwezi kukusanywa (A9). Angalia Mipangilio.',
   errStudyOff: 'Hali ya utafiti imezimwa.',
   errWithdrawn: 'Mshiriki huyu ameondoa ridhaa.',

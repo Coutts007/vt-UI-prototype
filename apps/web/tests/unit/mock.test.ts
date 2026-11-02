@@ -192,6 +192,10 @@ const CASES: Record<string, Case> = {
   putAdminSettings: { role: 'admin', body: { retention_months: 24 } },
   listDeletionRequests: { role: 'admin' },
   honourDeletionRequest: { role: 'admin', path: { request_id: '__request__' } },
+  withdrawParticipant: {
+    role: 'admin',
+    path: { participant_id: seed.participants[1].participant_id },
+  },
   listRules: { role: 'admin' },
   registerRules: {
     role: 'admin',

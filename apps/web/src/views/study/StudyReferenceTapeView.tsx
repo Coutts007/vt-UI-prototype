@@ -23,6 +23,22 @@ export function tapeMm(text: string): number | null {
   return Math.round(Number(trimmed) * 10);
 }
 
+/** The measurer's own saved values for this reading equal the queued ones, site for site. */
+export async function sameAsSaved(reading: QueuedReading): Promise<boolean> {
+  try {
+    const saved = await apiClient.get('/study/reference-readings/mine', {
+      query: { participant_code: reading.participant_code },
+    });
+    const mine = saved.filter((row) => row.reading_no === reading.reading_no);
+    return (
+      mine.length === TAPE_SITES.length &&
+      mine.every((row) => reading.values[row.site_code as keyof SiteValues] === row.value_mm)
+    );
+  } catch {
+    return false;
+  }
+}
+
 type Receipt = { code: string; n: number; outOfOrder: boolean } | { queued: true };
 
 async function send(reading: QueuedReading) {
@@ -48,6 +64,7 @@ export const StudyReferenceTapeView: React.FC<{ measurerCode: string; onNavigate
   const [confirming, setConfirming] = useState<string[]>([]);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [pending, setPending] = useState(0);
+  const [differs, setDiffers] = useState<{ code: string; n: number } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const countPending = useCallback(async () => {
@@ -60,9 +77,11 @@ export const StudyReferenceTapeView: React.FC<{ measurerCode: string; onNavigate
         await send(reading);
         await vtStorage.removeQueuedReading(reading.id!);
       } catch (problem) {
-        // Already saved (a retry after a lost reply): nothing left to send. Anything else stays queued.
+        // Already saved: drop the queued copy only if it is exactly what the server holds (a
+        // retry after a lost reply). A different saved reading keeps the copy and says so.
         if (problem instanceof ApiError && problem.code === 'reading_locked') {
-          await vtStorage.removeQueuedReading(reading.id!);
+          if (await sameAsSaved(reading)) await vtStorage.removeQueuedReading(reading.id!);
+          else setDiffers({ code: reading.participant_code, n: reading.reading_no });
         } else break;
       }
     }
@@ -132,6 +151,11 @@ export const StudyReferenceTapeView: React.FC<{ measurerCode: string; onNavigate
 
   return (
     <Page title={ax('tapeTitle')} intro={ax('tapeIntro', { code: measurerCode })}>
+      {differs && (
+        <p role="alert" className="p-3 rounded-xl border border-rose-300 bg-rose-50 text-sm font-semibold">
+          {ax('queuedDiffers', differs)}
+        </p>
+      )}
       {pending > 0 && (
         <div role="status" className="flex items-center justify-between gap-3 p-3 rounded-xl border border-amber-300 bg-amber-50">
           <span className="text-sm font-semibold">{ax('pendingCount', { n: pending })}</span>

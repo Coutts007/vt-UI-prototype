@@ -199,6 +199,7 @@ export function createHandlers(options: MockOptions = {}) {
   const participant = (code: string) => db.participants.find((p) => p.participant_code === code);
   // D44 default: a participant whose client withdrew consent is kept but not used.
   const withdrawnParticipant = (row: Row) => {
+    if (row.withdrawn_at) return true;
     const client = db.clients.find((c) => c.client_code === row.client_code);
     return Boolean(client && db.withdrawals.some((w) => w.client_id === client.client_id));
   };
@@ -1107,7 +1108,28 @@ export function createHandlers(options: MockOptions = {}) {
     }),
     route('get', '/admin/settings', ['admin'], () => db.settings),
     route('put', '/admin/settings', ['admin'], ({ user, body }) => {
-      Object.assign(db.settings, body);
+      const { confirm_study_deletion: confirmed, ...changes } = body;
+      if (
+        changes.study_collection_end &&
+        changes.study_collection_end !== db.settings.study_collection_end &&
+        !confirmed
+      )
+        return problem('validation_failed', {
+          errors: [{ field: 'confirm_study_deletion', code: 'required' }],
+        });
+      if (changes.approvals) {
+        // As on the server: who confirmed, and when, come from the signed-in admin.
+        const filled =
+          changes.approvals.ierc_ref &&
+          changes.approvals.nacosti_licence_no &&
+          changes.approvals.dpia_submitted_on;
+        changes.approvals = {
+          ...changes.approvals,
+          approvals_confirmed_by: filled ? user!.email : null,
+          confirmed_at: filled ? new Date().toISOString() : null,
+        };
+      }
+      Object.assign(db.settings, changes);
       if (body.approvals) {
         const required = [
           'ierc_ref',
@@ -1160,6 +1182,8 @@ export function createHandlers(options: MockOptions = {}) {
       }
       client.display_name = null;
       client.height_mm = null;
+      const person = db.participants.find((p) => p.client_code === client.client_code);
+      if (person && !person.withdrawn_at) person.withdrawn_at = new Date().toISOString();
       const retained = db.profiles.some((p) => p.client_id === client.client_id);
       request.status = retained ? 'partially_done' : 'done';
       request.completed_at = retained ? null : new Date().toISOString();
@@ -1244,7 +1268,10 @@ export function createHandlers(options: MockOptions = {}) {
 
     // As on the server: the list stays readable when study mode is off; writes need it on.
     route('get', '/study/participants', ['admin'], () =>
-      db.participants.map((p) => ({ ...p, withdrawn: withdrawnParticipant(p) })),
+      db.participants.map(({ withdrawn_at: _w, ...p }) => ({
+        ...p,
+        withdrawn: withdrawnParticipant(p),
+      })),
     ),
     route('post', '/study/participants', ['admin'], ({ user, body }) => {
       if (!db.settings.study_mode) return problem('study_mode_off');
@@ -1302,6 +1329,23 @@ export function createHandlers(options: MockOptions = {}) {
         'Changed a participant',
       );
       return row;
+    }),
+    route('post', '/study/participants/:participant_id/withdraw', ['admin'], ({ user, params }) => {
+      const row = db.participants.find((p) => p.participant_id === params.participant_id);
+      if (!row) return problem('not_found');
+      if (!row.withdrawn_at) {
+        row.withdrawn_at = new Date().toISOString();
+        audit(
+          db,
+          user,
+          'participant_update',
+          'participant',
+          row.participant_id,
+          'Withdrew a participant',
+        );
+      }
+      const { withdrawn_at: _w, ...shown } = row;
+      return { ...shown, withdrawn: true };
     }),
     route('post', '/study/reference-readings', ['measurer'], ({ user, body }) => {
       if (!db.settings.study_mode) return problem('study_mode_off');
