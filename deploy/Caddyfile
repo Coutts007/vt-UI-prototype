@@ -25,16 +25,27 @@
 			X-Content-Type-Options "nosniff"
 			Referrer-Policy "no-referrer"
 		}
-		@page not path_regexp ^/assets/marker\.worker-[A-Za-z0-9_-]+\.js$
+		# The worker policy goes only to a worker file that exists: a missing path falls back to
+		# index.html below, and the page must then keep the page policy.
+		@page not {
+			path_regexp ^/assets/marker\.worker-[A-Za-z0-9_-]+\.js$
+			file
+		}
 		header @page Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 		# The marker worker alone may evaluate code: OpenCV.js's embind builds its function
 		# wrappers with the Function constructor (M12, decision M12-10). The worker reaches no
 		# page, storage or network beyond this origin, and the page itself keeps the strict policy.
-		@marker path_regexp ^/assets/marker\.worker-[A-Za-z0-9_-]+\.js$
+		@marker {
+			path_regexp ^/assets/marker\.worker-[A-Za-z0-9_-]+\.js$
+			file
+		}
 		header @marker Content-Security-Policy "default-src 'none'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; connect-src 'self'"
 		# The service worker and the shell must be checked on every visit, or an update never lands.
 		@fresh path /sw.js /index.html /manifest.webmanifest /
 		header @fresh Cache-Control "no-cache"
+		# Deep links (/t/orders, /c/...) are served the shell too, so they must not be cached either.
+		@shell not file
+		header @shell Cache-Control "no-cache"
 		root * /srv
 		try_files {path} /index.html
 		file_server

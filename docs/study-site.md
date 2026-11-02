@@ -27,7 +27,7 @@ The pilot and the study run on the encrypted study laptop. The laptop joins a lo
 
 ## 2. Trust the certificate on each phone
 
-Caddy issues the site's certificate from its own local authority. A phone opens the site only after it trusts that authority. Do this once per phone, and remove the certificate when the study ends.
+Caddy issues the site's certificate from its own local authority. A phone opens the site only after it trusts that authority. Do this once per phone, and remove the certificate when the study ends. The authority's private key lives in the `caddy-data` Docker volume, and it can vouch for any site to a phone that trusts it, so keep the volume on the laptop's encrypted disk, never copy it, and delete it when the study ends (`docker volume rm` of the study profile's `caddy-data`) after removing the certificate from every phone.
 
 **Android (11 and later)**
 1. Copy `study-root.crt` to the phone's Downloads.

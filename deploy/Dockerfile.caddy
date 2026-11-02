@@ -6,6 +6,6 @@ COPY apps/web apps/web
 RUN pnpm install --frozen-lockfile --filter @vt/web
 RUN pnpm --filter @vt/web build
 
-FROM caddy:2-alpine
+FROM caddy:2.8.4-alpine
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
 COPY --from=web /repo/apps/web/dist /srv
