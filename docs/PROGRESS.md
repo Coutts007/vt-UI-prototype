@@ -20,6 +20,7 @@ The newest entry comes first. Every change or improvement adds a line in the sam
 - The prototype's mock client (`src/api/client.ts`, `src/api/mockData.ts`) is gone, and the seed's sign-ins live in a dev-only chunk that a production build never includes. The admin and study words have their own dictionary in English with a Kiswahili draft. The header's last literal words are translated.
 - The MSW mock follows the server: carrying out a deletion, codes in the deletion list, `withdrawn` on participants, no readings for a withdrawn participant, a fresh code for each enrolment, the participant list readable with study mode off, and CSV headers from `packages/contracts/study-export-columns.json`, which an API test holds equal to the export's columns.
 - Compliance documents: `docs/data-inventory.md`, `docs/dpia-technical-annex.md`, `docs/retention-schedule.md` and `docs/incident-response.md` describe what the code holds and does today, list the gaps (no backups or Content Security Policy yet, M12) and say that the DPIA, its filing and the approvals are the owner's.
+- `scripts/budget.mjs` now fails a production build that carries a demo sign-in. With the mock client gone the production build has none; D38's client flow plus capture engine figure is 179.2 KB gzip (about 179.5 KB before), the flow line 167.8 KB of 170, first screen 88.1 KB, tailor 110.1 KB.
 
 ## 2026-11-02: M10 specification sheets and sharing
 
