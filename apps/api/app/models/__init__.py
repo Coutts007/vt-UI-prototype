@@ -253,6 +253,15 @@ class MeasurementProfile(Base):
             postgresql_where=text("status = 'final'"),
         ),
         Index("ix_profile_client_captured", "client_id", text("captured_at DESC")),
+        # Each client's current profile, final first (migration 0009; the client list).
+        Index(
+            "ix_profile_current",
+            "client_id",
+            text("(status <> 'final')"),
+            text("captured_at DESC"),
+            postgresql_include=["profile_id"],
+            postgresql_where=text("status <> 'superseded'"),
+        ),
     )
     profile_id: Mapped[uuid.UUID] = pk()
     client_id: Mapped[uuid.UUID] = fk("client.client_id", ondelete="CASCADE")

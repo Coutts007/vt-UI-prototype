@@ -193,6 +193,9 @@ async def create_sheet(
         "sheet", str(principal.user.user_id), settings.sheets_per_tailor_hour, HOUR
     )
     data, share = await _sheet_data(session, order, principal.user, body.include_name)
+    # End the read before waiting to render, so the connection goes back to the pool: held
+    # through the wait and the render, it starved other requests under load (M12).
+    await session.commit()
     async with _RENDERING:
         pdf, png = await asyncio.to_thread(render_service.render, data)
     sheet_id = uuid.uuid4()
