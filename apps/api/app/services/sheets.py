@@ -7,22 +7,30 @@ carries a picture of the client: the outlines are static drawings, the same for 
 import hashlib
 import io
 import json
+import mimetypes
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from functools import cache
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
+from urllib.request import url2pathname
 
 import jinja2
 import pypdfium2  # type: ignore[import-untyped]
 import segno
 
-from app.services.share_text import format_date, format_length, share_labels
+from app.services.share_text import clean_name, format_date, format_length, share_labels
 
 TEMPLATES = Path(__file__).resolve().parents[1] / "templates" / "sheet"
 DPI = 150
 PNG_SIZE = (1240, 1754)
+# What the API itself writes: <id>.png, <id>.pdf, and .<id>.<ext>.part while writing.
+SHEET_FILE = re.compile(
+    r"\.?(?P<id>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.(png|pdf)(\.part)?"
+)
 NUMBERED = ("shoulder", "chest", "waist", "hip", "sleeve", "outleg", "inleg", "neck")
 _ICON = '<svg width="9pt" height="9pt" viewBox="0 0 10 10">{}</svg>'
 _FLAG_ICONS = {
@@ -85,12 +93,49 @@ def _environment() -> jinja2.Environment:
     )
 
 
-@cache
-def _fonts() -> Any:
+def font_configuration() -> Any:
+    """One per render: two renders run at once and WeasyPrint does not promise thread safety."""
     # Imported here, so the API starts (and its contract tests run) without Pango installed.
     from weasyprint.text.fonts import FontConfiguration  # type: ignore[import-untyped]
 
     return FontConfiguration()
+
+
+def fetch_resource(url: str) -> Any:
+    """Serves the template's own files (CSS, fonts) and refuses every other address.
+
+    The template holds no links of its own beyond these, but a value that slipped into the
+    HTML must never make the server read a local file or call out to the network.
+    """
+    from weasyprint.urls import URLFetcherResponse  # type: ignore[import-untyped]
+
+    parts = urlsplit(url)
+    if parts.scheme != "file" or parts.netloc not in ("", "localhost"):
+        raise ValueError("Sheets load only their own files")
+    path = Path(url2pathname(parts.path)).resolve()
+    if not path.is_relative_to(TEMPLATES.resolve()) or not path.is_file():
+        raise ValueError("Sheets load only their own files")
+    kind = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return URLFetcherResponse(url, path.read_bytes(), {"Content-Type": kind})
+
+
+def _fetcher() -> Any:
+    from weasyprint.urls import URLFetcher
+
+    class TemplateOnly(URLFetcher):  # type: ignore[misc]
+        def fetch(self, url: str, headers: Any = None) -> Any:
+            return fetch_resource(url)
+
+    return TemplateOnly()
+
+
+def write_pdf(html: str) -> bytes:
+    from weasyprint import HTML  # type: ignore[import-untyped]
+
+    pdf: bytes = HTML(string=html, base_url=str(TEMPLATES), url_fetcher=_fetcher()).write_pdf(
+        font_config=font_configuration(), uncompressed_pdf=False
+    )
+    return pdf
 
 
 def _passed(checks: dict[str, str], t: dict[str, Any]) -> str:
@@ -147,7 +192,7 @@ def render_html(data: SheetData) -> str:
             t=t,
             locale=data.locale,
             client_code=data.client_code,
-            name=data.name,
+            name=clean_name(data.name),
             profile_version=data.profile_version,
             captured_on=format_date(data.captured_on, data.locale),
             business_name=data.business_name,
@@ -172,12 +217,7 @@ def render_html(data: SheetData) -> str:
 
 def render(data: SheetData) -> tuple[bytes, bytes]:
     """The PDF and the 150 dpi PNG of its first page."""
-    from weasyprint import HTML  # type: ignore[import-untyped]
-
-    html = render_html(data)
-    pdf: bytes = HTML(string=html, base_url=str(TEMPLATES)).write_pdf(
-        font_config=_fonts(), uncompressed_pdf=False
-    )
+    pdf = write_pdf(render_html(data))
     document = pypdfium2.PdfDocument(pdf)
     try:
         bitmap = document[0].render(scale=DPI / 72)
@@ -220,7 +260,9 @@ def orphan_files(directory: Path, known: set[str], older_than_s: float) -> list[
     limit = time.time() - older_than_s
     out = []
     for path in directory.iterdir():
-        stem = path.name.lstrip(".").split(".", 1)[0]
-        if stem not in known and path.stat().st_mtime < limit:
+        match = SHEET_FILE.fullmatch(path.name)
+        if not match or not path.is_file() or path.is_symlink():
+            continue
+        if match["id"] not in known and path.stat().st_mtime < limit:
             out.append(path)
     return out

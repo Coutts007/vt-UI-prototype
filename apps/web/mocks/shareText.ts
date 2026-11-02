@@ -28,6 +28,13 @@ export interface ShareInput {
 
 const SEP = ' · ';
 
+/** One line of plain text, as the API's clean_name: controls become spaces, runs of space one. */
+export function cleanName(name: string | null): string | null {
+  if (name === null) return null;
+  const words = name.replace(/\p{C}/gu, ' ').split(/\s+/).filter(Boolean);
+  return words.length ? words.join(' ') : null;
+}
+
 export function formatLength(mm: number, unit: 'cm' | 'in'): string {
   if (unit === 'cm') return `${Math.floor(mm / 10)}.${mm % 10} cm`;
   // round(mm * 8 / 25.4) in whole numbers; whole millimetres never fall exactly half way.
@@ -56,7 +63,7 @@ export function buildShareText(data: ShareInput): string {
   const head = [
     labels.brand,
     `${labels.client} ${data.client_code}`,
-    ...(data.name ? [data.name] : []),
+    ...(cleanName(data.name) ? [cleanName(data.name)] : []),
     `${labels.profile} v${data.profile_version} (${formatDate(data.captured_on, data.locale)})`,
     garments[data.garment_type],
     `${labels.due} ${formatDate(data.due_date, data.locale)}`,

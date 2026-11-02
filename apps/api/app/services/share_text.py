@@ -5,6 +5,7 @@ same text from the same file (apps/web/mocks/shareText.ts), and both are tested 
 """
 
 import json
+import unicodedata
 from datetime import date
 from functools import cache
 from pathlib import Path
@@ -43,6 +44,17 @@ class ShareInput(BaseModel):
     items: list[ShareItem]
 
 
+def clean_name(name: str | None) -> str | None:
+    """One line of plain text: control and format characters become spaces, runs of space one.
+
+    A name typed with a newline would otherwise add a line to the WhatsApp text.
+    """
+    if name is None:
+        return None
+    visible = "".join(" " if unicodedata.category(c).startswith("C") else c for c in name)
+    return " ".join(visible.split()) or None
+
+
 def format_length(mm: int, unit: str, locale: str) -> str:
     """Centimetres to one decimal, or inches to the nearest eighth (backend-spec 13)."""
     if unit == "cm":
@@ -70,7 +82,7 @@ def build_share_text(data: ShareInput) -> str:
     head = [
         labels["brand"],
         f"{labels['client']} {data.client_code}",
-        *([data.name] if data.name else []),
+        *([name] if (name := clean_name(data.name)) else []),
         f"{labels['profile']} v{data.profile_version} ({captured})",
         labels["garments"][data.garment_type],
         f"{labels['due']} {format_date(data.due_date, data.locale)}",

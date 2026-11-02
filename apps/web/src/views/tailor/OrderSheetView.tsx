@@ -40,6 +40,27 @@ async function fetchFile(url: string): Promise<Blob> {
   }
 }
 
+function canShareFiles(): boolean {
+  if (typeof navigator.canShare !== 'function') return false;
+  try {
+    return navigator.canShare({ files: [new File([''], 'sheet.png', { type: 'image/png' })] });
+  } catch {
+    return false;
+  }
+}
+
+/** A blank tab opened during the tap; null where the browser refuses. */
+function blankTab(): Window | null {
+  const tab = window.open('', '_blank');
+  if (tab) tab.opener = null;
+  return tab;
+}
+
+function openIn(tab: Window | null, url: string): void {
+  if (tab && !tab.closed) tab.location.href = url;
+  else window.open(url, '_blank', 'noopener');
+}
+
 function saveBlob(blob: Blob, name: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -59,6 +80,15 @@ export const OrderSheetView: React.FC<{ orderId: string; onNavigate: (path: stri
   const [hint, setHint] = useState<'attach' | 'print' | null>(null);
   const [sheet, setSheet] = useState<SheetLinks | null>(null);
   const current = useRef<{ sheet: SheetLinks; includeName: boolean } | null>(null);
+
+  /** A sheet made under the other choice must not be shared, so it goes; the tailor makes a new one. */
+  const changeName = (value: boolean) => {
+    setIncludeName(value);
+    current.current = null;
+    setSheet(null);
+    setHint(null);
+    setFailed(null);
+  };
 
   const generate = async (withName = includeName): Promise<SheetLinks> => {
     const made = await apiClient.post('/orders/{order_id}/sheets', {
@@ -117,21 +147,31 @@ export const OrderSheetView: React.FC<{ orderId: string; onNavigate: (path: stri
     }
   };
 
-  const shareWhatsApp = () =>
-    act(async () => {
-      const { blob, links } = await withFile('png');
-      const file = new File([blob], `sheet-${links.sheet_id.slice(0, 8)}.png`, { type: 'image/png' });
-      if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], text: links.share_text });
-        await record(links, 'whatsapp_share');
-        return;
+  const shareWhatsApp = () => {
+    // Known in the tap itself, so a window for WhatsApp can open before anything is awaited:
+    // browsers (Safari above all) block windows opened after an await. Device check pending.
+    const sharesFiles = canShareFiles();
+    const tab = sharesFiles ? null : blankTab();
+    return act(async () => {
+      try {
+        const { blob, links } = await withFile('png');
+        const file = new File([blob], `sheet-${links.sheet_id.slice(0, 8)}.png`, { type: 'image/png' });
+        if (sharesFiles && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], text: links.share_text });
+          await record(links, 'whatsapp_share');
+          return;
+        }
+        // No file sharing (most desktop browsers and older iPhones): save the picture, open WhatsApp.
+        saveBlob(blob, file.name);
+        openIn(tab, waLink(links.share_text));
+        setHint('attach');
+        await record(links, 'wa_link');
+      } catch (error) {
+        tab?.close();
+        throw error;
       }
-      // No file sharing (most desktop browsers and older iPhones): save the picture, open WhatsApp.
-      saveBlob(blob, file.name);
-      window.open(waLink(links.share_text), '_blank', 'noopener');
-      setHint('attach');
-      await record(links, 'wa_link');
     });
+  };
 
   const download = (kind: 'png' | 'pdf') =>
     act(async () => {
@@ -140,15 +180,22 @@ export const OrderSheetView: React.FC<{ orderId: string; onNavigate: (path: stri
       await record(links, 'download');
     });
 
-  const print = () =>
-    act(async () => {
-      const { blob, links } = await withFile('pdf');
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank', 'noopener');
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      setHint('print');
-      await record(links, 'print');
+  const print = () => {
+    const tab = blankTab();
+    return act(async () => {
+      try {
+        const { blob, links } = await withFile('pdf');
+        const url = URL.createObjectURL(blob);
+        openIn(tab, url);
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        setHint('print');
+        await record(links, 'print');
+      } catch (error) {
+        tab?.close();
+        throw error;
+      }
     });
+  };
 
   return (
     <div className="flex flex-col gap-4 max-w-xl mx-auto">
@@ -156,7 +203,7 @@ export const OrderSheetView: React.FC<{ orderId: string; onNavigate: (path: stri
       <Title>{tx('sheetTitle')}</Title>
       <Card>
         <label className="flex items-center gap-2 min-h-[48px] text-sm cursor-pointer">
-          <input type="checkbox" className="w-5 h-5" checked={includeName} onChange={(e) => setIncludeName(e.target.checked)} />
+          <input type="checkbox" className="w-5 h-5" checked={includeName} onChange={(e) => changeName(e.target.checked)} />
           {tx('sheetIncludeName')}
         </label>
         <p className={hintClass}>{tx('sheetNameNote')}</p>

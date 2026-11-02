@@ -301,7 +301,9 @@ test('without file sharing the picture downloads and WhatsApp opens with the tex
   const popup = page.waitForEvent('popup');
   await page.getByRole('button', { name: tx.sheetShareWhatsApp }).click();
   expect((await download).suggestedFilename()).toMatch(/^sheet-[0-9a-f]{8}\.png$/);
-  const opened = decodeURIComponent(new URL((await popup).url()).searchParams.get('text') ?? '');
+  const tab = await popup;
+  await tab.waitForURL(/^https:\/\/wa\.me\//);
+  const opened = decodeURIComponent(new URL(tab.url()).searchParams.get('text') ?? '');
   expect(opened).toMatch(/^Virtual Tailor · Client AB1001 · Profile v\d+ /);
   expect(opened).not.toContain(clientOf('AB1001').display_name);
   await expect(page.getByText(tx.sheetAttachHint)).toBeVisible();
@@ -329,4 +331,18 @@ test('an expired link is replaced by a new sheet without the tailor noticing', a
   await made;
   expect((await pdf).suggestedFilename()).toMatch(/\.pdf$/);
   expect(refused).toBe(2);
+});
+
+test('changing the name choice drops the sheet already made, so the old name cannot be sent', async ({
+  page,
+}) => {
+  await openSheet(page, true);
+  const preview = page.getByRole('img', { name: tx.sheetPreviewAlt });
+  await page.getByRole('checkbox', { name: tx.sheetIncludeName }).uncheck();
+  await expect(preview).toHaveCount(0);
+  await expect(page.getByRole('button', { name: tx.sheetShareWhatsApp })).toHaveCount(0);
+  await page.getByRole('button', { name: tx.sheetGenerate }).click();
+  await expect(preview).toBeVisible();
+  await page.getByText(tx.sheetShareText).click();
+  await expect(page.getByTestId('share-text')).not.toContainText(clientOf('AB1001').display_name);
 });

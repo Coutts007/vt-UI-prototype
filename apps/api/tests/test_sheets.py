@@ -350,3 +350,82 @@ def test_production_needs_its_own_link_secret() -> None:
             vt_app_db_password="q",
             _env_file=None,
         )
+
+
+# Review of PR #13: the renderer reads only its own templates, cleanup touches only sheet files,
+# names cannot break the share text, and renders do not share font state.
+
+
+def test_the_renderer_fetches_only_its_own_template_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    secret = tmp_path / "secret.css"
+    secret.write_text("body { color: red; }")
+    asked: list[str] = []
+    real = sheets.fetch_resource
+
+    def spy(url: str) -> Any:
+        asked.append(url)
+        return real(url)
+
+    monkeypatch.setattr(sheets, "fetch_resource", spy)
+    html = (
+        f'<link rel="stylesheet" href="{secret.as_uri()}">'
+        '<link rel="stylesheet" href="http://example.invalid/x.css">'
+        '<img src="file:///etc/hostname"><p>x</p>'
+    )
+    pdf = sheets.write_pdf(html)
+    assert pdf.startswith(b"%PDF")
+    assert secret.as_uri() in asked and "http://example.invalid/x.css" in asked
+    for url in (secret.as_uri(), "http://example.invalid/x.css", "file:///etc/hostname"):
+        with pytest.raises(ValueError):
+            real(url)
+    escape = (sheets.TEMPLATES / "fonts" / ".." / ".." / ".." / "config.py").as_uri()
+    with pytest.raises(ValueError):
+        real(escape)
+    assert real((sheets.TEMPLATES / "sheet.css").as_uri()).status == 200
+
+
+def test_cleanup_ignores_folders_and_foreign_files(tmp_path: Path) -> None:
+    old = time.time() - 7200
+    sheet = str(uuid.uuid4())
+    stray = tmp_path / f"{sheet}.png"
+    part = tmp_path / f".{uuid.uuid4()}.pdf.part"
+    folder = tmp_path / str(uuid.uuid4())
+    folder.mkdir()
+    foreign = tmp_path / "notes.txt"
+    lookalike = tmp_path / f"{uuid.uuid4()}.png.bak"
+    for path in (stray, part, foreign, lookalike):
+        path.write_bytes(b"x")
+    for path in (stray, part, folder, foreign, lookalike):
+        os.utime(path, (old, old))
+    found = sheets.orphan_files(tmp_path, set(), 3600)
+    assert sorted(p.name for p in found) == sorted([stray.name, part.name])
+
+
+@pytest.mark.parametrize("name", ["Ami\nna", "Ami\r\nna", "Ami na", "Ami\tna", " Ami  na\x00"])
+def test_control_characters_in_a_name_cannot_add_lines(name: str) -> None:
+    data = ShareInput.model_validate(
+        {
+            "locale": "en",
+            "unit": "cm",
+            "client_code": "AB1001",
+            "name": name,
+            "profile_version": 1,
+            "captured_on": "2026-10-04",
+            "garment_type": "shirt",
+            "due_date": "2026-11-16",
+            "items": [],
+        }
+    )
+    text = build_share_text(data)
+    assert text.split("\n")[0].endswith(
+        "· Ami na · Profile v1 (4 Oct 2026) · Shirt · Due 16 Nov 2026"
+    )
+    assert len(text.split("\n")) == 2
+    html = sheets.render_html(dataclasses.replace(sample(), name=name))
+    assert ">Ami na<" in html
+
+
+def test_each_render_has_its_own_font_configuration() -> None:
+    assert sheets.font_configuration() is not sheets.font_configuration()
