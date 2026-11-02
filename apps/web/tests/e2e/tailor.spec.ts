@@ -231,3 +231,99 @@ test('sunlight mode at 360 px passes contrast, on every main screen', async ({ p
     await clean(page);
   }
 });
+
+// M10: the sheet, both share paths, the PDF and the 10-minute links (frontend-spec 13.9, F6).
+const SHEET_ORDER = seed.orders.find(
+  (o: { order_no: string; client_code: string }) => o.order_no === 'ORD-0001' && o.client_code === 'AB1001',
+);
+const REAL_API = Boolean(process.env.VT_E2E_REAL_API);
+
+async function openSheet(page: Page, withName: boolean) {
+  await signIn(page);
+  await go(page, `/t/orders/${SHEET_ORDER.order_id}/sheet`);
+  const box = page.getByRole('checkbox', { name: tx.sheetIncludeName });
+  if (withName) await box.check();
+  else await box.uncheck();
+  await page.getByRole('button', { name: tx.sheetGenerate }).click();
+  const preview = page.getByRole('img', { name: tx.sheetPreviewAlt });
+  await expect(preview).toBeVisible();
+  // The real API renders A4 at 150 dpi; the mock serves a one-pixel stand-in.
+  await expect
+    .poll(() => preview.evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .toBe(REAL_API ? 1240 : 1);
+  return preview;
+}
+
+test('a sheet is generated, previewed and shared through the share sheet', async ({ page }) => {
+  await page.addInitScript(() => {
+    const shared: { files: number; type: string; text: string }[] = [];
+    (window as unknown as { __shared: typeof shared }).__shared = shared;
+    Object.defineProperty(navigator, 'canShare', { value: () => true, configurable: true });
+    Object.defineProperty(navigator, 'share', {
+      configurable: true,
+      value: async (data: { files: File[]; text: string }) => {
+        shared.push({ files: data.files.length, type: data.files[0].type, text: data.text });
+      },
+    });
+  });
+  await openSheet(page, true);
+  const text = page.getByTestId('share-text');
+  await page.getByText(tx.sheetShareText).click();
+  await expect(text).toContainText(`Client AB1001 · ${clientOf('AB1001').display_name} ·`);
+  await expect(text).toContainText('No photo is stored.');
+  await clean(page);
+  await page.getByRole('button', { name: tx.sheetShareWhatsApp }).click();
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __shared: unknown[] }).__shared))
+    .toEqual([
+      {
+        files: 1,
+        type: 'image/png',
+        text: (await text.textContent()) ?? '',
+      },
+    ]);
+});
+
+test('without file sharing the picture downloads and WhatsApp opens with the text', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'canShare', { value: undefined, configurable: true });
+  });
+  await page.context().route('https://wa.me/**', (route) =>
+    route.fulfill({ status: 200, contentType: 'text/plain', body: 'whatsapp' }),
+  );
+  await openSheet(page, false);
+  const download = page.waitForEvent('download');
+  const popup = page.waitForEvent('popup');
+  await page.getByRole('button', { name: tx.sheetShareWhatsApp }).click();
+  expect((await download).suggestedFilename()).toMatch(/^sheet-[0-9a-f]{8}\.png$/);
+  const opened = decodeURIComponent(new URL((await popup).url()).searchParams.get('text') ?? '');
+  expect(opened).toMatch(/^Virtual Tailor · Client AB1001 · Profile v\d+ /);
+  expect(opened).not.toContain(clientOf('AB1001').display_name);
+  await expect(page.getByText(tx.sheetAttachHint)).toBeVisible();
+  const pdf = page.waitForEvent('download');
+  await page.getByRole('button', { name: tx.sheetDownloadPdf }).click();
+  expect((await pdf).suggestedFilename()).toMatch(/\.pdf$/);
+});
+
+test('an expired link is replaced by a new sheet without the tailor noticing', async ({ page }) => {
+  test.skip(!REAL_API, 'the mock answers inside its service worker, out of reach of page.route');
+  await openSheet(page, false);
+  let refused = 0;
+  await page.route('**/api/v1/files/sheets/*.pdf*', async (route) => {
+    if (refused++ === 0) {
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/problem+json',
+        body: JSON.stringify({ code: 'sheet_link_invalid' }),
+      });
+    } else await route.continue();
+  });
+  const made = page.waitForRequest((r) => r.method() === 'POST' && r.url().endsWith('/sheets'));
+  const pdf = page.waitForEvent('download');
+  await page.getByRole('button', { name: tx.sheetDownloadPdf }).click();
+  await made;
+  expect((await pdf).suggestedFilename()).toMatch(/\.pdf$/);
+  expect(refused).toBe(2);
+});

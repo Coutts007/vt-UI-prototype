@@ -90,6 +90,10 @@ export interface ApiClient {
   patch<P extends OpsWith<'patch'>>(path: P, options?: RequestOptions<Op<P, 'patch'>>): Promise<Success<Op<P, 'patch'>>>;
   delete<P extends OpsWith<'delete'>>(path: P, options?: RequestOptions<Op<P, 'delete'>>): Promise<Success<Op<P, 'delete'>>>;
   text(path: string, query?: Record<string, string>): Promise<string>;
+  /** Where a signed sheet link (`/api/v1/files/sheets/...`, F6) points, on the API's origin. */
+  sheetFileUrl(signedPath: string): string;
+  /** A server-rendered sheet through its signed link. No sign-in is sent: the signature is the check. */
+  sheetFile(signedPath: string): Promise<Blob>;
   readonly auth: AuthTransport;
 }
 
@@ -164,7 +168,30 @@ export class HttpApiClient implements ApiClient {
     const response = await this.send('GET', path, { query } as any);
     return response.text();
   }
+
+  sheetFileUrl(signedPath: string): string {
+    const relative = signedPath.startsWith(SERVER_PREFIX) ? signedPath.slice(SERVER_PREFIX.length) : signedPath;
+    return new URL(`${this.base}${relative}`, window.location.href).href;
+  }
+
+  async sheetFile(signedPath: string): Promise<Blob> {
+    await this.ready();
+    let response: Response;
+    try {
+      response = await fetch(this.sheetFileUrl(signedPath), { cache: 'no-store', credentials: 'omit' });
+    } catch (error) {
+      throw new NetworkError(String(error));
+    }
+    if (!response.ok) {
+      const problem = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      throw new ApiError(response.status, String(problem.code ?? 'unknown'), problem);
+    }
+    return response.blob();
+  }
 }
+
+/** The API's own path prefix, which signed sheet links carry. */
+const SERVER_PREFIX = '/api/v1';
 
 /** The same client, talking to MSW, which is never in a production build. */
 export class MockApiClient extends HttpApiClient {

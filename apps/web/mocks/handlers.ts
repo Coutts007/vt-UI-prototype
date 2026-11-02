@@ -2,6 +2,7 @@
 import { delay, http, HttpResponse } from 'msw';
 import errorCodes from '../../../packages/contracts/error-codes.json';
 import rulesArtifact from '../../../packages/rules/rules-0.1-uncalibrated.json';
+import { buildShareText } from './shareText';
 import { createDb, MockDb } from './store';
 
 type Row = Record<string, any>;
@@ -18,6 +19,13 @@ type Result = Response | Row | Row[] | null;
 type Handler = (ctx: Ctx) => Result | Promise<Result>;
 
 const BASE = '/api/v1';
+// A 1 x 1 white PNG, so the preview loads in mock mode.
+const MOCK_PNG = Uint8Array.from(
+  atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC'),
+  (c) => c.charCodeAt(0),
+);
+/** The calendar day in Nairobi (UTC+3, no daylight saving). */
+const nairobiDay = (iso: string) => new Date(Date.parse(iso) + 3 * 3600 * 1000).toISOString().slice(0, 10);
 
 export interface MockOptions {
   /** Added latency in ms. Tests pass 0; dev uses 150 to 600 ms. */
@@ -989,19 +997,41 @@ export function createHandlers(options: MockOptions = {}) {
       audit(db, user, 'export', 'sheet', sheetId, 'Generated a sheet');
       const expires = Math.floor(Date.now() / 1000) + 600;
       const sig = '0'.repeat(64);
-      const name = body.include_name && order.display_name ? `${order.display_name} ` : '';
+      const profile = db.profiles.find((p) => p.profile_id === order.profile_id);
+      const share = buildShareText({
+        locale: user!.locale === 'sw' ? 'sw' : 'en',
+        unit: user!.unit_pref === 'in' ? 'in' : 'cm',
+        client_code: order.client_code,
+        name: body.include_name ? (clientById(order.client_id)?.display_name ?? null) : null,
+        profile_version: order.profile_version,
+        captured_on: nairobiDay(profile?.captured_at ?? order.created_at),
+        garment_type: order.garment_type,
+        due_date: order.due_date,
+        items: (order.items as Row[]).map((item) => ({
+          site_code: item.site_code,
+          body_mm: item.body_mm,
+          flag: item.confidence_flag,
+          pending_fitting: Boolean(item.pending_fitting),
+        })),
+      });
       return created({
         sheet_id: sheetId,
         png_url: `${BASE}/files/sheets/${sheetId}.png?exp=${expires}&sig=${sig}`,
         pdf_url: `${BASE}/files/sheets/${sheetId}.pdf?exp=${expires}&sig=${sig}`,
-        share_text: `Virtual Tailor ${order.order_no} ${name}${order.client_code}`,
+        share_text: share,
         generated_at: new Date().toISOString(),
       });
     }),
     route('get', '/files/sheets/:sheet_file', null, ({ params, url }) => {
-      if (Number(url.searchParams.get('exp')) < Date.now() / 1000) return problem('forbidden');
-      const type = params.sheet_file.endsWith('.pdf') ? 'application/pdf' : 'image/png';
-      return new HttpResponse(new Uint8Array([0]), { headers: { 'Content-Type': type } });
+      if (Number(url.searchParams.get('exp')) < Date.now() / 1000) return problem('sheet_link_invalid');
+      const stem = params.sheet_file.split('.')[0];
+      if (!db.sheets.some((s) => s.sheet_id === stem)) return problem('not_found');
+      const pdf = params.sheet_file.endsWith('.pdf');
+      // Stand-ins: the mock does not render. The real sheet comes from the API (M10).
+      const bytes = pdf ? new TextEncoder().encode('%PDF-1.4\n%mock sheet\n%%EOF\n') : MOCK_PNG;
+      return new HttpResponse(bytes, {
+        headers: { 'Content-Type': pdf ? 'application/pdf' : 'image/png', 'Cache-Control': 'no-store' },
+      });
     }),
     route('post', '/sheets/:sheet_id/shares', ['tailor'], ({ user, params, body }) => {
       if (!db.sheets.some((s) => s.sheet_id === params.sheet_id)) return problem('not_found');
