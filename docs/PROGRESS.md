@@ -8,6 +8,7 @@ The newest entry comes first. Every change or improvement adds a line in the sam
 - Reading `/conflicts` writes a `profile_view` row for each side. Superseding the row a conflict waited on makes the other row final and records `conflict_resolve` with the tailor's id; before, it closed the conflict silently and stranded the row.
 - A code review's audit now names each profile, withdrawal (with its date) and request it touched. The deletion banner ends once a request is done or refused. Rotating a code locks the client row.
 - Orders: each flagged row of the garment must be answered, an override must change the value, a row in conflict cannot be ordered on, and a collected order's items are locked. The override reason stays optional, as frontend-spec 13 says.
+- The freeing e2e test no longer fails when the profile list reloads before it looks, so the word appears twice.
 - Profile lists give each row's `claim_round`. When rows from different claims sit side by side, the order form makes the tailor choose instead of defaulting to the newest.
 
 ## 2026-11-02: M9 tailor slice

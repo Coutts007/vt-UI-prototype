@@ -171,7 +171,8 @@ test('freeing a code: the next phone reaches only its own, and the old row waits
 
   await page.getByLabel(tx.claimSupersede).check();
   await page.getByRole('button', { name: tx.claimApply }).click();
-  await expect(page.getByText(tx.statusSuperseded, { exact: false })).toBeVisible();
+  // The claim panel and, once it reloads, the profile list both say so.
+  await expect(page.getByText(tx.statusSuperseded, { exact: false }).first()).toBeVisible();
 
   expect(await uploadAs(page, code, SECRET_B, 2)).toBe(201);
   await go(page, '/t/clients');
