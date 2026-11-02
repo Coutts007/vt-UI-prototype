@@ -60,7 +60,11 @@ test('a tailor registers, is approved, sends a code and the audit log shows it',
   // 5. The tailor's audit log names each step.
   await page.goto('/t/audit');
   await expect(page.getByRole('heading', { name: tx.auditTitle })).toBeVisible();
-  await expect(page.locator('#content')).toContainText(code);
+  // The log names actions, never client codes.
+  await expect(page.getByRole('listitem').filter({ hasText: 'Issued a client code' })).toHaveCount(
+    1,
+  );
+  await expect(page.getByRole('listitem').filter({ hasText: code })).toHaveCount(0);
   await shot(page, '05a-tailor-audit');
 
   await page.goto(link);

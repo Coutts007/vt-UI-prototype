@@ -77,7 +77,7 @@ walkthrough:
 	$(E2E_COMPOSE) exec -T api .venv/bin/vt seed demo
 	mkdir -p docs/integration
 	VT_SHOTS_DIR=$(CURDIR)/docs/integration pnpm --filter @vt/web exec playwright test -c playwright.real-api.config.ts --project real-api; status=$$?; \
-		$(E2E_COMPOSE) run --rm jobs .venv/bin/vt jobs retention --dry-run > docs/integration/retention-dry-run.txt 2>&1 || status=1; \
+		$(E2E_COMPOSE) run --rm jobs .venv/bin/vt jobs retention --dry-run > docs/integration/retention-dry-run.txt 2>/dev/null || status=1; \
 		$(E2E_COMPOSE) down -v; exit $$status
 
 # The production build behind Caddy with rate limits on: headers, CSP and limits as deployed (M12).
