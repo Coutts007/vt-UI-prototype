@@ -67,8 +67,9 @@ test('a tailor registers, is approved, sends a code and the audit log shows it',
   await expect(page.getByRole('listitem').filter({ hasText: code })).toHaveCount(0);
   await shot(page, '05a-tailor-audit');
 
+  // The code fills one box per character, and the app names the tailor it belongs to.
   await page.goto(link);
-  await expect(page.locator('#content')).toContainText(code);
+  await expect(page.locator('#content')).toContainText(`${en.codeFromTailor}: ${business}`);
   await shot(page, '02b-deep-link-opens');
 
   // 5 and 7: the administrator's audit log and deletion requests.
