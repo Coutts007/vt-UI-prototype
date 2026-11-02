@@ -134,7 +134,7 @@ test('the offline banner appears', async ({ page, context }) => {
 
 test('a new order starts from the profile that was chosen', async ({ page }) => {
   await signIn(page, 'wanjiru@vt.test');
-  await page.goto('/t/orders/new?profileId=p-02');
+  await page.goto('/t/orders/new?profileId=2576ae62-107e-5421-bb55-f45661f18284');
   await page.waitForLoadState('networkidle');
-  await expect(page.locator('#neworderview-2')).toHaveValue('p-02');
+  await expect(page.locator('#order-profile')).toHaveValue('2576ae62-107e-5421-bb55-f45661f18284');
 });

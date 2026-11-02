@@ -1,167 +1,144 @@
-import React, { useState, useEffect } from 'react';
-import { useI18n } from '../../i18n';
-import { Order, OrderStatus } from '../../types/api';
-import { api } from '../../api/client';
+import React, { useState } from 'react';
+import { AlertTriangle, ChevronRight, Plus, RefreshCw } from 'lucide-react';
+import { apiClient } from '../../api/instance';
 import { Button } from '../../components/ui/Button';
-import { FlagBadge } from '../../components/ui/FlagBadge';
+import { BottomSheet } from '../../components/ui/feedback';
 import {
-  ClipboardList,
-  Plus,
-  Calendar,
-  AlertTriangle,
-  ChevronRight,
-  FileText,
-  Clock,
-} from 'lucide-react';
+  chipClass,
+  hintClass,
+  inputClass,
+  labelClass,
+  Loading,
+  nairobiToday,
+  OrderStatus,
+  OrderSummary,
+  STATUSES,
+  StaleNote,
+  Title,
+  useDates,
+  useLoad,
+} from './common';
+import { TailorKey, useTailorText } from './tailorText';
 
-interface OrderQueueViewProps {
-  onNavigate: (path: string) => void;
-}
+type Sort = 'due_date' | 'created_at';
+const OPEN: OrderStatus[] = ['new', 'cutting', 'fitting', 'ready'];
 
-export const OrderQueueView: React.FC<OrderQueueViewProps> = ({ onNavigate }) => {
-  const { t } = useI18n();
+export const OrderQueueView: React.FC<{ onNavigate: (path: string) => void }> = ({ onNavigate }) => {
+  const tx = useTailorText();
+  const { date } = useDates();
+  const [status, setStatus] = useState<OrderStatus | null>(null);
+  const [showCollected, setShowCollected] = useState(false);
+  const [sort, setSort] = useState<Sort>('due_date');
+  const [moving, setMoving] = useState<OrderSummary | null>(null);
+  const [error, setError] = useState(false);
 
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [activeTab, setActiveTab] = useState<OrderStatus | 'all'>('all');
-  const [loading, setLoading] = useState(true);
+  const { data, failed, reload, updatedAt } = useLoad(async () => {
+    const page = await apiClient.get('/orders', { query: { page_size: 100, sort } });
+    return page.items;
+  }, [sort]);
 
-  const fetchOrders = async () => {
-    setLoading(true);
+  if (!data) return <Loading failed={failed} onRetry={reload} />;
+  const today = nairobiToday();
+  const visible = data.filter((row) =>
+    status ? row.status === status : showCollected || row.status !== 'collected',
+  );
+  const shownStatuses = showCollected ? STATUSES : OPEN;
+  const count = (name: OrderStatus) => data.filter((row) => row.status === name).length;
+  const statusName = (name: OrderStatus) => tx(`status_${name}` as TailorKey);
+
+  const move = async (order: OrderSummary, next: OrderStatus) => {
+    const backwards = STATUSES.indexOf(next) < STATUSES.indexOf(order.status);
+    if (backwards && !window.confirm(tx('backwardsConfirm', { status: statusName(next) }))) return;
+    setMoving(null);
+    setError(false);
     try {
-      const data = await api.getOrders(activeTab === 'all' ? undefined : activeTab);
-      setOrders(data);
+      await apiClient.patch('/orders/{order_id}', { path: { order_id: order.order_id }, body: { status: next } });
+      await reload();
     } catch {
-      // ignore
-    } finally {
-      setLoading(false);
+      setError(true);
     }
   };
 
-  useEffect(() => {
-    fetchOrders();
-  }, [activeTab]);
-
-  const statuses: { id: OrderStatus | 'all'; label: string }[] = [
-    { id: 'all', label: 'All Orders' },
-    { id: 'new', label: 'New' },
-    { id: 'cutting', label: 'Cutting' },
-    { id: 'fitting', label: 'Fitting' },
-    { id: 'ready', label: 'Ready' },
-    { id: 'collected', label: 'Collected' },
-  ];
-
   return (
-    <div className="flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--vt-ink,#1F1C18)] tracking-tight">
-            {t('orderQueue')}
-          </h1>
-          <p className="text-sm text-[var(--vt-ink-muted,#5C554C)] mt-0.5">
-            Track garment production from measurement intake to collection
-          </p>
+          <Title>{tx('ordersQueue')}</Title>
+          <p className={hintClass}>{tx('ordersIntro')}</p>
         </div>
-
-        <Button
-          onClick={() => onNavigate('/t/orders/new')}
-          icon={<Plus className="w-4 h-4" />}
-          size="md"
-        >
-          {t('newOrder')}
+        <Button onClick={() => onNavigate('/t/orders/new')} icon={<Plus aria-hidden="true" className="w-4 h-4" />}>
+          {tx('newOrder')}
         </Button>
       </div>
-
-      {/* Status Segmented Filter Chips */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-        {statuses.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => setActiveTab(s.id)}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap cursor-pointer transition-colors ${
-              activeTab === s.id
-                ? 'bg-[var(--vt-thread,#2E3A87)] text-white shadow-2xs'
-                : 'bg-white border border-[var(--vt-line,#DDD5C8)] text-[var(--vt-ink-muted,#5C554C)] hover:text-[var(--vt-ink,#1F1C18)]'
-            }`}
-          >
-            {s.label}
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {shownStatuses.map((name) => (
+          <button key={name} type="button" aria-pressed={status === name} className={chipClass(status === name)} onClick={() => setStatus(status === name ? null : name)}>
+            {statusName(name)} ({count(name)})
           </button>
         ))}
       </div>
-
-      {/* Orders List */}
-      {loading ? (
-        <div className="p-12 text-center text-sm text-slate-600">Loading orders queue…</div>
-      ) : orders.length === 0 ? (
-        <div className="p-12 text-center rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white">
-          <ClipboardList className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-          <h2 className="text-base font-bold text-[var(--vt-ink,#1F1C18)] mb-1">
-            No orders in this stage
-          </h2>
-          <p className="text-xs text-[var(--vt-ink-muted,#5C554C)] mb-6">
-            Create an order from a client profile to begin cutting and tailoring.
-          </p>
-          <Button onClick={() => onNavigate('/t/orders/new')} size="sm">
-            {t('newOrder')}
-          </Button>
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label htmlFor="order-sort" className={labelClass}>{tx('sortBy')}</label>
+          <select id="order-sort" value={sort} onChange={(e) => setSort(e.target.value as Sort)} className={inputClass}>
+            <option value="due_date">{tx('sortDue')}</option>
+            <option value="created_at">{tx('sortCreated')}</option>
+          </select>
         </div>
+        <Button variant="outline" onClick={() => { setShowCollected(!showCollected); setStatus(null); }}>
+          {tx(showCollected ? 'hideCollected' : 'showCollected')}
+        </Button>
+      </div>
+      <StaleNote failed={failed} updatedAt={updatedAt} />
+      {error && <p role="alert" className="text-sm text-rose-800">{tx('saveFailed')}</p>}
+      {visible.length === 0 ? (
+        <p className="p-8 text-center text-sm rounded-2xl border border-[var(--vt-line)] bg-white">{tx('queueEmpty')}</p>
       ) : (
-        <div className="grid grid-cols-1 gap-3.5">
-          {orders.map((ord) => {
-            const isOverdue = new Date(ord.due_date) < new Date() && ord.status !== 'collected';
-            const hasFlag = ord.items.some((i) => i.confidence_flag !== 'pass');
-
-            return (
-              <div
-                key={ord.order_id}
-                onClick={() => onNavigate(`/t/orders/${ord.order_id}`)}
-                className="p-5 rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white hover:border-[var(--vt-thread,#2E3A87)] transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs group"
-              >
-                <div>
-                  <div className="flex items-center gap-3 mb-1">
-                    <span className="font-mono font-bold text-base text-[var(--vt-thread,#2E3A87)]">
-                      {ord.order_no}
-                    </span>
-                    <span className="text-sm font-bold text-[var(--vt-ink,#1F1C18)] capitalize">
-                      {ord.garment_type.replace('_', ' ')}
-                    </span>
-                    <span className="text-xs text-[var(--vt-ink-muted,#5C554C)]">
-                      · {ord.client_code} ({ord.display_name || 'Anonymous'})
-                    </span>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--vt-ink-muted,#5C554C)]">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 text-slate-600" />
-                      <span>Due: {ord.due_date}</span>
-                    </span>
-
-                    {isOverdue && (
-                      <span className="text-rose-700 bg-rose-50 px-2 py-0.5 rounded font-bold border border-rose-200">
-                        Overdue
-                      </span>
-                    )}
-
-                    {hasFlag && (
-                      <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded font-semibold border border-amber-200 flex items-center gap-1">
-                        <AlertTriangle className="w-3 h-3" />
-                        1 Flagged Site
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 self-end sm:self-center">
-                  <span className="text-xs uppercase font-bold tracking-wider px-3 py-1 rounded-lg bg-[#FAF8F5] border border-[var(--vt-line,#DDD5C8)] text-[var(--vt-ink,#1F1C18)]">
-                    {ord.status}
+        <ul className="flex flex-col gap-2">
+          {visible.map((row) => (
+            <li key={row.order_id} className="p-4 rounded-xl border border-[var(--vt-line)] bg-white flex flex-col gap-2">
+              <button type="button" className="text-left cursor-pointer flex items-center justify-between gap-2 min-h-[48px]" onClick={() => onNavigate(`/t/orders/${row.order_id}`)}>
+                <span>
+                  <span className="font-mono font-bold">{row.order_no}</span> · {tx(`garment_${row.garment_type}` as TailorKey)} · <span className="font-mono">{row.client_code}</span>
+                  {row.display_name ? ` (${row.display_name})` : ''}
+                  <span className={`block ${hintClass}`}>
+                    {tx('dueOn', { date: date(row.due_date) })} · {tx('profileVersion', { version: row.profile_version })} · {statusName(row.status)}
                   </span>
-                  <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-[var(--vt-thread,#2E3A87)] transition-colors" />
-                </div>
+                </span>
+                <ChevronRight aria-hidden="true" className="w-5 h-5 shrink-0" />
+              </button>
+              <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                {row.due_date < today && row.status !== 'collected' && <span className="text-rose-800">{tx('overdue')}</span>}
+                {row.flagged_sites > 0 && (
+                  <span className="inline-flex items-center gap-1 text-amber-800">
+                    <AlertTriangle aria-hidden="true" className="w-3 h-3" />
+                    {tx('flaggedSites', { count: row.flagged_sites })}
+                  </span>
+                )}
+                {row.has_conflict && (
+                  <span className="inline-flex items-center gap-1 text-sky-800">
+                    <RefreshCw aria-hidden="true" className="w-3 h-3" />
+                    {tx('queueConflict')}
+                  </span>
+                )}
               </div>
-            );
-          })}
-        </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => onNavigate(`/t/orders/${row.order_id}/sheet`)}>{tx('sheet')}</Button>
+                <Button size="sm" variant="outline" onClick={() => setMoving(row)}>{tx('changeStatus')}</Button>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
+      <BottomSheet open={moving !== null} title={tx('changeStatus')} onClose={() => setMoving(null)}>
+        <div className="flex flex-col gap-2">
+          {STATUSES.map((name) => (
+            <Button key={name} variant={moving?.status === name ? 'primary' : 'outline'} onClick={() => moving && void move(moving, name)}>
+              {statusName(name)}
+            </Button>
+          ))}
+        </div>
+      </BottomSheet>
     </div>
   );
 };

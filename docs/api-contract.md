@@ -68,6 +68,9 @@ The tailor directory (D27) is behind the web switch `VITE_FEATURE_DIRECTORY` and
 | `PATCH /clients/{client_id}` | Changes the display name or height. Audited |
 | `DELETE /clients/{client_id}` | Marks the client for deletion at once, and a nightly job removes the rows. Refused while active orders exist (`client_has_orders`), and for collected orders or a study participant (`client_records_retained`), which leave only through the retention job. Audited |
 | `POST /clients/{client_id}/rotate-code` | Replaces a code, and the old one stops working. Audited |
+| `GET /clients/{client_id}/claim` | Shows a tailor whether a phone holds the code, and what was done under each claim: profiles, withdrawals and deletion requests, including any that wiped the name and height (D45). |
+| `POST /clients/{client_id}/claim/free` | Frees the code so a client on a new phone can claim it. The next phone can read and delete only what it uploads itself. Nothing stored changes. |
+| `POST /clients/{client_id}/claim/review` | On a freed code, does only what the tailor names: supersede profiles, clear withdrawals, close deletion requests. Never automatic. |
 | `GET /clients/{client_id}/profiles` | Lists a client's profiles, newest first |
 | `GET /profiles/{profile_id}` | Reads one full profile. Every view is audited |
 | `GET /conflicts` | Lists cases where a phone sent a different version from the one stored, showing both |

@@ -152,6 +152,8 @@ class Client(Base):
     created_at: Mapped[datetime] = now()
     # The hash of the phone's secret, set by the first accepted upload (D45).
     secret_hash: Mapped[str | None] = mapped_column(String(64))
+    # Goes up each time a tailor frees the code. A phone reaches only its own round (D45).
+    claim_round: Mapped[int] = mapped_column(Integer, server_default="0", default=0)
     deleted_at: Mapped[datetime | None] = stamp()
     previous_code: Mapped[str | None] = mapped_column(String(6))
     source: Mapped[str] = mapped_column(String(10), server_default="tailor")
@@ -168,6 +170,7 @@ class Consent(Base):
     source: Mapped[str] = mapped_column(String(12), server_default="app")
     given_at: Mapped[datetime] = stamp(nullable=False)
     withdrawn_at: Mapped[datetime | None] = stamp()
+    claim_round: Mapped[int] = mapped_column(Integer, server_default="0", default=0)
 
 
 class Participant(Base):
@@ -267,6 +270,7 @@ class MeasurementProfile(Base):
     covariates: Mapped[dict[str, Any]] = mapped_column(JSONB)
     payload_sha256: Mapped[str] = mapped_column(String(64))
     received_at: Mapped[datetime] = now()
+    claim_round: Mapped[int] = mapped_column(Integer, server_default="0", default=0)
 
 
 class Measurement(Base):

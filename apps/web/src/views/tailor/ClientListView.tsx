@@ -1,154 +1,165 @@
-import React, { useState, useEffect } from 'react';
-import { useI18n } from '../../i18n';
-import { ClientRecord } from '../../types/api';
-import { api } from '../../api/client';
+import React, { useEffect, useState } from 'react';
+import { AlertTriangle, ChevronRight, Plus, RefreshCw } from 'lucide-react';
+import { apiClient } from '../../api/instance';
 import { Button } from '../../components/ui/Button';
-import { Search, Plus, User, AlertTriangle, Layers, ChevronRight, RefreshCw } from 'lucide-react';
+import {
+  chipClass,
+  ClientSummary,
+  hintClass,
+  inputClass,
+  labelClass,
+  Loading,
+  rowClass,
+  StaleNote,
+  Title,
+  useDates,
+  useLoad,
+} from './common';
+import { useTailorText } from './tailorText';
 
-interface ClientListViewProps {
-  onNavigate: (path: string) => void;
-}
+type Filter = 'has_new' | 'has_flags' | 'no_profiles';
+type Sort = 'last_capture' | 'code' | 'name';
+const PAGE_SIZE = 25;
 
-export const ClientListView: React.FC<ClientListViewProps> = ({ onNavigate }) => {
-  const { t } = useI18n();
-
-  const [clients, setClients] = useState<ClientRecord[]>([]);
+export const ClientListView: React.FC<{ onNavigate: (path: string) => void }> = ({ onNavigate }) => {
+  const tx = useTailorText();
+  const { date } = useDates();
+  const [typed, setTyped] = useState('');
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'flags' | 'conflicts' | 'no_measurements'>('all');
-  const [loading, setLoading] = useState(true);
-
-  const fetchClients = async () => {
-    setLoading(true);
-    try {
-      const data = await api.getClients(search, filter);
-      setClients(data);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [filter, setFilter] = useState<Filter | undefined>();
+  const [sort, setSort] = useState<Sort>('last_capture');
+  const [pages, setPages] = useState(1);
 
   useEffect(() => {
-    fetchClients();
-  }, [search, filter]);
+    const timer = setTimeout(() => {
+      setSearch(typed.trim());
+      setPages(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [typed]);
+
+  const { data, failed, reload, updatedAt } = useLoad(
+    () =>
+      apiClient.get('/clients', {
+        query: { search: search || undefined, filter, sort, page: 1, page_size: PAGE_SIZE * pages },
+      }),
+    [search, filter, sort, pages],
+  );
+
+  const filters: [Filter | undefined, string][] = [
+    [undefined, tx('filterAll')],
+    ['has_new', tx('filterHasNew')],
+    ['has_flags', tx('filterHasFlags')],
+    ['no_profiles', tx('filterNoProfiles')],
+  ];
+  const rows: ClientSummary[] = data?.items ?? [];
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--vt-ink,#1F1C18)] tracking-tight">
-            {t('clientList')}
-          </h1>
-          <p className="text-sm text-[var(--vt-ink-muted,#5C554C)] mt-0.5">
-            Manage your tailoring clients, issued codes, and body measurement profiles
-          </p>
+          <Title>{tx('clientsTitle')}</Title>
+          <p className={hintClass}>{tx('clientsIntro')}</p>
         </div>
-
-        <Button
-          onClick={() => onNavigate('/t/clients/new')}
-          icon={<Plus className="w-4 h-4" />}
-          size="md"
-        >
-          {t('issueNewCode')}
+        <Button onClick={() => onNavigate('/t/clients/new')} icon={<Plus aria-hidden="true" className="w-4 h-4" />}>
+          {tx('newCode')}
         </Button>
       </div>
 
-      {/* Search & Filter Strip */}
-      <div className="flex flex-col sm:flex-row items-center gap-3">
-        <div className="relative flex-1 w-full">
-          <Search className="w-4 h-4 text-slate-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+      <div className="grid sm:grid-cols-[1fr_auto] gap-3">
+        <div>
+          <label htmlFor="client-search" className={labelClass}>
+            {tx('searchClients')}
+          </label>
           <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by code (e.g. AB1234) or client name…"
-            className="w-full h-12 pl-10 pr-4 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-white text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)]"
+            id="client-search"
+            type="search"
+            maxLength={60}
+            value={typed}
+            onChange={(event) => setTyped(event.target.value)}
+            className={inputClass}
           />
         </div>
-
-        <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-          {[
-            { id: 'all', label: 'All Clients' },
-            { id: 'flags', label: 'Has Flags' },
-            { id: 'conflicts', label: 'Conflicts' },
-            { id: 'no_measurements', label: 'No Profiles' },
-          ].map((f) => (
-            <button
-              key={f.id}
-              onClick={() => setFilter(f.id as any)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap cursor-pointer transition-colors ${
-                filter === f.id
-                  ? 'bg-[var(--vt-thread,#2E3A87)] text-white shadow-2xs'
-                  : 'bg-white border border-[var(--vt-line,#DDD5C8)] text-[var(--vt-ink-muted,#5C554C)] hover:text-[var(--vt-ink,#1F1C18)]'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+        <div>
+          <label htmlFor="client-sort" className={labelClass}>
+            {tx('sortBy')}
+          </label>
+          <select
+            id="client-sort"
+            value={sort}
+            onChange={(event) => setSort(event.target.value as Sort)}
+            className={inputClass}
+          >
+            <option value="last_capture">{tx('sortLastCapture')}</option>
+            <option value="code">{tx('sortCode')}</option>
+            <option value="name">{tx('sortName')}</option>
+          </select>
         </div>
       </div>
 
-      {/* Clients Table / Cards */}
-      {loading ? (
-        <div className="p-12 text-center text-sm text-slate-600">Loading clients…</div>
-      ) : clients.length === 0 ? (
-        <div className="p-12 text-center rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white">
-          <User className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-          <h2 className="text-base font-bold text-[var(--vt-ink,#1F1C18)] mb-1">No clients found</h2>
-          <p className="text-xs text-[var(--vt-ink-muted,#5C554C)] mb-6">
-            Issue a client code and send it on WhatsApp to get started.
-          </p>
-          <Button onClick={() => onNavigate('/t/clients/new')} size="sm">
-            {t('issueNewCode')}
-          </Button>
-        </div>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {filters.map(([id, label]) => (
+          <button
+            key={label}
+            type="button"
+            aria-pressed={filter === id}
+            onClick={() => {
+              setFilter(id);
+              setPages(1);
+            }}
+            className={chipClass(filter === id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <StaleNote failed={failed} updatedAt={updatedAt} />
+      {!data ? (
+        <Loading failed={failed} onRetry={reload} />
+      ) : rows.length === 0 ? (
+        <p className="p-8 text-center text-sm rounded-2xl border border-[var(--vt-line)] bg-white">
+          {search || filter ? tx('clientsNoMatch') : tx('clientsEmpty')}
+        </p>
       ) : (
-        <div className="grid grid-cols-1 gap-3">
-          {clients.map((c) => (
-            <div
-              key={c.client_id}
-              onClick={() => onNavigate(`/t/clients/${c.client_id}`)}
-              className="p-4 sm:p-5 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-white hover:border-[var(--vt-thread,#2E3A87)] transition-all cursor-pointer flex items-center justify-between shadow-2xs group"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6">
-                <div>
-                  <span className="font-mono font-bold text-lg text-[var(--vt-thread,#2E3A87)]">
-                    {c.client_code}
+        <ul className="flex flex-col gap-2">
+          {rows.map((row) => (
+            <li key={row.client_id}>
+              <button type="button" onClick={() => onNavigate(`/t/clients/${row.client_id}`)} className={rowClass}>
+                <span className="min-w-0">
+                  <span className="font-mono font-bold text-lg text-[var(--vt-thread)] mr-2">{row.client_code}</span>
+                  <span className="text-sm font-semibold">{row.display_name || tx('anonymous')}</span>
+                  <span className={`block ${hintClass}`}>
+                    {row.last_capture_at ? tx('lastCapture', { date: date(row.last_capture_at) }) : tx('noCapture')}
+                    {' · '}
+                    {tx('openOrders', { count: row.open_orders })}
                   </span>
-                  <span className="text-sm font-semibold text-[var(--vt-ink,#1F1C18)] block sm:inline sm:ml-3">
-                    {c.display_name || '— (Anonymous)'}
+                  <span className="flex flex-wrap gap-2 mt-1 text-xs font-semibold">
+                    {row.flag_counts && row.flag_counts.check + row.flag_counts.fail > 0 && (
+                      <span className="inline-flex items-center gap-1 text-amber-800">
+                        <AlertTriangle aria-hidden="true" className="w-3 h-3" />
+                        {tx('flagsSummary', { check: row.flag_counts.check, fail: row.flag_counts.fail })}
+                      </span>
+                    )}
+                    {row.has_new && <span className="text-emerald-800">{tx('newMeasurements')}</span>}
+                    {row.has_conflict && (
+                      <span className="inline-flex items-center gap-1 text-sky-800">
+                        <RefreshCw aria-hidden="true" className="w-3 h-3" />
+                        {tx('conflictTag')}
+                      </span>
+                    )}
                   </span>
-                </div>
-
-                <div className="flex items-center gap-3 text-xs text-[var(--vt-ink-muted,#5C554C)]">
-                  <span>
-                    Profiles: <strong>{c.profiles_count}</strong>
-                  </span>
-                  <span>·</span>
-                  <span>
-                    Active orders: <strong>{c.open_orders_count}</strong>
-                  </span>
-                  {c.has_flags && (
-                    <span className="inline-flex items-center gap-1 text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                      <AlertTriangle className="w-3 h-3" />
-                      Flags
-                    </span>
-                  )}
-                  {c.sync_conflict && (
-                    <span className="inline-flex items-center gap-1 text-sky-700 font-semibold bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
-                      <RefreshCw className="w-3 h-3" />
-                      Conflict
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-[var(--vt-thread,#2E3A87)] transition-colors shrink-0" />
-            </div>
+                </span>
+                <ChevronRight aria-hidden="true" className="w-5 h-5 shrink-0" />
+              </button>
+            </li>
           ))}
-        </div>
+        </ul>
+      )}
+      {data && data.total > rows.length && (
+        <Button variant="outline" onClick={() => setPages((count) => count + 1)}>
+          {tx('loadMore')}
+        </Button>
       )}
     </div>
   );

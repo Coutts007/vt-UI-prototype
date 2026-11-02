@@ -1,203 +1,132 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { useI18n } from '../../i18n';
-import { api } from '../../api/client';
-import { ClientRecord } from '../../types/api';
+import { Check, Copy, Printer, Share2 } from 'lucide-react';
+import { apiClient } from '../../api/instance';
 import { Button } from '../../components/ui/Button';
-import { NumberInput } from '../../components/ui/NumberInput';
-import {
-  Share2,
-  Copy,
-  Printer,
-  Check,
-  ChevronLeft,
-  Sparkles,
-  QrCode as QrIcon,
-} from 'lucide-react';
+import { BackLink, Card, hintClass, inputClass, labelClass, Title } from './common';
+import { useTailorText } from './tailorText';
 
-interface NewClientCodeViewProps {
-  onNavigate: (path: string) => void;
+interface Issued {
+  client_code: string;
+  deep_link: string;
+  display_name: string;
 }
 
-export const NewClientCodeView: React.FC<NewClientCodeViewProps> = ({ onNavigate }) => {
-  const { locale, t } = useI18n();
-
-  const [displayName, setDisplayName] = useState('');
-  const [height, setHeight] = useState<number>(0);
-  const [issuedClient, setIssuedClient] = useState<ClientRecord | null>(null);
+export const NewClientCodeView: React.FC<{ onNavigate: (path: string) => void }> = ({ onNavigate }) => {
+  const tx = useTailorText();
+  const [name, setName] = useState('');
+  const [height, setHeight] = useState('');
+  const [issued, setIssued] = useState<Issued | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const canvas = useRef<HTMLCanvasElement>(null);
 
-  const qrCanvasRef = useRef<HTMLCanvasElement>(null);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      const client = await api.issueClientCode({
-        display_name: displayName.trim() || undefined,
-        height_mm: height > 0 ? Math.round(height * 10) : undefined,
-      });
-      setIssuedClient(client);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const deepLink = issuedClient
-    ? `${window.location.origin}/start?code=${issuedClient.client_code}`
-    : '';
+  const centimetres = height.trim() ? Number(height) : null;
+  const badHeight = centimetres !== null && !(centimetres >= 120 && centimetres <= 220);
+  const link = issued ? `${window.location.origin}${issued.deep_link}` : '';
+  const message = issued ? tx('codeMessage', { link, code: issued.client_code }) : '';
 
   useEffect(() => {
-    if (issuedClient && qrCanvasRef.current) {
-      QRCode.toCanvas(
-        qrCanvasRef.current,
-        deepLink,
-        { width: 140, margin: 1, color: { dark: '#1F1C18', light: '#FFFFFF' } },
-        () => {}
-      );
-    }
-  }, [issuedClient, deepLink]);
+    if (issued && canvas.current) void QRCode.toCanvas(canvas.current, link, { width: 160, margin: 1 });
+  }, [issued, link]);
 
-  const shareText = issuedClient
-    ? `Hello! Please measure yourself for your order with Virtual Tailor: ${deepLink}\nYour code is ${issuedClient.client_code}.\nYou will need: fitted clothes, a measuring sheet, and a chair. Photos stay on your phone.`
-    : '';
-
-  const handleShareWhatsApp = () => {
-    if (typeof navigator !== 'undefined' && navigator.share) {
-      navigator.share({ text: shareText }).catch(() => {});
-    } else {
-      window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank', 'noopener,noreferrer');
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (badHeight) return;
+    setBusy(true);
+    setFailed(false);
+    try {
+      const reply = await apiClient.post('/clients', {
+        body: {
+          display_name: name.trim() || null,
+          height_mm: centimetres === null ? null : Math.round(centimetres * 10),
+        },
+      });
+      setIssued({ client_code: reply.client_code, deep_link: reply.deep_link, display_name: name.trim() });
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
     }
   };
 
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(deepLink).then(() => {
+  const share = () => {
+    if (navigator.share) void navigator.share({ text: message }).catch(() => undefined);
+    else window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+  };
+
+  const copy = () =>
+    void navigator.clipboard.writeText(link).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
-  };
 
   return (
-    <div className="max-w-xl mx-auto px-4 py-6">
-      <button
-        onClick={() => onNavigate('/t/clients')}
-        className="text-xs text-[var(--vt-ink-muted,#5C554C)] hover:text-[var(--vt-ink,#1F1C18)] flex items-center gap-1 mb-4 cursor-pointer font-medium"
-      >
-        <ChevronLeft className="w-4 h-4" />
-        <span>Back to clients</span>
-      </button>
-
-      <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--vt-ink,#1F1C18)] tracking-tight mb-2">
-        {t('issueNewCode')}
-      </h1>
-      <p className="text-sm text-[var(--vt-ink-muted,#5C554C)] mb-6">
-        Generate a unique 6-character client code to send to your tailoring customer on WhatsApp.
-      </p>
-
-      {!issuedClient ? (
-        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-          <div className="p-5 rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white shadow-2xs space-y-4">
+    <div className="max-w-xl mx-auto flex flex-col gap-4">
+      <BackLink onClick={() => onNavigate('/t/clients')} label={tx('codeBackToList')} />
+      <Title>{tx('codeTitle')}</Title>
+      {!issued ? (
+        <form onSubmit={submit} className="flex flex-col gap-4">
+          <Card>
             <div>
-              <label className="text-sm font-bold text-[var(--vt-ink,#1F1C18)] block mb-1">
-                Client Display Name (Optional)
+              <label htmlFor="code-name" className={labelClass}>
+                {tx('codeNameLabel')}
               </label>
-              <span className="text-xs text-[var(--vt-ink-muted,#5C554C)] block mb-2">
-                Only you see this name in your workshop records. Leave blank for full anonymity.
-              </span>
               <input
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="e.g. Amina Mohamed"
-                className="w-full h-12 px-4 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-white text-sm outline-none focus:border-[var(--vt-thread,#2E3A87)]"
+                id="code-name"
+                maxLength={60}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                className={inputClass}
               />
+              <p className={hintClass}>{tx('codeNameHint')}</p>
             </div>
-
             <div>
-              <label className="text-sm font-bold text-[var(--vt-ink,#1F1C18)] block mb-1">
-                Measured Stature / Height in cm (Optional)
+              <label htmlFor="code-height" className={labelClass}>
+                {tx('codeHeightLabel')}
               </label>
-              <span className="text-xs text-[var(--vt-ink-muted,#5C554C)] block mb-2">
-                If the client is present in your workshop, measure barefoot against a wall.
-              </span>
-              <NumberInput
+              <input
+                id="code-height"
+                inputMode="decimal"
                 value={height}
-                onChange={(val) => setHeight(val)}
-                min={120}
-                max={220}
-                unit="cm"
-                placeholder="e.g. 170"
+                aria-invalid={badHeight}
+                onChange={(event) => setHeight(event.target.value)}
+                className={inputClass}
               />
+              <p className={hintClass}>{tx('codeHeightHint')}</p>
             </div>
-          </div>
-
-          <Button type="submit" size="xl" loading={loading} className="w-full">
-            Generate Client Code
+          </Card>
+          {failed && <p role="alert" className="text-sm text-rose-800">{tx('saveFailed')}</p>}
+          <Button type="submit" size="xl" loading={busy} disabled={badHeight} className="w-full">
+            {tx('codeSubmit')}
           </Button>
         </form>
       ) : (
-        /* Issued Share Card */
-        <div className="flex flex-col items-center gap-6">
-          <div className="w-full p-6 sm:p-8 rounded-2xl border-2 border-[var(--vt-thread,#2E3A87)] bg-white text-center shadow-lg">
-            <span className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-2">
-              Client Code Generated
-            </span>
-
-            <div className="text-4xl sm:text-5xl font-mono font-black text-[var(--vt-thread,#2E3A87)] tracking-wider mb-2">
-              {issuedClient.client_code}
+        <div className="flex flex-col gap-4 items-stretch">
+          <Card>
+            <div className="text-center">
+              <p className={hintClass}>{tx('codeReady')}</p>
+              <p data-testid="issued-code" className="text-5xl font-mono font-black tracking-wider text-[var(--vt-thread)]">
+                {issued.client_code}
+              </p>
+              {issued.display_name && <p className="font-semibold">{issued.display_name}</p>}
+              <canvas ref={canvas} role="img" aria-label={tx('codeQr')} className="mx-auto mt-3" />
             </div>
-
-            {issuedClient.display_name && (
-              <span className="text-base font-semibold text-[var(--vt-ink,#1F1C18)] block mb-4">
-                {issuedClient.display_name}
-              </span>
-            )}
-
-            {/* QR Code Canvas */}
-            <div className="p-3 bg-[#FAF8F5] border border-[var(--vt-line,#DDD5C8)] rounded-xl inline-block mb-4">
-              <canvas ref={qrCanvasRef} className="rounded-md" />
-              <span className="text-[10px] font-mono text-[var(--vt-ink-muted,#5C554C)] mt-1 block">
-                Scan to measure
-              </span>
-            </div>
-
-            <p className="text-xs text-[var(--vt-ink-muted,#5C554C)] max-w-sm mx-auto leading-relaxed">
-              Send this code and link to your customer on WhatsApp so they can measure themselves from home.
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full">
-            <Button
-              onClick={handleShareWhatsApp}
-              size="lg"
-              icon={<Share2 className="w-4 h-4 text-emerald-300" />}
-              className="w-full sm:flex-1"
-            >
-              Send on WhatsApp
-            </Button>
-
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={handleCopyLink}
-              icon={copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-              className="w-full sm:w-auto"
-            >
-              {copied ? 'Copied!' : 'Copy link'}
-            </Button>
-          </div>
-
+          </Card>
+          <Button size="lg" onClick={share} icon={<Share2 aria-hidden="true" className="w-4 h-4" />}>
+            {tx('codeSend')}
+          </Button>
           <Button
-            variant="text"
-            size="sm"
-            onClick={() => onNavigate('/t/clients')}
-            className="text-xs"
+            size="lg"
+            variant="outline"
+            onClick={copy}
+            icon={copied ? <Check aria-hidden="true" className="w-4 h-4" /> : <Copy aria-hidden="true" className="w-4 h-4" />}
           >
-            Back to Client List
+            {copied ? tx('codeCopied') : tx('codeCopy')}
+          </Button>
+          <Button size="lg" variant="outline" onClick={() => window.print()} icon={<Printer aria-hidden="true" className="w-4 h-4" />}>
+            {tx('codePrint')}
           </Button>
         </div>
       )}

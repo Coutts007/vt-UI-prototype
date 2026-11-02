@@ -1,80 +1,228 @@
 import React, { lazy, Suspense, useState } from 'react';
-import { FEATURE_DIRECTORY } from '../../config/features';
+import { LogOut } from 'lucide-react';
+import { ApiError } from '../../api/http';
+import { apiClient } from '../../api/instance';
+import { APP_VERSION } from '../../appVersion';
+import { Button } from '../../components/ui/Button';
 import { useI18n } from '../../i18n';
 import { UserAccount } from '../../types/api';
-import { api } from '../../api/client';
-import { Button } from '../../components/ui/Button';
-import { LogOut, Check } from 'lucide-react';
-
-interface TailorSettingsViewProps {
-  currentUser: UserAccount;
-  onNavigate: (path: string) => void;
-  onLogout: () => void;
-}
+import {
+  ALL_SITES,
+  applySunlight,
+  readSunlight,
+  Card,
+  chipClass,
+  EasePreset,
+  GARMENT_SITES,
+  GARMENTS,
+  GarmentType,
+  hintClass,
+  inputClass,
+  labelClass,
+  SiteCode,
+  Title,
+  toMm,
+  toUnit,
+  Unit,
+  useLoad,
+} from './common';
+import { TailorKey, useTailorText } from './tailorText';
+import type { TranslationKey } from '../../i18n/en';
 
 // Loaded only when the directory is on, so a switched-off build carries none of it (D27).
 const Listing = __VT_DIRECTORY__
   ? lazy(() => import('./DirectoryListingPanel').then((m) => ({ default: m.DirectoryListingPanel })))
   : null;
 
-export const TailorSettingsView: React.FC<TailorSettingsViewProps> = ({
-  currentUser,
-  onNavigate,
-  onLogout,
-}) => {
-  const { locale, setLocale, t } = useI18n();
+const NAME_DEFAULT_KEY = 'vt_sheet_include_name';
+const presetKey = (garment: GarmentType, site: SiteCode) => `${garment}:${site}`;
 
-  const [unitPref, setUnitPref] = useState<'cm' | 'in'>(currentUser.unit_pref || 'cm');
-  const [businessName, setBusinessName] = useState(currentUser.business_name || '');
-  const [phone, setPhone] = useState(currentUser.phone || '');
-  const [area, setArea] = useState(currentUser.area || '');
-  const [address, setAddress] = useState(currentUser.address || '');
-  const [saving, setSaving] = useState(false);
-  const [savedNotice, setSavedNotice] = useState(false);
-
-  const handleSave = async () => {
-    setSaving(true);
+export const TailorSettingsView: React.FC<{
+  currentUser: UserAccount;
+  onNavigate: (path: string) => void;
+  onLogout: () => void;
+}> = ({ currentUser, onNavigate, onLogout }) => {
+  const tx = useTailorText();
+  const { t, locale, setLocale } = useI18n();
+  const [unit, setUnit] = useState<Unit>(currentUser.unit_pref ?? 'cm');
+  const [business, setBusiness] = useState(currentUser.business_name ?? '');
+  const [phone, setPhone] = useState(currentUser.phone ?? '');
+  const [area, setArea] = useState(currentUser.area ?? '');
+  const [status, setStatus] = useState<TailorKey | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [passwordStatus, setPasswordStatus] = useState<TailorKey | null>(null);
+  const [garment, setGarment] = useState<GarmentType>('shirt');
+  const [typed, setTyped] = useState<Record<string, string>>({});
+  const [presetStatus, setPresetStatus] = useState<TailorKey | null>(null);
+  const [sunlight, setSunlight] = useState(readSunlight);
+  const [nameDefault, setNameDefault] = useState(() => {
     try {
-      await api.updateTailorPublicProfile(currentUser.user_id, {
-        unit_pref: unitPref,
-        business_name: businessName,
-        phone,
-        area,
-        address,
-      });
-
-      currentUser.unit_pref = unitPref;
-      currentUser.business_name = businessName;
-      currentUser.phone = phone;
-      currentUser.area = area;
-      currentUser.address = address;
-
-      setSavedNotice(true);
-      setTimeout(() => setSavedNotice(false), 2500);
+      return localStorage.getItem(NAME_DEFAULT_KEY) === '1';
     } catch {
-      // ignore
+      return false;
+    }
+  });
+
+  const presets = useLoad(() => apiClient.get('/me/ease-presets'), []);
+  const settings = useLoad(() => apiClient.get('/settings/public'), []);
+  const saved = (g: GarmentType, s: SiteCode) =>
+    presets.data?.find((row) => row.garment_type === g && row.site_code === s)?.ease_mm;
+
+  const saveSettings = async () => {
+    setBusy(true);
+    setStatus(null);
+    try {
+      const user = await apiClient.patch('/me', {
+        body: { business_name: business, phone, area, unit_pref: unit, locale },
+      });
+      sessionStorage.setItem('vt_session_user', JSON.stringify(user));
+      setStatus('saved');
+    } catch (problem) {
+      setStatus(problem instanceof ApiError && problem.code === 'validation_failed' ? 'phoneInvalid' : 'saveFailed');
     } finally {
-      setSaving(false);
+      setBusy(false);
+    }
+  };
+
+  const changePassword = async () => {
+    setPasswordStatus(null);
+    try {
+      await apiClient.post('/me/password', { body: { current_password: current, new_password: next } });
+      setPasswordStatus('passwordChanged');
+      onLogout();
+    } catch (problem) {
+      setPasswordStatus(problem instanceof ApiError && problem.code === 'invalid_credentials' ? 'passwordWrong' : 'saveFailed');
+    }
+  };
+
+  const savePresets = async () => {
+    const rows: EasePreset[] = [];
+    for (const g of GARMENTS) {
+      for (const s of ALL_SITES) {
+        const key = presetKey(g, s);
+        const text = typed[key];
+        const value = text === undefined ? saved(g, s) : text.trim() === '' ? undefined : toMm(Number(text), unit);
+        if (value === undefined) continue;
+        if (!Number.isFinite(value) || value < 0 || value > 300) {
+          setPresetStatus('easeRange');
+          return;
+        }
+        rows.push({ garment_type: g, site_code: s, ease_mm: value });
+      }
+    }
+    setPresetStatus(null);
+    try {
+      presets.setData(await apiClient.put('/me/ease-presets', { body: rows }));
+      setTyped({});
+      setPresetStatus('saved');
+    } catch {
+      setPresetStatus('saveFailed');
+    }
+  };
+
+  const toggleNameDefault = (value: boolean) => {
+    setNameDefault(value);
+    try {
+      localStorage.setItem(NAME_DEFAULT_KEY, value ? '1' : '0');
+    } catch {
+      // A preference only: the sheet still asks each time.
     }
   };
 
   return (
-    <div className="flex flex-col gap-6 max-w-3xl mx-auto pb-12">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--vt-ink,#1F1C18)] tracking-tight">
-          {t('dashboardSettings')}
-        </h1>
-        <p className="text-sm text-[var(--vt-ink-muted,#5C554C)] mt-0.5">
-          Measurement preferences and workshop information
-        </p>
-      </div>
-
-      {savedNotice && (
-        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-semibold flex items-center gap-2">
-          <Check className="w-4 h-4 text-emerald-600" />
-          <span>Workshop settings updated successfully.</span>
+    <div className="flex flex-col gap-4 max-w-2xl mx-auto">
+      <Title>{tx('settingsTitle')}</Title>
+      <Card>
+        <div>
+          <span className={labelClass}>{tx('languageLabel')}</span>
+          <div className="flex gap-2">
+            <button type="button" aria-pressed={locale === 'en'} className={chipClass(locale === 'en')} onClick={() => setLocale('en')}>English</button>
+            <button type="button" aria-pressed={locale === 'sw'} className={chipClass(locale === 'sw')} onClick={() => setLocale('sw')}>Kiswahili</button>
+          </div>
         </div>
-      )}
+        <div>
+          <span className={labelClass}>{tx('unitsLabel')}</span>
+          <div className="flex gap-2">
+            <button type="button" aria-pressed={unit === 'cm'} className={chipClass(unit === 'cm')} onClick={() => setUnit('cm')}>{tx('unitCm')}</button>
+            <button type="button" aria-pressed={unit === 'in'} className={chipClass(unit === 'in')} onClick={() => setUnit('in')}>{tx('unitIn')}</button>
+          </div>
+        </div>
+        <label className="flex items-center gap-2 min-h-[48px] text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            className="w-5 h-5"
+            checked={sunlight}
+            onChange={(e) => {
+              setSunlight(e.target.checked);
+              applySunlight(e.target.checked, true);
+            }}
+          />
+          {tx('sunlightMode')}
+        </label>
+        <div>
+          <label htmlFor="set-business" className={labelClass}>{tx('businessLabel')}</label>
+          <input id="set-business" maxLength={120} value={business} onChange={(e) => setBusiness(e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label htmlFor="set-phone" className={labelClass}>{tx('phoneLabel')}</label>
+          <input id="set-phone" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label htmlFor="set-area" className={labelClass}>{tx('areaLabel')}</label>
+          <input id="set-area" maxLength={120} value={area} onChange={(e) => setArea(e.target.value)} className={inputClass} />
+        </div>
+        <Button loading={busy} onClick={saveSettings}>{tx('saveSettings')}</Button>
+        {status && <p role="status" className="text-sm">{tx(status)}</p>}
+      </Card>
+
+      <Card title={tx('presetsTitle')}>
+        <p className={hintClass}>{tx('presetsHint', { unit })}</p>
+        <div>
+          <label htmlFor="preset-garment" className={labelClass}>{tx('garmentLabel')}</label>
+          <select id="preset-garment" value={garment} onChange={(e) => setGarment(e.target.value as GarmentType)} className={inputClass}>
+            {GARMENTS.map((name) => <option key={name} value={name}>{tx(`garment_${name}` as TailorKey)}</option>)}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {GARMENT_SITES[garment].map((site) => {
+            const key = presetKey(garment, site);
+            const stored = saved(garment, site);
+            return (
+              <div key={key}>
+                <label htmlFor={`preset-${key}`} className={labelClass}>{t(`site_${site}` as TranslationKey)}</label>
+                <input
+                  id={`preset-${key}`}
+                  inputMode="decimal"
+                  value={typed[key] ?? (stored === undefined ? '' : String(toUnit(stored, unit)))}
+                  onChange={(e) => setTyped((all) => ({ ...all, [key]: e.target.value }))}
+                  className={inputClass}
+                />
+              </div>
+            );
+          })}
+        </div>
+        <Button variant="outline" onClick={savePresets}>{tx('presetsSave')}</Button>
+        {presetStatus && <p role="status" className="text-sm">{tx(presetStatus)}</p>}
+        <label className="flex items-center gap-2 min-h-[48px] text-sm cursor-pointer">
+          <input type="checkbox" className="w-5 h-5" checked={nameDefault} onChange={(e) => toggleNameDefault(e.target.checked)} />
+          {tx('namesDefault')}
+        </label>
+      </Card>
+
+      <Card title={tx('passwordTitle')}>
+        <div>
+          <label htmlFor="set-current" className={labelClass}>{tx('passwordCurrent')}</label>
+          <input id="set-current" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label htmlFor="set-next" className={labelClass}>{tx('passwordNew')}</label>
+          <input id="set-next" type="password" autoComplete="new-password" minLength={10} value={next} onChange={(e) => setNext(e.target.value)} className={inputClass} />
+        </div>
+        <Button variant="outline" disabled={!current || next.length < 10} onClick={changePassword}>{tx('passwordChange')}</Button>
+        {passwordStatus && <p role="status" className="text-sm">{tx(passwordStatus)}</p>}
+      </Card>
 
       {Listing && (
         <Suspense fallback={null}>
@@ -82,149 +230,11 @@ export const TailorSettingsView: React.FC<TailorSettingsViewProps> = ({
         </Suspense>
       )}
 
-      {/* 2. Basic Contact & Physical Location */}
-      <div className="p-6 rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white shadow-2xs space-y-4">
-        <h2 className="text-base font-bold text-[var(--vt-ink,#1F1C18)]">
-          Contact &amp; Physical Workshop Location
-        </h2>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="tailorsettingsview-4" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
-              Business Name
-            </label>
-            <input id="tailorsettingsview-4"
-              type="text"
-              value={businessName}
-              onChange={(e) => setBusinessName(e.target.value)}
-              className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="tailorsettingsview-5" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
-              Contact Phone / WhatsApp
-            </label>
-            <input id="tailorsettingsview-5"
-              type="text"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="tailorsettingsview-6" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
-              Location / Area
-            </label>
-            <input id="tailorsettingsview-6"
-              type="text"
-              value={area}
-              onChange={(e) => setArea(e.target.value)}
-              placeholder="e.g. Gikomba, Nairobi"
-              className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="tailorsettingsview-7" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
-              Stall / Building Address
-            </label>
-            <input id="tailorsettingsview-7"
-              type="text"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="e.g. Stall 42B, Ground Floor"
-              className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm"
-            />
-          </div>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <button type="button" className="underline text-sm min-h-[48px] cursor-pointer" onClick={() => onNavigate('/privacy')}>{tx('privacyLink')}</button>
+        <Button variant="outline" onClick={onLogout} icon={<LogOut aria-hidden="true" className="w-4 h-4" />}>{tx('signOut')}</Button>
       </div>
-
-      {/* 3. Measurement Units & Language */}
-      <div className="p-6 rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white shadow-2xs space-y-4">
-        <div>
-          <label className="text-sm font-bold text-[var(--vt-ink,#1F1C18)] block mb-1">
-            {t('unitsPreference')}
-          </label>
-          <span className="text-xs text-[var(--vt-ink-muted,#5C554C)] block mb-2">
-            Values are always recorded in millimetres and converted to your preferred display unit.
-          </span>
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() => setUnitPref('cm')}
-              className={`py-2.5 px-3 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${
-                unitPref === 'cm'
-                  ? 'border-[var(--vt-thread,#2E3A87)] bg-indigo-50/70 text-[var(--vt-thread,#2E3A87)] ring-2 ring-[var(--vt-thread,#2E3A87)]/15'
-                  : 'border-[var(--vt-line,#DDD5C8)] hover:bg-[#FAF8F5]'
-              }`}
-            >
-              {t('centimeters')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setUnitPref('in')}
-              className={`py-2.5 px-3 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${
-                unitPref === 'in'
-                  ? 'border-[var(--vt-thread,#2E3A87)] bg-indigo-50/70 text-[var(--vt-thread,#2E3A87)] ring-2 ring-[var(--vt-thread,#2E3A87)]/15'
-                  : 'border-[var(--vt-line,#DDD5C8)] hover:bg-[#FAF8F5]'
-              }`}
-            >
-              {t('inches')}
-            </button>
-          </div>
-        </div>
-
-        <div className="pt-3 border-t border-[var(--vt-line,#DDD5C8)]/60">
-          <label className="text-sm font-bold text-[var(--vt-ink,#1F1C18)] block mb-2">
-            Language
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() => setLocale('en')}
-              className={`py-2.5 px-3 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${
-                locale === 'en'
-                  ? 'border-[var(--vt-thread,#2E3A87)] bg-indigo-50/70 text-[var(--vt-thread,#2E3A87)] ring-2 ring-[var(--vt-thread,#2E3A87)]/15'
-                  : 'border-[var(--vt-line,#DDD5C8)] hover:bg-[#FAF8F5]'
-              }`}
-            >
-              English
-            </button>
-            <button
-              type="button"
-              onClick={() => setLocale('sw')}
-              className={`py-2.5 px-3 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${
-                locale === 'sw'
-                  ? 'border-[var(--vt-thread,#2E3A87)] bg-indigo-50/70 text-[var(--vt-thread,#2E3A87)] ring-2 ring-[var(--vt-thread,#2E3A87)]/15'
-                  : 'border-[var(--vt-line,#DDD5C8)] hover:bg-[#FAF8F5]'
-              }`}
-            >
-              Kiswahili
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Save Button */}
-      <div className="flex items-center justify-between gap-4 pt-2">
-        <Button onClick={handleSave} size="lg" loading={saving}>
-          Save Workshop Changes
-        </Button>
-
-        <Button
-          variant="outline"
-          size="md"
-          onClick={onLogout}
-          icon={<LogOut className="w-4 h-4 text-rose-600" />}
-          className="text-rose-700 hover:bg-rose-50"
-        >
-          Sign Out
-        </Button>
-      </div>
+      <p className={hintClass}>{tx('versionLine', { app: APP_VERSION, rules: settings.data?.current_rules_version ?? '—' })}</p>
     </div>
   );
 };

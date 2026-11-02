@@ -2,6 +2,27 @@
 
 The newest entry comes first. Every change or improvement adds a line in the same commit.
 
+## 2026-11-02: M9 review fixes
+
+- After a reset the next phone was told the earlier client's measurements through `change_since_last`. Comparisons now read only the phone's own claim round. A phone is never told the height check, since holding a code's secret does not prove the typed height is theirs. A low version against an earlier round goes to the tailor as a conflict and answers 201, so the phone learns nothing about what came before.
+- Reading `/conflicts` writes a `profile_view` row for each side. Superseding the row a conflict waited on makes the other row final and records `conflict_resolve` with the tailor's id; before, it closed the conflict silently and stranded the row.
+- A code review's audit now names each profile, withdrawal (with its date) and request it touched. The deletion banner ends once a request is done or refused. Rotating a code locks the client row.
+- Orders: each flagged row of the garment must be answered, an override must change the value, a row in conflict cannot be ordered on, and a collected order's items are locked. The override reason stays optional, as frontend-spec 13 says.
+- The freeing e2e test no longer fails when the profile list reloads before it looks, so the word appears twice.
+- Profile lists give each row's `claim_round`. When rows from different claims sit side by side, the order form makes the tailor choose instead of defaulting to the newest.
+
+## 2026-11-02: M9 tailor slice
+
+- The API now serves the tailor's clients, profiles, conflicts, orders, ease suggestions and presets, and the audit list, with the role matrix covering each. Finished is always body plus ease; flagged rows must be confirmed or overridden; due dates run from today to 180 days in Nairobi time.
+- A tailor can free a client code. Each freeing starts a new claim round, so the next phone can claim the code but reads and deletes only what it uploaded itself. A replay proves only its own row: it claims nothing if another row shares the round.
+- The claim page shows profiles by round, withdrawals and deletion requests, including any that wiped the name and height. Superseding, clearing a withdrawal and closing a request happen only when the tailor names them, on a freed code.
+- The tailor's screens now use the real sign-in and API: register, pending, login, clients, issuing a code with its QR and WhatsApp text, client page with deletion banner, profile view, conflicts, the order form with ease suggestions and flagged rows, queue, order detail with status history, presets, settings and own audit. Each is tested at 360 px with axe on the mock and on the API.
+- The older shell, directory and claim-audit tests now follow the real screens and rules.
+- Sunlight mode (high contrast) is a setting for the tailor's screens. Its contrast is tested on the main screens.
+- A left-behind profile refused `code_not_found` now stays on the phone as rejected, because the server has no copy.
+- The mock follows the server on claim rounds, withdrawals, `stale_app_version`, the per-code limit and session reuse. It now separates a deleted client from a client who asked for deletion.
+- A deletion request on an unclaimed code that holds anything is now passed to the tailor and changes nothing. It no longer says "nothing is held" when a name is held, and it no longer blocks the phone's queue.
+
 ## 2026-11-01: M8 ingest and public endpoints
 
 - The image guard could be made to take about 6 s on one unauthenticated request, by combining nested encoding with characters that expand when normalised, and it blocked the API meanwhile. Each body now has a budget of 64,000 normalised characters and is refused past it; the same request takes milliseconds and ordinary text is unaffected.

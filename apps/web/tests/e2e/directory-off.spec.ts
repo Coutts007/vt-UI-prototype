@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { en } from '../../src/i18n/en';
+import { tailorEn } from '../../src/views/tailor/tailorText';
 import { panelEn } from '../../src/views/tailor/directoryPanelText';
 
 test('no link anywhere a client goes', async ({ page }) => {
@@ -37,7 +38,7 @@ test('privacy text and tailor settings say nothing about it', async ({ page }) =
     history.pushState({}, '', '/t/settings');
     dispatchEvent(new PopStateEvent('popstate'));
   });
-  await expect(page.getByRole('button', { name: /Save Workshop/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: tailorEn.saveSettings })).toBeVisible();
   await expect(page.getByText(panelEn.listingTitle)).toHaveCount(0);
 });
 

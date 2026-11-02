@@ -47,6 +47,12 @@ export interface MockDb {
   profileBodies: Record<string, string>;
   /** Deleted profile id to the client it belonged to. */
   deletedProfiles: Record<string, string>;
+  /** Which claim of a code each row came under (D45). */
+  claimRounds: Record<string, number>;
+  profileRounds: Record<string, number>;
+  withdrawals: Row[];
+  consentRecords: Row[];
+  codeUploads: Record<string, number[]>;
   settings: Row;
   rules: Row[];
   sheets: Row[];
@@ -77,6 +83,11 @@ export function createDb(rulesArtifact: Row, now = new Date()): MockDb {
     clientSecrets: {},
     profileBodies: {},
     deletedProfiles: {},
+    claimRounds: {},
+    profileRounds: {},
+    withdrawals: [],
+    consentRecords: [],
+    codeUploads: {},
     settings: data.settings,
     rules: [{ ...rulesArtifact }],
     sheets: [],
