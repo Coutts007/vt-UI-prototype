@@ -2,6 +2,9 @@
 
 The newest entry comes first. Every change or improvement adds a line in the same commit.
 
+## 2026-11-02: M12 integration hardening and the study-site profile
+
+- Schemathesis (MIT, a development dependency) fuzzes every endpoint of the contract as nobody, a tailor and the admin (`make fuzz`, `scripts/fuzz.sh`): no 500 responses, and responses must match the contract. Its first runs found two server errors, both fixed with tests: a NUL character in a query, path or JSON string reached PostgreSQL, which cannot store it (now refused at the edge with `validation_failed`), and `page=2^63` overflowed the database offset (the contract and the API now cap `page` at 100,000).
 ## 2026-11-02: M11 admin, study mode, approvals guard, exports, retention
 
 - The study e2e accessibility check now waits for running animations to end, so a button changing colour as it becomes enabled is not measured half-way. CI had flagged it once on a commit that passed in its other run.

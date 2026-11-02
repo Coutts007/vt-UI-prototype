@@ -1271,7 +1271,7 @@ components:
         proof of possession.
         It is optional in the schema only because a missing one must get the same refusal as a wrong one.
       schema: { type: string, maxLength: 64 }
-    Page: { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+    Page: { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 100000, default: 1 } }
     PageSize: { name: page_size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
     ClientId: { name: client_id, in: path, required: true, schema: { type: string, format: uuid, maxLength: 36 } }
     OrderId: { name: order_id, in: path, required: true, schema: { type: string, format: uuid, maxLength: 36 } }

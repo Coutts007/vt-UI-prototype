@@ -32,7 +32,8 @@ router = APIRouter()
 # backend-spec 7: letters without I and O, plus four digits.
 CODE_LETTERS = "".join(c for c in string.ascii_uppercase if c not in "IO")
 CODE_ATTEMPTS = 8
-Page = Annotated[int, Query(ge=1)]
+# Bounded so an offset can never overflow PostgreSQL bigint (found by fuzzing, M12).
+Page = Annotated[int, Query(ge=1, le=100_000)]
 PageSize = Annotated[int, Query(ge=1, le=100)]
 
 
