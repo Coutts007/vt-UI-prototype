@@ -47,6 +47,9 @@ function Shell() {
     const onPop = () => setLocation({ pathname: window.location.pathname, search: window.location.search });
     const onOnline = () => setOnline(true);
     const onOffline = () => setOnline(false);
+    // The admin turned study mode on or off (AdminSettingsView): the study routes follow at once.
+    const onStudyMode = (event: Event) => setStudyMode(Boolean((event as CustomEvent<boolean>).detail));
+    window.addEventListener('vt:study-mode', onStudyMode);
     window.addEventListener('popstate', onPop);
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
@@ -56,6 +59,7 @@ function Shell() {
       .catch(() => setStudyMode(false));
     registerServiceWorker((apply) => setApplyUpdate(() => apply));
     return () => {
+      window.removeEventListener('vt:study-mode', onStudyMode);
       window.removeEventListener('popstate', onPop);
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
@@ -99,7 +103,6 @@ function Shell() {
           // Not a sign-in that came after this one.
           if (apiClient.auth.getToken() === token) apiClient.auth.clear();
         });
-      void import('./api/client').then(({ api }) => api.logout());
       setUser(null);
       navigate('/login');
     },

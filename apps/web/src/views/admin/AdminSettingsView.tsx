@@ -1,96 +1,213 @@
-import React, { useState } from 'react';
-import { useI18n } from '../../i18n';
-import { api } from '../../api/client';
+// Admin settings (frontend-spec 14.3, A9): retention, study mode, rules, approvals and the deletion queue.
+import React, { useEffect, useState } from 'react';
+import { apiClient } from '../../api/instance';
 import { Button } from '../../components/ui/Button';
-import { Settings, Shield, Beaker, Check } from 'lucide-react';
+import { Card, hintClass, inputClass, labelClass, useDates, useLoad } from '../tailor/common';
+import { AdminLoading, AdminSettings, Approvals, DeletionRequest, Page, problemKey } from './adminCommon';
+import { AdminKey, useAdminText } from './adminText';
 
-interface AdminSettingsViewProps {
-  onNavigate: (path: string) => void;
-}
+/** App listens for this, so the study screens appear or go without a reload. */
+export const STUDY_MODE_EVENT = 'vt:study-mode';
 
-export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({ onNavigate }) => {
-  const { t } = useI18n();
-  const [retentionMonths, setRetentionMonths] = useState<number>(24);
-  const [studyMode, setStudyMode] = useState<boolean>(true);
-  const [savedNotice, setSavedNotice] = useState(false);
+const APPROVAL_FIELDS: { key: keyof Approvals; label: AdminKey; type: 'text' | 'date' }[] = [
+  { key: 'ierc_ref', label: 'ierc', type: 'text' },
+  { key: 'nacosti_licence_no', label: 'nacosti', type: 'text' },
+  { key: 'dpia_submitted_on', label: 'dpiaSubmitted', type: 'date' },
+  { key: 'approvals_confirmed_by', label: 'confirmedBy', type: 'text' },
+  { key: 'confirmed_at', label: 'confirmedAt', type: 'date' },
+  { key: 'odpc_response_on', label: 'odpcOn', type: 'date' },
+  { key: 'odpc_response_ref', label: 'odpcRef', type: 'text' },
+];
+const STATUS: Record<DeletionRequest['status'], AdminKey> = {
+  received: 'statusReceived',
+  partially_done: 'statusPartial',
+  done: 'statusDone',
+  rejected: 'statusRejected',
+};
 
-  const handleSave = async () => {
-    await api.setStudyMode(studyMode);
-    setSavedNotice(true);
-    setTimeout(() => setSavedNotice(false), 2000);
+type Form = Omit<AdminSettings, 'approvals_missing' | 'earliest_collection_date' | 'consent_version'>;
+
+export const AdminSettingsView: React.FC<{ onNavigate: (path: string) => void }> = () => {
+  const ax = useAdminText();
+  const { date } = useDates();
+  const settings = useLoad(() => apiClient.get('/admin/settings'), []);
+  const deletions = useLoad(() => apiClient.get('/admin/deletion-requests'), []);
+  const [form, setForm] = useState<Form | null>(null);
+  const [notice, setNotice] = useState<AdminKey | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!settings.data) return;
+    const { approvals_missing: _m, earliest_collection_date: _e, consent_version: _c, ...rest } = settings.data;
+    setForm(rest);
+  }, [settings.data]);
+
+  if (!settings.data || !form) return <AdminLoading failed={settings.failed} onRetry={() => void settings.reload()} />;
+  const current = settings.data;
+
+  const save = async () => {
+    if (form.study_mode !== current.study_mode) {
+      if (!window.confirm(ax(form.study_mode ? 'studyModeOnConfirm' : 'studyModeOffConfirm'))) return;
+    }
+    setBusy(true);
+    setNotice(null);
+    try {
+      const approvals = Object.fromEntries(
+        Object.entries(form.approvals).map(([key, value]) => [key, value ? value : null]),
+      ) as Approvals;
+      // The contract keeps a time on confirmed_at; the screen asks for the day only.
+      if (approvals.confirmed_at && approvals.confirmed_at.length === 10) {
+        approvals.confirmed_at = `${approvals.confirmed_at}T00:00:00+03:00`;
+      }
+      const saved = await apiClient.put('/admin/settings', { body: { ...form, approvals } });
+      settings.setData(saved);
+      if (saved.study_mode !== current.study_mode) {
+        window.dispatchEvent(new CustomEvent(STUDY_MODE_EVENT, { detail: saved.study_mode }));
+      }
+      setNotice('saved');
+    } catch (problem) {
+      setNotice(problemKey(problem));
+    } finally {
+      setBusy(false);
+    }
   };
 
-  return (
-    <div className="max-w-3xl mx-auto px-4 py-8 flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--vt-ink,#1F1C18)] tracking-tight">
-          System Governance Settings
-        </h1>
-        <p className="text-sm text-[var(--vt-ink-muted,#5C554C)] mt-0.5">
-          Data retention enforcement, MKU validation study mode, and privacy controls
-        </p>
-      </div>
+  const honour = async (request: DeletionRequest) => {
+    if (!window.confirm(ax('deletionHonourConfirm', { code: request.client_code ?? '' }))) return;
+    try {
+      await apiClient.post('/admin/deletion-requests/{request_id}/honour', { path: { request_id: request.request_id } });
+    } catch (problem) {
+      setNotice(problemKey(problem));
+    }
+    void deletions.reload();
+  };
 
-      {savedNotice && (
-        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-semibold flex items-center gap-2">
-          <Check className="w-4 h-4 text-emerald-600" />
-          <span>Settings updated successfully.</span>
-        </div>
-      )}
-
-      {/* Retention Period Card */}
-      <div className="p-5 rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white shadow-2xs space-y-3">
-        <div className="flex items-center gap-2">
-          <Shield className="w-5 h-5 text-[var(--vt-thread,#2E3A87)]" />
-          <h2 className="text-base font-bold text-[var(--vt-ink,#1F1C18)]">
-            Data Retention Limit (Months)
-          </h2>
-        </div>
-        <p className="text-xs text-[var(--vt-ink-muted,#5C554C)]">
-          Profiles inactive longer than this period past the last completed order will be flagged for automatic scheduled purging under Section 39 of the DPA.
-        </p>
-        <div className="flex items-center gap-3">
-          <input
-            aria-label={t('retentionMonthsLabel')}
-            type="number"
-            value={retentionMonths}
-            onChange={(e) => setRetentionMonths(parseInt(e.target.value) || 24)}
-            min={1}
-            max={60}
-            className="w-28 h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm font-bold font-mono"
-          />
-          <span className="text-sm text-[var(--vt-ink-muted,#5C554C)]">months</span>
-        </div>
-      </div>
-
-      {/* Study Mode Switch Card */}
-      <div className="p-5 rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white shadow-2xs space-y-3">
-        <div className="flex items-center gap-2">
-          <Beaker className="w-5 h-5 text-indigo-600" />
-          <h2 className="text-base font-bold text-[var(--vt-ink,#1F1C18)]">
-            Validation Study Mode (MKU IERC)
-          </h2>
-        </div>
-        <p className="text-xs text-[var(--vt-ink-muted,#5C554C)] leading-relaxed">
-          Enables researcher-run capture screens with study covariates (lighting, distance, clothing fit), participant enrollment (P001–P090), and blind reference tape data entry.
-        </p>
-
-        <label className="flex items-center gap-3 cursor-pointer pt-2">
-          <input
-            type="checkbox"
-            checked={studyMode}
-            onChange={(e) => setStudyMode(e.target.checked)}
-            className="w-5 h-5 rounded text-[var(--vt-thread,#2E3A87)] focus:ring-[var(--vt-thread,#2E3A87)]"
-          />
-          <span className="text-sm font-bold text-[var(--vt-ink,#1F1C18)]">
-            Study Mode Active
-          </span>
-        </label>
-      </div>
-
-      <Button onClick={handleSave} size="lg" className="w-full sm:w-auto">
-        Save Governance Settings
-      </Button>
+  const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm({ ...form, [key]: value });
+  const number = (key: 'retention_months' | 'audit_retention_months', label: AdminKey, min: number) => (
+    <div>
+      <label htmlFor={`set-${key}`} className={labelClass}>{ax(label)}</label>
+      <input
+        id={`set-${key}`}
+        type="number"
+        min={min}
+        max={120}
+        value={form[key]}
+        onChange={(e) => set(key, Number(e.target.value))}
+        className={inputClass}
+      />
     </div>
+  );
+
+  return (
+    <Page title={ax('settingsTitle')}>
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save();
+        }}
+      >
+        <Card>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {number('retention_months', 'retentionMonths', 1)}
+            {number('audit_retention_months', 'auditMonths', 12)}
+            <div>
+              <label htmlFor="set-rules" className={labelClass}>{ax('rulesVersion')}</label>
+              <input id="set-rules" value={form.current_rules_version} maxLength={40} onChange={(e) => set('current_rules_version', e.target.value)} className={inputClass} />
+            </div>
+            <div>
+              <label htmlFor="set-app" className={labelClass}>{ax('minAppVersion')}</label>
+              <input id="set-app" value={form.min_app_version} maxLength={32} onChange={(e) => set('min_app_version', e.target.value)} className={inputClass} />
+            </div>
+            <div>
+              <label htmlFor="set-consent" className={labelClass}>{ax('consentVersion')}</label>
+              <input id="set-consent" value={current.consent_version} readOnly className={`${inputClass} bg-[var(--vt-paper)]`} />
+            </div>
+          </div>
+        </Card>
+        <Card title={ax('studyMode')}>
+          <p className={hintClass}>{ax('studyModeExplain')}</p>
+          <label className="flex items-center gap-3 min-h-[48px] cursor-pointer">
+            <input type="checkbox" className="w-5 h-5" checked={form.study_mode} onChange={(e) => set('study_mode', e.target.checked)} />
+            <span className="text-sm font-semibold">{ax('studyMode')}</span>
+          </label>
+          <div>
+            <label htmlFor="set-end" className={labelClass}>{ax('collectionEnd')}</label>
+            <input
+              id="set-end"
+              type="date"
+              value={form.study_collection_end ?? ''}
+              onChange={(e) => set('study_collection_end', e.target.value || null)}
+              className={inputClass}
+            />
+          </div>
+        </Card>
+        <Card title={ax('approvalsTitle')}>
+          <p className={hintClass}>{ax('approvalsIntro')}</p>
+          {current.approvals_missing.length > 0 ? (
+            <p role="alert" className="p-3 rounded-xl border border-amber-300 bg-amber-50 text-sm text-amber-900">
+              {ax('approvalsMissing', { fields: current.approvals_missing.join(', ') })}
+            </p>
+          ) : (
+            current.earliest_collection_date && (
+              <p role="status" className="p-3 rounded-xl border border-emerald-300 bg-emerald-50 text-sm text-emerald-900">
+                {ax('approvalsReady', { date: date(current.earliest_collection_date) })}
+              </p>
+            )
+          )}
+          {current.approvals_missing.length > 0 && current.earliest_collection_date && (
+            <p className={hintClass}>{ax('approvalsWaiting', { date: date(current.earliest_collection_date) })}</p>
+          )}
+          <div className="grid sm:grid-cols-2 gap-3">
+            {APPROVAL_FIELDS.map(({ key, label, type }) => (
+              <div key={key}>
+                <label htmlFor={`approval-${key}`} className={labelClass}>{ax(label)}</label>
+                <input
+                  id={`approval-${key}`}
+                  type={type}
+                  maxLength={80}
+                  value={(type === 'date' ? form.approvals[key]?.slice(0, 10) : form.approvals[key]) ?? ''}
+                  onChange={(e) => set('approvals', { ...form.approvals, [key]: e.target.value })}
+                  className={inputClass}
+                />
+              </div>
+            ))}
+          </div>
+        </Card>
+        {notice && (
+          <p role={notice === 'saved' ? 'status' : 'alert'} className="text-sm font-semibold">
+            {ax(notice)}
+          </p>
+        )}
+        <Button type="submit" disabled={busy}>{ax('save')}</Button>
+      </form>
+
+      <Card title={ax('deletionsTitle')}>
+        {!deletions.data ? (
+          <AdminLoading failed={deletions.failed} onRetry={() => void deletions.reload()} />
+        ) : deletions.data.length === 0 ? (
+          <p className={hintClass}>{ax('deletionsEmpty')}</p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-[var(--vt-line)]">
+            {deletions.data.map((request) => (
+              <li key={request.request_id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold">
+                    <span className="font-mono">{request.client_code ?? '—'}</span> ·{' '}
+                    {ax(request.reason === 'withdraw_consent' ? 'reasonWithdraw' : 'reasonDelete')} · {ax(STATUS[request.status])}
+                  </p>
+                  <p className={hintClass}>{ax('deletionReceived', { date: date(request.received_at) })}</p>
+                </div>
+                {request.client_code && (request.status === 'received' || request.status === 'partially_done') && (
+                  <Button size="sm" variant="danger" onClick={() => void honour(request)}>
+                    {ax('deletionHonour')}
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </Page>
   );
 };

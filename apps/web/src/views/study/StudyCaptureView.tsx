@@ -1,195 +1,172 @@
-import React, { useState } from 'react';
-import { useI18n } from '../../i18n';
-import { api } from '../../api/client';
+// Study capture (frontend-spec 15.1): the researcher sets one participant's set, then runs the client flow.
+// The draft carries the study block and the paper consent; the server accepts that consent only with it.
+import React, { useMemo, useState } from 'react';
+import type { components } from '@vt/contracts';
+import { ArrowRight } from 'lucide-react';
+import { apiClient } from '../../api/instance';
 import { Button } from '../../components/ui/Button';
-import { NumberInput } from '../../components/ui/NumberInput';
 import { vtStorage } from '../../db/storage';
-import { Beaker, ArrowRight, ShieldCheck, Check } from 'lucide-react';
+import { useI18n } from '../../i18n';
+import { ApprovalsBanner, AdminLoading, Page } from '../admin/adminCommon';
+import { AdminKey, useAdminText } from '../admin/adminText';
+import { Card, chipClass, inputClass, labelClass, useLoad } from '../tailor/common';
 
-interface StudyCaptureViewProps {
-  initialParticipantCode?: string;
-  onNavigate: (path: string) => void;
-}
+type Lighting = components['schemas']['StudyBlock']['lighting'];
+type Fit = components['schemas']['ClothingFit'];
+const LIGHTS: { value: Lighting; label: AdminKey }[] = [
+  { value: 'window', label: 'lightWindow' },
+  { value: 'lamp', label: 'lightLamp' },
+  { value: 'outdoor', label: 'lightOutdoor' },
+];
+export const STUDY_CONSENT_VERSION = 'study-paper-1.0';
 
-export const StudyCaptureView: React.FC<StudyCaptureViewProps> = ({
+export const StudyCaptureView: React.FC<{ initialParticipantCode?: string; onNavigate: (path: string) => void }> = ({
   initialParticipantCode,
   onNavigate,
 }) => {
-  const { t } = useI18n();
-
-  const [participantCode, setParticipantCode] = useState(initialParticipantCode || 'P001');
-  const [setNo, setSetNo] = useState<1 | 2 | 3>(1);
+  const ax = useAdminText();
+  const { locale } = useI18n();
+  const list = useLoad(() => apiClient.get('/study/participants'), []);
+  const settings = useLoad(() => apiClient.get('/admin/settings'), []);
+  const [code, setCode] = useState(initialParticipantCode ?? '');
+  const [setNo, setSetNo] = useState(1);
   const [mode, setMode] = useState<'self' | 'assisted'>('self');
-  const [lighting, setLighting] = useState<'window' | 'lamp' | 'outdoor'>('window');
-  const [distanceM, setDistanceM] = useState<number>(2.2);
-  const [clothingFit, setClothingFit] = useState<'fitted' | 'loose'>('fitted');
-  const [heightCm, setHeightCm] = useState<number>(170);
-  const [paperConsent, setPaperConsent] = useState<boolean>(true);
-  const [lux, setLux] = useState<number>(240);
+  const [lighting, setLighting] = useState<Lighting>('window');
+  const [distance, setDistance] = useState('2.2');
+  const [fit, setFit] = useState<Fit>('fitted');
+  const [stature, setStature] = useState('');
+  const [lux, setLux] = useState('');
+  const [paper, setPaper] = useState(false);
+  const [error, setError] = useState<AdminKey | null>(null);
 
-  const handleStartStudyCapture = () => {
-    // Save draft with study covariates
-    vtStorage.saveDraft({
-      client_code: participantCode,
-      height_mm: Math.round(heightCm * 10),
-      clothing_fit: clothingFit,
+  const participant = useMemo(() => list.data?.find((row) => row.participant_code === code), [list.data, code]);
+  // The next set this participant has not done yet, once the code is known.
+  const [seenCode, setSeenCode] = useState('');
+  if (participant && seenCode !== participant.participant_code) {
+    setSeenCode(participant.participant_code);
+    setSetNo(Math.min(3, participant.sets_captured + 1));
+  }
+
+  if (!list.data) return <AdminLoading failed={list.failed} onRetry={() => void list.reload()} />;
+
+  const start = async () => {
+    const distanceM = Number(distance);
+    const statureCm = Number(stature);
+    const luxValue = lux.trim() === '' ? undefined : Math.round(Number(lux));
+    if (!participant) return setError('unknownParticipant');
+    if (participant.withdrawn) return setError('participantWithdrew');
+    const valid =
+      distanceM >= 1.5 && distanceM <= 3.5 && statureCm >= 100 && statureCm <= 250 &&
+      (luxValue === undefined || (luxValue >= 0 && luxValue <= 200000));
+    if (!valid || !paper) return setError('checkFields');
+    await vtStorage.saveDraft({
+      language: locale,
+      client_code: participant.client_code,
+      code_verified: true,
+      height_mm: Math.round(statureCm * 10),
+      sex: participant.sex,
+      clothing_fit: fit,
       capture_mode: mode,
       consent: {
-        consent_version: 'study-paper-1.0',
-        language: 'en',
-        scope: ['study_paper', 'measure', 'measurements_only', 'retention'],
+        consent_version: STUDY_CONSENT_VERSION,
+        language: locale,
+        scope: ['study_paper', 'measure', 'measurements_only'],
         given_at: new Date().toISOString(),
       },
+      study: {
+        participant_code: participant.participant_code,
+        set_no: setNo,
+        lighting,
+        distance_m: Math.round(distanceM * 100) / 100,
+        clothing_fit_observed: fit,
+        ...(luxValue !== undefined && { lux: luxValue }),
+      },
     });
-
-    onNavigate('/capture/front');
+    onNavigate('/check');
   };
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8 flex flex-col gap-6">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-indigo-100 text-[var(--vt-thread,#2E3A87)] flex items-center justify-center">
-          <Beaker className="w-6 h-6 stroke-[2.2]" />
-        </div>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--vt-ink,#1F1C18)] tracking-tight">
-            Researcher Study Capture
-          </h1>
-          <p className="text-sm text-[var(--vt-ink-muted,#5C554C)]">
-            Enforce experimental covariates for MKU Thesis Validation Protocol (Appendix E)
-          </p>
-        </div>
-      </div>
-
-      <div className="p-6 rounded-2xl border border-[var(--vt-line,#DDD5C8)] bg-white shadow-2xs space-y-5">
-        {/* Participant & Set */}
-        <div className="grid grid-cols-2 gap-4">
+    <Page title={ax('captureTitle')} intro={ax('captureIntro')}>
+      <ApprovalsBanner missing={settings.data?.approvals_missing ?? []} />
+      <Card>
+        <div className="grid sm:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="studycaptureview-1" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
-              Participant Code
-            </label>
-            <input id="studycaptureview-1"
-              type="text"
-              value={participantCode}
-              onChange={(e) => setParticipantCode(e.target.value.toUpperCase())}
-              className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] font-mono font-bold text-base"
+            <label htmlFor="sc-code" className={labelClass}>{ax('participantCode')}</label>
+            <input
+              id="sc-code"
+              value={code}
+              maxLength={4}
+              list="sc-codes"
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              className={`${inputClass} font-mono`}
             />
+            <datalist id="sc-codes">
+              {list.data.filter((row) => !row.withdrawn).map((row) => <option key={row.participant_id} value={row.participant_code} />)}
+            </datalist>
           </div>
-
-          <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
-              Capture Set Number
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {[1, 2, 3].map((num) => (
-                <button
-                  key={num}
-                  type="button"
-                  onClick={() => setSetNo(num as any)}
-                  className={`h-12 rounded-xl border text-xs font-bold cursor-pointer ${
-                    setNo === num
-                      ? 'bg-[var(--vt-thread,#2E3A87)] text-white'
-                      : 'border-[var(--vt-line,#DDD5C8)] hover:bg-[#FAF8F5]'
-                  }`}
-                >
-                  Set {num}
+          <fieldset>
+            <legend className={labelClass}>{ax('setNumber')}</legend>
+            <div className="flex gap-2">
+              {[1, 2, 3].map((n) => (
+                <button key={n} type="button" aria-pressed={setNo === n} className={chipClass(setNo === n)} onClick={() => setSetNo(n)}>
+                  {n}
                 </button>
               ))}
             </div>
-          </div>
-        </div>
-
-        {/* Height & Clothing Fit */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="studycaptureview-2" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
-              Measured Stature (cm)
-            </label>
-            <input id="studycaptureview-2"
-              type="number"
-              value={heightCm}
-              onChange={(e) => setHeightCm(parseFloat(e.target.value) || 170)}
-              className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] font-mono text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
-              Observed Clothing Fit
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              {(['fitted', 'loose'] as const).map((fit) => (
-                <button
-                  key={fit}
-                  type="button"
-                  onClick={() => setClothingFit(fit)}
-                  className={`h-12 rounded-xl border text-xs font-bold capitalize cursor-pointer ${
-                    clothingFit === fit
-                      ? 'bg-[var(--vt-thread,#2E3A87)] text-white'
-                      : 'border-[var(--vt-line,#DDD5C8)] hover:bg-[#FAF8F5]'
-                  }`}
-                >
-                  {fit}
+          </fieldset>
+          <fieldset>
+            <legend className={labelClass}>{ax('captureMode')}</legend>
+            <div className="flex gap-2">
+              {(['self', 'assisted'] as const).map((value) => (
+                <button key={value} type="button" aria-pressed={mode === value} className={chipClass(mode === value)} onClick={() => setMode(value)}>
+                  {ax(value === 'self' ? 'modeSelf' : 'modeAssisted')}
                 </button>
               ))}
             </div>
+          </fieldset>
+          <fieldset>
+            <legend className={labelClass}>{ax('lighting')}</legend>
+            <div className="flex flex-wrap gap-2">
+              {LIGHTS.map(({ value, label }) => (
+                <button key={value} type="button" aria-pressed={lighting === value} className={chipClass(lighting === value)} onClick={() => setLighting(value)}>
+                  {ax(label)}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend className={labelClass}>{ax('clothingFit')}</legend>
+            <div className="flex gap-2">
+              {(['fitted', 'loose'] as const).map((value) => (
+                <button key={value} type="button" aria-pressed={fit === value} className={chipClass(fit === value)} onClick={() => setFit(value)}>
+                  {ax(value === 'fitted' ? 'fitFitted' : 'fitLoose')}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <div>
+            <label htmlFor="sc-distance" className={labelClass}>{ax('distance')}</label>
+            <input id="sc-distance" type="number" inputMode="decimal" step="0.1" min={1.5} max={3.5} value={distance} onChange={(e) => setDistance(e.target.value)} className={inputClass} />
+          </div>
+          <div>
+            <label htmlFor="sc-stature" className={labelClass}>{ax('statureCm')}</label>
+            <input id="sc-stature" type="number" inputMode="decimal" step="0.1" min={100} max={250} value={stature} onChange={(e) => setStature(e.target.value)} className={inputClass} />
+          </div>
+          <div>
+            <label htmlFor="sc-lux" className={labelClass}>{ax('lux')}</label>
+            <input id="sc-lux" type="number" inputMode="numeric" min={0} value={lux} onChange={(e) => setLux(e.target.value)} className={inputClass} />
           </div>
         </div>
-
-        {/* Environmental Covariates (Lighting & Distance) */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="studycaptureview-3" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
-              Ambient Lighting
-            </label>
-            <select id="studycaptureview-3"
-              value={lighting}
-              onChange={(e) => setLighting(e.target.value as any)}
-              className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-xs font-semibold"
-            >
-              <option value="window">Natural Window Light</option>
-              <option value="lamp">Indoor Bulb / Lamp</option>
-              <option value="outdoor">Outdoor Diffused</option>
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor="studycaptureview-4" className="text-xs font-bold uppercase tracking-wider text-[var(--vt-ink-muted,#5C554C)] block mb-1">
-              Distance Wall-to-Phone (m)
-            </label>
-            <input id="studycaptureview-4"
-              type="number"
-              step="0.1"
-              value={distanceM}
-              onChange={(e) => setDistanceM(parseFloat(e.target.value) || 2.2)}
-              className="w-full h-12 px-3 rounded-xl border border-[var(--vt-line,#DDD5C8)] text-sm font-mono"
-            />
-          </div>
-        </div>
-
-        {/* Paper Consent Confirmation */}
-        <label className="flex items-center gap-3 p-3 rounded-xl bg-[#FAF8F5] border border-[var(--vt-line,#DDD5C8)] cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={paperConsent}
-            onChange={(e) => setPaperConsent(e.target.checked)}
-            className="w-5 h-5 rounded text-[var(--vt-thread,#2E3A87)]"
-          />
-          <span className="text-xs font-semibold text-[var(--vt-ink,#1F1C18)]">
-            Paper consent verified and on file for {participantCode} (MKU IERC Protocol 1.0)
-          </span>
+        <label className="flex items-center gap-3 min-h-[48px] cursor-pointer">
+          <input type="checkbox" className="w-5 h-5" checked={paper} onChange={(e) => setPaper(e.target.checked)} />
+          <span className="text-sm font-semibold">{ax('paperConsent', { code: code || '—' })}</span>
         </label>
-      </div>
-
-      <Button
-        onClick={handleStartStudyCapture}
-        disabled={!paperConsent}
-        size="xl"
-        icon={<ArrowRight className="w-5 h-5" />}
-        className="w-full"
-      >
-        Launch Experimental Capture Flow
+        {participant?.withdrawn && <p role="alert" className="text-sm text-rose-700">{ax('participantWithdrew')}</p>}
+        {error && <p role="alert" className="text-sm text-rose-700">{ax(error)}</p>}
+      </Card>
+      <Button size="xl" className="w-full" disabled={!paper} icon={<ArrowRight className="w-5 h-5" />} onClick={() => void start()}>
+        {ax('startStudyCapture')}
       </Button>
-    </div>
+    </Page>
   );
 };

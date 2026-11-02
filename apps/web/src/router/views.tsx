@@ -47,12 +47,12 @@ const admin = {
   Settings: view(() => import('../views/admin/AdminSettingsView'), 'AdminSettingsView'),
   Participants: view(() => import('../views/admin/AdminStudyParticipantsView'), 'AdminStudyParticipantsView'),
   Export: view(() => import('../views/admin/AdminStudyExportView'), 'AdminStudyExportView'),
+  Measurers: view(() => import('../views/admin/AdminMeasurersView'), 'AdminMeasurersView'),
 };
 const study = {
   Capture: view(() => import('../views/study/StudyCaptureView'), 'StudyCaptureView'),
   Reference: view(() => import('../views/study/StudyReferenceTapeView'), 'StudyReferenceTapeView'),
 };
-const Placeholder = lazy(() => import('../views/PlaceholderView'));
 
 export interface ViewContext {
   params: Record<string, string>;
@@ -124,7 +124,7 @@ export const VIEWS: Record<string, Render> = {
   '/admin/audit': (c) => <admin.Audit onNavigate={c.navigate} />,
   '/admin/settings': (c) => <admin.Settings onNavigate={c.navigate} />,
   '/admin/study/participants': (c) => <admin.Participants onNavigate={c.navigate} />,
-  '/admin/study/measurers': () => <Placeholder titleKey="measurersTitle" />,
+  '/admin/study/measurers': (c) => <admin.Measurers onNavigate={c.navigate} />,
   '/admin/study/export': (c) => <admin.Export onNavigate={c.navigate} />,
 
   '/study/capture': (c) => <study.Capture initialParticipantCode={c.query.get('participant') ?? undefined} onNavigate={c.navigate} />,

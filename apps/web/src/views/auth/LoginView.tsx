@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { lazy, Suspense, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { ApiError, NetworkError } from '../../api/http';
 import { apiClient } from '../../api/instance';
@@ -14,8 +14,10 @@ const ERRORS: Record<string, TailorKey> = {
   rate_limited: 'loginRateLimited',
 };
 // Seed accounts appear only where the seed exists: never in a production build.
-const DEMO_ACCOUNTS = import.meta.env.DEV || import.meta.env.MODE === 'mock';
-const DEMO_EMAILS = ['wanjiru@vt.test', 'otieno@vt.test', 'admin@vt.test', 'measurer-a@vt.test'];
+const DemoAccounts =
+  import.meta.env.DEV || import.meta.env.MODE === 'mock'
+    ? lazy(() => import('./DemoAccounts').then((module) => ({ default: module.DemoAccounts })))
+    : null;
 
 export const LoginView: React.FC<{
   onLoginSuccess: (user: UserAccount) => void;
@@ -74,25 +76,15 @@ export const LoginView: React.FC<{
         </div>
         <Button type="submit" size="xl" loading={busy} className="w-full">{tx('signIn')}</Button>
       </form>
-      {DEMO_ACCOUNTS && (
-        <div className="p-4 rounded-xl border border-[var(--vt-line)] text-xs">
-          <p className="font-bold mb-2">{tx('demoAccounts')}</p>
-          <div className="grid grid-cols-2 gap-2">
-            {DEMO_EMAILS.map((account) => (
-              <button
-                key={account}
-                type="button"
-                className="p-2 min-h-[48px] rounded-lg bg-white border border-[var(--vt-line)] text-left cursor-pointer break-all"
-                onClick={() => {
-                  setEmail(account);
-                  setPassword('vt-demo-2026');
-                }}
-              >
-                {account}
-              </button>
-            ))}
-          </div>
-        </div>
+      {DemoAccounts && (
+        <Suspense fallback={null}>
+          <DemoAccounts
+            onPick={(account, secret) => {
+              setEmail(account);
+              setPassword(secret);
+            }}
+          />
+        </Suspense>
       )}
       <button type="button" onClick={() => onNavigate('/register')} className="underline text-sm min-h-[48px] cursor-pointer">
         {tx('registerLink')}

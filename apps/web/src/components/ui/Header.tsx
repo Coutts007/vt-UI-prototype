@@ -102,25 +102,25 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={() => onNavigate('/admin/accounts')}
                 className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
               >
-                Accounts
+                {t('navAccounts')}
               </button>
               <button
                 onClick={() => onNavigate('/admin/audit')}
                 className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
               >
-                Audit Log
+                {t('navAuditLog')}
               </button>
               <button
                 onClick={() => onNavigate('/admin/study/participants')}
                 className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
               >
-                Study
+                {t('navStudy')}
               </button>
               <button
                 onClick={() => onNavigate('/admin/settings')}
                 className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
               >
-                Settings
+                {t('navSettings')}
               </button>
             </>
           ) : currentUser?.role === 'measurer' ? (
@@ -129,7 +129,7 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={() => onNavigate('/study/reference')}
                 className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer text-[var(--vt-thread,#2E3A87)] font-semibold"
               >
-                Reference Tape Entry
+                {t('navTapeEntry')}
               </button>
             </>
           ) : (
@@ -155,19 +155,19 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={() => onNavigate('/sheet')}
                 className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
               >
-                Measuring Sheet
+                {t('hdrSheet')}
               </button>
               <button
                 onClick={() => onNavigate('/me')}
                 className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
               >
-                My Measurements
+                {t('hdrMine')}
               </button>
               <button
                 onClick={() => onNavigate('/help')}
                 className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
               >
-                How It Works
+                {t('howItWorks')}
               </button>
             </>
           )}
@@ -236,7 +236,7 @@ export const Header: React.FC<HeaderProps> = ({
                 />
                 <div className="absolute right-0 mt-2 w-56 rounded-xl border border-[var(--vt-line,#DDD5C8)] bg-white p-1.5 shadow-lg z-50 text-sm">
                   <div className="px-3 py-1.5 text-xs font-semibold text-[var(--vt-ink-muted,#5C554C)] uppercase tracking-wider border-b border-[var(--vt-line,#DDD5C8)]/50 mb-1">
-                    Virtual Tailor Navigation
+                    {t('hdrMenu')}
                   </div>
                   {FEATURE_DIRECTORY && (
 <button
