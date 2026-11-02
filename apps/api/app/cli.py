@@ -1,7 +1,8 @@
 import asyncio
+import uuid
 
 import typer
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.config import Settings
@@ -17,6 +18,8 @@ study = typer.Typer(no_args_is_help=True)
 cli.add_typer(db, name="db")
 cli.add_typer(study, name="study")
 cli.add_typer(seed, name="seed")
+users = typer.Typer(no_args_is_help=True)
+cli.add_typer(users, name="users")
 cli.add_typer(jobs, name="jobs")
 
 
@@ -60,6 +63,94 @@ def seed_demo() -> None:
         typer.echo(str(error), err=True)
         raise typer.Exit(1) from error
     typer.echo("Demo data loaded" if loaded else "Demo data is already there")
+
+
+@seed.command("volume")
+def seed_volume(
+    clients: int = typer.Option(5000, "--clients"),
+    filled: int = typer.Option(2000, "--filled"),
+    per_client: int = typer.Option(10, "--per-client", min=1, max=50),
+) -> None:
+    """Synthetic volume for the load test: one tailor, many clients and profiles. Not production."""
+    from app.volume import load_volume
+
+    settings = Settings()
+
+    async def run() -> bool:
+        engine = make_engine(settings.database_url)
+        try:
+            async with make_sessions(engine)() as session:
+                loaded = await load_volume(session, settings, clients, filled, per_client)
+                await session.commit()
+                return loaded
+        finally:
+            await engine.dispose()
+
+    try:
+        loaded = asyncio.run(run())
+    except SeedRefused as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(1) from error
+    typer.echo("Volume loaded" if loaded else "Volume is already there")
+
+
+async def create_admin(settings: Settings, email: str, password: str) -> str:
+    """The first administrator of a fresh database, such as the study laptop (M12)."""
+    from app.models import UserAccount
+    from app.security.passwords import hash_password
+    from app.services import audit
+
+    if not 10 <= len(password) <= 256:
+        return "refused: the password needs 10 to 256 characters"
+    engine = make_engine(settings.database_url)
+    try:
+        async with make_sessions(engine)() as session:
+            if await session.scalar(select(UserAccount).where(UserAccount.role == "admin")):
+                return "refused: an administrator already exists; add others from the admin screens"
+            user_id = uuid.uuid4()
+            session.add(
+                UserAccount(
+                    user_id=user_id,
+                    email=email.strip().lower(),
+                    password_hash=hash_password(password),
+                    role="admin",
+                    status="active",
+                    locale="en",
+                    unit_pref="cm",
+                )
+            )
+            await session.flush()
+            audit.record(
+                session,
+                actor_type="system",
+                action="account_create",
+                entity_type="user_account",
+                entity_id=user_id,
+                detail={"role": "admin", "via": "cli"},
+            )
+            await session.commit()
+            return "administrator created"
+    finally:
+        await engine.dispose()
+
+
+@users.command("create-admin")
+def users_create_admin(
+    email: str = typer.Option(..., "--email"),
+    password: str = typer.Option(
+        ...,
+        "--password",
+        prompt=True,
+        hide_input=True,
+        confirmation_prompt=True,
+        envvar="VT_ADMIN_PASSWORD",
+    ),
+) -> None:
+    """Creates the first administrator. Refused once one exists."""
+    outcome = asyncio.run(create_admin(Settings(), email, password))
+    typer.echo(outcome, err=outcome.startswith("refused"))
+    if outcome.startswith("refused"):
+        raise typer.Exit(1)
 
 
 @jobs.command("clean-sheets")

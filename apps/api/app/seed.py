@@ -65,109 +65,102 @@ def to_e164(phone: str) -> str:
     return f"+254{phone[1:]}" if phone.startswith("0") else phone
 
 
-async def add_profile(
-    session: AsyncSession, row: dict[str, Any], participants: dict[str, uuid.UUID]
-) -> None:
+def profile_rows(
+    row: dict[str, Any], participants: dict[str, uuid.UUID]
+) -> tuple[
+    dict[str, Any], dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]
+]:
+    """The capture session, profile, measurements, server checks and consent of one seed row."""
     client_id = uuid.UUID(row["client_id"])
     s = row["session"]
     study = s.get("study") or {}
     session_id = uuid.UUID(s["session_id"])
-    session.add(
-        CaptureSession(
-            session_id=session_id,
-            client_id=client_id,
-            started_at=stamp(s["started_at"]),
-            capture_mode=s["capture_mode"],
-            camera_facing=s["camera_facing"],
-            guidance_mode=s["guidance_mode"],
-            free_arm=s["free_arm"],
-            device_model=s["device_model"],
-            os=s["os"],
-            browser=s["browser"],
-            memory_gb=s["memory_gb"],
-            model_variant=s["model_variant"],
-            stream_w=s["stream_w"],
-            stream_h=s["stream_h"],
-            still_source=s["still_source"],
-            level_unchecked=s["level_unchecked"],
-            capture_fallback=s["capture_fallback"],
-            front_checks=s["front_checks"],
-            side_checks=s["side_checks"],
-            scale_front_mm_px=s["scale_front_mm_px"],
-            scale_side_mm_px=s["scale_side_mm_px"],
-            scale_stature_mm_px=s["scale_stature_mm_px"],
-            scale_disagreement_pct=s["scale_disagreement_pct"],
-            processing_ms=s["processing_ms"],
-            retake_count=s["retake_count"],
-            config_hash=s["config_hash"],
-            app_version=s["app_version"],
-            participant_id=participants.get(study.get("participant_code", "")),
-            set_no=study.get("set_no"),
-            lighting=study.get("lighting"),
-            distance_m=study.get("distance_m"),
-            clothing_fit_observed=study.get("clothing_fit_observed"),
-            lux=study.get("lux"),
-        )
-    )
-    await session.flush()
+    copied = (
+        "capture_mode camera_facing guidance_mode free_arm device_model os browser memory_gb "
+        "model_variant stream_w stream_h still_source level_unchecked capture_fallback "
+        "front_checks side_checks scale_front_mm_px scale_side_mm_px scale_stature_mm_px "
+        "scale_disagreement_pct processing_ms retake_count config_hash app_version"
+    ).split()
+    capture = {
+        "session_id": session_id,
+        "client_id": client_id,
+        "started_at": stamp(s["started_at"]),
+        **{name: s[name] for name in copied},
+        "participant_id": participants.get(study.get("participant_code", "")),
+        "set_no": study.get("set_no"),
+        "lighting": study.get("lighting"),
+        "distance_m": study.get("distance_m"),
+        "clothing_fit_observed": study.get("clothing_fit_observed"),
+        "lux": study.get("lux"),
+    }
     profile_id = uuid.UUID(row["profile_id"])
-    session.add(
-        MeasurementProfile(
-            profile_id=profile_id,
-            client_id=client_id,
-            session_id=session_id,
-            version=row["version"],
-            captured_at=stamp(row["captured_at"]),
-            status=row["status"],
-            landmarks_front=row["landmarks_front"],
-            landmarks_side=row["landmarks_side"],
-            marker_front=row["marker_front"],
-            marker_side=row["marker_side"],
-            silhouette_front=row["silhouette_front"],
-            silhouette_side=row["silhouette_side"],
-            rules_version=row["rules_version"],
-            covariates=row["covariates"],
-            payload_sha256="0" * 64,
-            received_at=stamp(row["received_at"]),
-        )
-    )
-    await session.flush()
-    for item in row["measurements"]:
-        session.add(
-            Measurement(
-                profile_id=profile_id,
-                site_code=item["site_code"],
-                value_mm=item["value_mm"],
-                method=item["method"],
-                confidence_flag=item["confidence_flag"],
-                flag_reasons=item["flag_reasons"],
-                correction_factor=item.get("correction_factor"),
-                level_fraction=item.get("level_fraction"),
-                half_width_mm=item.get("half_width_mm"),
-                half_depth_mm=item.get("half_depth_mm"),
-            )
-        )
-    for check in row["server_checks"]:
-        session.add(
-            ServerCheck(
-                profile_id=profile_id,
-                site_code=check["site_code"],
-                kind=check["kind"],
-                severity=check["severity"],
-                detail=check["detail"],
-            )
-        )
+    profile = {
+        "profile_id": profile_id,
+        "client_id": client_id,
+        "session_id": session_id,
+        "version": row["version"],
+        "captured_at": stamp(row["captured_at"]),
+        "status": row["status"],
+        **{
+            name: row[name]
+            for name in (
+                "landmarks_front landmarks_side marker_front marker_side silhouette_front "
+                "silhouette_side rules_version covariates"
+            ).split()
+        },
+        "payload_sha256": "0" * 64,
+        "received_at": stamp(row["received_at"]),
+    }
+    measurements = [
+        {
+            "profile_id": profile_id,
+            "site_code": item["site_code"],
+            "value_mm": item["value_mm"],
+            "method": item["method"],
+            "confidence_flag": item["confidence_flag"],
+            "flag_reasons": item["flag_reasons"],
+            "correction_factor": item.get("correction_factor"),
+            "level_fraction": item.get("level_fraction"),
+            "half_width_mm": item.get("half_width_mm"),
+            "half_depth_mm": item.get("half_depth_mm"),
+        }
+        for item in row["measurements"]
+    ]
+    checks = [
+        {
+            "profile_id": profile_id,
+            "site_code": check["site_code"],
+            "kind": check["kind"],
+            "severity": check["severity"],
+            "detail": check["detail"],
+        }
+        for check in row["server_checks"]
+    ]
     consent = row["consent"]
-    session.add(
-        Consent(
-            client_id=client_id,
-            consent_version=consent["consent_version"],
-            language=consent["language"],
-            scope=consent["scope"],
-            given_at=stamp(consent["given_at"]),
-            withdrawn_at=when(consent.get("withdrawn_at")),
-        )
-    )
+    consent_row = {
+        "client_id": client_id,
+        "consent_version": consent["consent_version"],
+        "language": consent["language"],
+        "scope": consent["scope"],
+        "given_at": stamp(consent["given_at"]),
+        "withdrawn_at": when(consent.get("withdrawn_at")),
+    }
+    return capture, profile, measurements, checks, consent_row
+
+
+async def add_profile(
+    session: AsyncSession, row: dict[str, Any], participants: dict[str, uuid.UUID]
+) -> None:
+    capture, profile, measurements, checks, consent = profile_rows(row, participants)
+    session.add(CaptureSession(**capture))
+    await session.flush()
+    session.add(MeasurementProfile(**profile))
+    await session.flush()
+    for item in measurements:
+        session.add(Measurement(**item))
+    for check in checks:
+        session.add(ServerCheck(**check))
+    session.add(Consent(**consent))
 
 
 async def load_demo(session: AsyncSession, settings: Settings) -> bool:
