@@ -622,7 +622,7 @@ export interface paths {
         };
         /**
          * Download a sheet through a signed link
-         * @description The only binary responses in the API. They are server-rendered sheets, never client photos.
+         * @description The only binary responses in the API. They are server-rendered sheets, never client photos. No sign-in: the HMAC signature is the access check. An expired or altered link answers 403 `sheet_link_invalid`; a file the cleanup job removed answers 404, and the tailor generates the sheet again.
          */
         get: operations["getSheetFile"];
         put?: never;
@@ -2975,6 +2975,7 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
         };
     };
     getSheetFile: {

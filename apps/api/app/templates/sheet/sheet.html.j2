@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="{{ locale }}">
+<head>
+<meta charset="utf-8">
+<title>{{ t.title }} {{ client_code }}</title>
+<meta name="dcterms.created" content="{{ generated_at }}">
+<meta name="dcterms.modified" content="{{ generated_at }}">
+<link rel="stylesheet" href="sheet.css">
+</head>
+<body>
+<section class="head">
+  <h1>{{ t.title }}</h1>
+  <dl>
+    <dt>{{ t.client }}</dt><dd>{{ client_code }}</dd>
+    {% if name %}<dt>{{ t.name }}</dt><dd>{{ name }}</dd>{% endif %}
+    <dt>{{ t.profile }}</dt><dd>v{{ profile_version }} · {{ captured_on }}</dd>
+    <dt>{{ t.tailor }}</dt><dd>{{ business_name }}</dd>
+  </dl>
+</section>
+<p class="order"><span>{{ t.garment }}: <b>{{ garment }}</b></span><span>{{ t.due }}: <b>{{ due_date }}</b></span><span>{{ t.order }}: <b>{{ order_no }}</b></span></p>
+<section class="main">
+<table>
+  <thead><tr><th></th><th>{{ t.site }}</th><th>{{ t.body }}</th><th>{{ t.ease }}</th><th>{{ t.finished }}</th><th>{{ t.flag }}</th></tr></thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td class="no">{{ row.number or "" }}</td>
+      <td>{{ row.name }}<span class="iso">{{ row.iso }}, ISO 8559-1</span></td>
+      {% if row.note %}
+      <td class="num">{{ row.body }}</td><td class="note" colspan="2">{{ row.note }}</td>
+      {% else %}
+      <td class="num">{{ row.body }}</td><td class="num">{{ row.ease }}</td><td class="num">{{ row.finished }}</td>
+      {% endif %}
+      <td class="flag">{{ row.icon | safe }} {{ row.flag_word }}{% if row.reason %} · {{ row.reason }}{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<div class="figures">
+  <div class="pair">{{ front_svg | safe }}{{ side_svg | safe }}</div>
+  <p>{{ t.front }} · {{ t.side }}</p>
+</div>
+</section>
+<section class="box">
+  <h2>{{ t.notes }}</h2>
+  <div class="rule"></div><div class="rule"></div>
+</section>
+{% if server_checks %}
+<section class="box">
+  <h2>{{ t.confirm }}</h2>
+  <ul>{% for line in server_checks %}<li>{{ line }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+<section class="foot">
+  <div class="qr">{{ qr_svg | safe }}</div>
+  <div>
+    <p>{{ footer_version }}</p>
+    <p>{{ footer_checks }} {{ t.footer_estimate }}</p>
+    <p class="privacy">{{ t.footer_privacy }}</p>
+  </div>
+</section>
+</body>
+</html>

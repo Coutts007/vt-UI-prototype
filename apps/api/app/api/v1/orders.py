@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Annotated, Any, Literal
 from zoneinfo import ZoneInfo
 
@@ -19,6 +20,7 @@ from app.models import (
     Order,
     OrderItem,
     OrderStatusHistory,
+    SpecSheet,
     Tailor,
     UserAccount,
 )
@@ -46,6 +48,7 @@ from app.security.ip_hash import ip_hash
 from app.services import audit
 from app.services.ease import suggestions
 from app.services.ingest import invalid
+from app.services.sheets import remove_files
 
 from .directory import Page, PageSize
 
@@ -427,8 +430,18 @@ async def delete_order(
     if order.status != "new":
         raise invalid("status", "order_in_progress")
     _record(request, session, principal.user, "order_delete", order)
+    sheet_ids = [
+        str(sheet_id)
+        for sheet_id in await session.scalars(
+            select(SpecSheet.sheet_id).where(SpecSheet.order_id == order.order_id)
+        )
+    ]
     await session.delete(order)
     await session.commit()
+    # The rows went with the order; their files would otherwise wait 30 days for the cleanup job.
+    folder = Path(request.app.state.settings.sheets_dir)
+    for sheet_id in sheet_ids:
+        remove_files(folder, sheet_id)
     return Response(status_code=204)
 
 

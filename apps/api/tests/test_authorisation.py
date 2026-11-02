@@ -118,6 +118,8 @@ SCHEMA_PAIRS = {
     "orderRows": ("OrderItemInput", "OrderItem"),
     "orderSummary": ("OrderSummary", None),
     "ease": ("EasePreset", "EaseSuggestion"),
+    "createSheet": ("SheetInput", "Sheet"),
+    "logShare": ("ShareInput", None),
     "listAudit": (None, "AuditPage"),
     "auditRows": ("AuditEntry", None),
     "flags": ("FlagCounts", None),

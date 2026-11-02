@@ -17,9 +17,14 @@ for (const [licence, packages] of Object.entries(web)) {
 const api = JSON.parse(
   run('uv run --quiet --no-dev --with pip-licenses pip-licenses --format=json --from=mixed'),
 );
+// Packages offered under a choice of licences: the licence the project takes. Checked by hand.
+const elected = {
+  // WeasyPrint's hyphenation dictionary; offered as GPL-2.0+, LGPL-2.1+ or MPL-1.1 (M10).
+  pyphen: 'MPL-1.1 (elected; also offered under two copyleft licences)',
+};
 for (const pkg of api) {
   if (['pip-licenses', 'prettytable', 'wcwidth', 'tomli'].includes(pkg.Name)) continue;
-  rows.push(['api', pkg.Name, pkg.Version, pkg.License]);
+  rows.push(['api', pkg.Name, pkg.Version, elected[pkg.Name] ?? pkg.License]);
 }
 // Self-hosted files that no package manager lists (D37). Licences checked by hand; see docs/opencv-build.md.
 rows.push(
@@ -36,6 +41,9 @@ rows.push(
     'Apache-2.0',
   ],
   ['web-asset', 'OpenCV.js custom build', '4.10.0', 'Apache-2.0'],
+  // Bundled into the sheet renderer (apps/api/app/templates/sheet/fonts, OFL.txt alongside).
+  ['api-asset', 'Noto Sans (Regular, Bold), unhinted', '2.015', 'OFL-1.1'],
+  ['api-asset', 'Noto Sans Mono (Regular), unhinted', '2.014', 'OFL-1.1'],
 );
 rows.sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
 

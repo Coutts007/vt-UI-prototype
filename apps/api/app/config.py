@@ -5,6 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEV_JWT_SECRET = "dev-only-jwt-secret-change-me-0123456789"
 DEV_IP_PEPPER = "dev-only-ip-pepper"
+DEV_SIGNED_URL_SECRET = "dev-only-signed-url-secret-0123456789"
 
 
 class Settings(BaseSettings):
@@ -19,6 +20,10 @@ class Settings(BaseSettings):
     ip_pepper: str = DEV_IP_PEPPER
     trusted_proxies: str = ""
     token_hours: int = 24
+    # Sheets (backend-spec 13): files on disk, reached only through signed links.
+    signed_url_secret: str = DEV_SIGNED_URL_SECRET
+    sheets_dir: str = "/data/sheets"
+    sheets_per_tailor_hour: int = Field(default=60, ge=1)
     # The tailor directory (D27). Stays off in production until M8 and M11's cleanup job exist.
     directory_enabled: bool = False
     directory_codes_per_tailor_day: int = Field(default=50, ge=1)
@@ -32,7 +37,9 @@ class Settings(BaseSettings):
             self.jwt_secret == DEV_JWT_SECRET
             or self.ip_pepper == DEV_IP_PEPPER
             or self.vt_app_db_password == "vt-app-dev-only"
+            or self.signed_url_secret == DEV_SIGNED_URL_SECRET
             or len(self.jwt_secret) < 32
+            or len(self.signed_url_secret) < 32
         ):
             raise ValueError("Production needs its own secrets")
         if self.env == "production" and self.rate_limits_off:

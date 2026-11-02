@@ -752,3 +752,20 @@ class RulesArtifact(BaseModel):
     rules_version: str
     status: Literal["draft", "frozen", "retired"]
     checksum: str
+
+
+class SheetInput(Input):
+    include_name: StrictBool
+
+
+class Sheet(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    sheet_id: uuid.UUID
+    png_url: str = Field(max_length=512)
+    pdf_url: str = Field(max_length=512)
+    share_text: str = Field(max_length=1500)
+    generated_at: AwareDatetime
+
+
+class ShareInput(Input):
+    via: Literal["whatsapp_share", "wa_link", "download", "print"]

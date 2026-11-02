@@ -279,6 +279,16 @@ describe('every endpoint answers as the contract says', () => {
   for (const { path, method, op } of operations) {
     it(`${method.toUpperCase()} ${path}`, async () => {
       const c = CASES[op.operationId];
+      if (op.operationId === 'getSheetFile') {
+        // The mock serves files only for sheets it made, as the API does.
+        const made = await call(
+          '/orders/{order_id}/sheets',
+          'post',
+          CASES.createSheet,
+          tokens.tailor,
+        );
+        c.path = { sheet_file: `${(await made.clone().json()).sheet_id}.png` };
+      }
       if (op.operationId === 'logShare') {
         const made = await call(
           '/orders/{order_id}/sheets',
