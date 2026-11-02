@@ -970,6 +970,23 @@ export interface paths {
         patch: operations["updateParticipant"];
         trace?: never;
     };
+    "/study/participants/{participant_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a participant's withdrawal (D44 default, open for the owner). Their rows are kept, left out of every export and refused for new readings. One way. */
+        post: operations["withdrawParticipant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/study/reference-readings": {
         parameters: {
             query?: never;
@@ -1717,7 +1734,7 @@ export interface components {
             /** Format: date */
             trained_on: string;
         };
-        /** @description A9. Study writes are refused in production until the first five fields are filled and either 60 days have passed since dpia_submitted_on or odpc_response_on is recorded. */
+        /** @description A9. Study writes are refused in production until the first five fields are filled and either 60 days have passed since dpia_submitted_on or odpc_response_on is recorded with its reference, on or after the DPIA date. No date may be in the future. The server sets approvals_confirmed_by and confirmed_at from the signed-in admin; values sent are ignored. */
         Approvals: {
             ierc_ref: string | null;
             nacosti_licence_no: string | null;
@@ -1739,6 +1756,8 @@ export interface components {
             current_rules_version?: components["schemas"]["RulesVersion"];
             min_app_version?: string;
             approvals?: components["schemas"]["Approvals"];
+            /** @description Needed with a new study_collection_end, which schedules the deletion of study records 12 months later. A past end is refused while study mode is on. */
+            confirm_study_deletion?: boolean;
         };
         AdminSettings: {
             retention_months: number;
@@ -3603,6 +3622,31 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    withdrawParticipant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                participant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Withdrawn */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Participant"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     submitReferenceReadings: {

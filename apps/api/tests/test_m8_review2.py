@@ -114,21 +114,33 @@ async def test_a_replay_claim_can_clear_the_details(
 async def test_deleting_an_empty_unclaimed_code_is_done_with_nothing_done(
     client: AsyncClient, session: AsyncSession, owner_url: str, secret: str | None, reason: str
 ) -> None:
+    # AB1008 became a participant's code in the M11 seed, and a participant's request is always
+    # held for the admin (D44). An empty code that is nobody's participant is needed here.
+    empty = "ZZ8001"
     await owner_execute(
         owner_url,
-        f"UPDATE client SET display_name=NULL, height_mm=NULL WHERE client_code='{FREE_CODE}'",
+        "INSERT INTO client (client_id, client_code, tailor_id)"
+        f" SELECT gen_random_uuid(), '{empty}', tailor_id FROM client WHERE client_code = 'AB1001'",
     )
-    reply = await ask_delete(client, secret=secret, reason=reason)
+    reply = await ask_delete(client, code=empty, secret=secret, reason=reason)
     assert reply.status_code == 202 and reply.json()["status"] == "done"
     assert reply.json()["note"] == "Nothing is held for this code."
     uuid.UUID(reply.json()["request_id"])
-    row = await row_of(session)
+    row = await row_of(session, empty)
     assert row.secret_hash is None, "a deletion must not claim"
     query = select(func.count()).select_from(Consent).where(Consent.client_id == row.client_id)
     assert not await session.scalar(query.where(Consent.withdrawn_at.isnot(None)))
     requests = select(func.count()).select_from(DeletionRequest)
     assert not await session.scalar(requests.where(DeletionRequest.client_id == row.client_id))
-    assert (await post(client, payload())).status_code == 201, "a real client can still claim"
+    assert (await post(client, payload(code=empty))).status_code == 201, "a real client can claim"
+
+
+async def test_a_participant_code_with_nothing_held_is_still_held_for_the_admin(
+    client: AsyncClient,
+) -> None:
+    """D44: a study code's request reaches the admin even with no profile or consent row."""
+    reply = await ask_delete(client, secret=None, reason="withdraw_consent")
+    assert reply.status_code == 202 and reply.json()["status"] == "received"
 
 
 async def test_deleting_an_unknown_code_is_refused(client: AsyncClient) -> None:

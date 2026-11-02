@@ -10,7 +10,7 @@ from datetime import UTC, date, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request, Response
-from sqlalchemy import exists, func, select
+from sqlalchemy import exists, func, literal, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -71,8 +71,13 @@ def _guard(request: Request, values: dict[str, Any]) -> None:
     require_approvals(request.app.state.settings.env, values, datetime.now(UTC).date())
 
 
-def withdrawn_clause(client_id: Any) -> Any:
-    return exists().where(Consent.client_id == client_id, Consent.withdrawn_at.isnot(None))
+def is_withdrawn(participant: Participant) -> Any:
+    """Withdrawn from the study, whether or not a consent row exists (D44 default)."""
+    if participant.withdrawn_at is not None:
+        return select(literal(True))
+    return select(
+        exists().where(Consent.client_id == participant.client_id, Consent.withdrawn_at.isnot(None))
+    )
 
 
 async def _view(session: AsyncSession, participant: Participant) -> ParticipantView:
@@ -94,7 +99,7 @@ async def _view(session: AsyncSession, participant: Participant) -> ParticipantV
     counts = list(await session.scalars(select(per_site.c.n)))
     # Complete sets of readings: the fewest any of the nine sites has.
     readings = min(counts) if len(counts) == len(SITES) else 0
-    withdrawn = await session.scalar(select(withdrawn_clause(participant.client_id)))
+    withdrawn = await session.scalar(is_withdrawn(participant))
     return ParticipantView(
         participant_id=participant.participant_id,
         participant_code=participant.participant_code,
@@ -156,6 +161,13 @@ async def enrol_participant(
 ) -> ParticipantView:
     values = await _study_on(request, session)
     _guard(request, values)
+    if await session.scalar(
+        select(Participant).where(Participant.participant_code == body.participant_code)
+    ):
+        raise invalid("participant_code", "taken")
+    # One enrolment at a time, so two cannot draw the seed or take the same stratum position.
+    await session.execute(text("SELECT pg_advisory_xact_lock(hashtext('vt-allocation'))"))
+    values = await read_settings(session)
     if await session.scalar(
         select(Participant).where(Participant.participant_code == body.participant_code)
     ):
@@ -247,6 +259,32 @@ async def update_participant(
     return await _view(session, participant)
 
 
+@router.post("/study/participants/{participant_id}/withdraw", operation_id="withdrawParticipant",
+             response_model=ParticipantView, dependencies=[ADMIN])  # fmt: skip
+async def withdraw(
+    participant_id: uuid.UUID, request: Request, session: Session, principal: CurrentPrincipal
+) -> ParticipantView:
+    """The admin records a withdrawal given on paper or in person (D44 default: kept, unused)."""
+    participant = await session.get(Participant, participant_id, with_for_update=True)
+    if participant is None:
+        raise ApiError("not_found")
+    if participant.withdrawn_at is None:
+        participant.withdrawn_at = datetime.now(UTC)
+        audit.record(
+            session,
+            actor_type="user",
+            action="participant_update",
+            entity_type="participant",
+            entity_id=participant.participant_id,
+            user_id=principal.user.user_id,
+            client_id=participant.client_id,
+            ip_hash=ip_hash(request),
+            detail={"withdrawn": True},
+        )
+    await session.commit()
+    return await _view(session, participant)
+
+
 async def _participant(session: AsyncSession, code: str) -> Participant:
     participant = await session.scalar(
         select(Participant).where(Participant.participant_code == code)
@@ -273,7 +311,7 @@ async def submit_readings(
     _guard(request, values)
     measurer = await _measurer(session, principal.user)
     participant = await _participant(session, body.participant_code)
-    if await session.scalar(select(withdrawn_clause(participant.client_id))):
+    if await session.scalar(is_withdrawn(participant)):
         raise ApiError("consent_missing")
     mine = select(ReferenceMeasurement.reading_no).where(
         ReferenceMeasurement.participant_id == participant.participant_id,

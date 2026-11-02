@@ -190,6 +190,8 @@ class Participant(Base):
     cohort: Mapped[str] = mapped_column(String(12))
     cohort_assigned_at: Mapped[datetime] = now()
     enrolled_at: Mapped[datetime] = now()
+    # D44 default: withdrawal blocks use without destroying anything. One way (a trigger keeps it).
+    withdrawn_at: Mapped[datetime | None] = stamp()
 
 
 class CaptureSession(Base):
@@ -480,6 +482,9 @@ class DeletionRequest(Base):
     note: Mapped[str | None] = mapped_column(String(256))
     # The claim round the request covers. None: every round, after an admin checked it (D45).
     claim_round: Mapped[int | None] = mapped_column(Integer)
+    # The admin carried it out after checking, so it covers every round (D45). False with no
+    # round recorded means the job leaves it for the admin.
+    all_rounds: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
 
 class AuditLog(Base):

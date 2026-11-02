@@ -1,7 +1,8 @@
 """The two study exports, column for column as backend-spec 12.1 lists them.
 
 Codes only: no name, phone, email or client code leaves in them. A participant who withdrew
-is left out (D44, open). Centimetres to one decimal; a missing value is an empty cell.
+is left out (D44 default, open for the owner). Centimetres to one decimal; a missing
+value is an empty cell.
 """
 
 from collections import defaultdict
@@ -57,8 +58,10 @@ def _number(value: Any) -> str:
     return "" if value is None else str(value)
 
 
-def _withdrawn() -> Any:
-    return select(Consent.client_id).where(Consent.withdrawn_at.isnot(None))
+def _kept() -> Any:
+    """Participants still in the study: no withdrawal on the row and none through consent (D44)."""
+    consent_withdrawn = select(Consent.client_id).where(Consent.withdrawn_at.isnot(None))
+    return (Participant.withdrawn_at.is_(None)) & Participant.client_id.not_in(consent_withdrawn)
 
 
 async def captures_csv(session: AsyncSession, rules_version: str | None) -> tuple[str, int]:
@@ -68,7 +71,7 @@ async def captures_csv(session: AsyncSession, rules_version: str | None) -> tupl
         .join(Participant, Participant.participant_id == CaptureSession.participant_id)
         .where(
             MeasurementProfile.status != "deleted",
-            Participant.client_id.not_in(_withdrawn()),
+            _kept(),
         )
         .order_by(
             Participant.participant_code, CaptureSession.set_no, MeasurementProfile.captured_at
@@ -130,7 +133,7 @@ async def reference_csv(session: AsyncSession) -> tuple[str, int]:
         select(ReferenceMeasurement, Participant, Measurer)
         .join(Participant, Participant.participant_id == ReferenceMeasurement.participant_id)
         .join(Measurer, Measurer.measurer_id == ReferenceMeasurement.measurer_id)
-        .where(Participant.client_id.not_in(_withdrawn()))
+        .where(_kept())
         .order_by(
             Participant.participant_code,
             ReferenceMeasurement.site_code,

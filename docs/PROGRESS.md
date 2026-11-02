@@ -22,6 +22,15 @@ The newest entry comes first. Every change or improvement adds a line in the sam
 - Compliance documents: `docs/data-inventory.md`, `docs/dpia-technical-annex.md`, `docs/retention-schedule.md` and `docs/incident-response.md` describe what the code holds and does today, list the gaps (no backups or Content Security Policy yet, M12) and say that the DPIA, its filing and the approvals are the owner's.
 - `scripts/budget.mjs` now fails a production build that carries a demo sign-in. With the mock client gone the production build has none; D38's client flow plus capture engine figure is 179.2 KB gzip (about 179.5 KB before), the flow line 167.8 KB of 170, first screen 88.1 KB, tailor 110.1 KB.
 - The measurer-screen test matched digit runs inside ids and hashes on the real API ("450" inside a generated id); it now counts whole numbers only.
+- Review of PR #14, API and database:
+  - Withdrawal now lives on the participant row (`participant.withdrawn_at`, migration 0008), so a participant with no consent record can withdraw. A proven phone request (delete or withdraw) on a participant's code sets it. An unproven one is held for the admin instead of answering "nothing held". The admin's "Carry out" sets it, and so does the new audited `POST /study/participants/{id}/withdraw`. Exports and readings check it, and a trigger makes it one way.
+  - No deletion path removes study capture sets (D44 default), and they never hold a request open.
+  - A9: an ODPC date needs its reference and must fall between the DPIA date and today. No approval date may be in the future. The server records who confirmed and when from the signed-in admin. The audit row keeps the approval values. Study uploads to `POST /profiles` apply the guard in production.
+  - A new collection end needs `confirm_study_deletion`. A past end is refused while study mode is on, and the audit row keeps old and new. The job deletes study records only after a dry-run report at least a week older showed that deletion for the same end.
+  - Enrolments take an advisory lock, so concurrent ones keep the allocation blocks.
+  - Triggers lock the cohort once readings exist, a capture set's participant and set number, and the allocation seed.
+  - `vt_retention` may delete only from the tables it cleans (audit rows past their period included, as spec 14.6 needs). It can no longer read accounts or the migration table.
+  - Migration 0007 copies the client's round onto old deletion requests. A new `all_rounds` flag marks the admin's checked requests, and a request with neither is left for the admin.
 
 ## 2026-11-02: M10 specification sheets and sharing
 

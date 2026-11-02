@@ -164,6 +164,12 @@ async def test_study_records_go_12_months_after_collection_ends(
         " ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
     )
     assert await count(session, ReferenceMeasurement) == 63
+    # A dry run a week or more earlier must have shown the deletion (review of PR #14).
+    early = await run_retention(
+        job, sheets_dir=tmp_path / "sheets", reports_dir=tmp_path / "reports", dry_run=True,
+        now=datetime.now(UTC) - timedelta(days=8),
+    )  # fmt: skip
+    assert early.study_readings == 63
     report = await run(job, tmp_path)
     assert report.study_readings == 63 and report.study_participants == 5
     assert await count(session, Participant) == 0
@@ -261,3 +267,62 @@ def test_production_refuses_the_default_retention_password() -> None:
             signed_url_secret="s" * 40,
             _env_file=None,
         )
+
+
+async def test_study_records_stay_without_an_earlier_dry_run(
+    job: AsyncSession, session: AsyncSession, owner_url: str, tmp_path: Path
+) -> None:
+    end = (datetime.now(UTC) - timedelta(days=400)).date().isoformat()
+    await owner_execute(
+        owner_url,
+        "INSERT INTO app_setting (key, value) VALUES"
+        f" ('study_collection_end', '\"{end}\"')"
+        " ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+    )
+    # A dry run today is not enough: the deletion waits a week after the report that showed it.
+    await run(job, tmp_path, dry_run=True)
+    report = await run(job, tmp_path)
+    assert report.study_readings == 0
+    assert await count(session, ReferenceMeasurement) == 63
+    assert any("study" in note.lower() for note in report.notes)
+
+
+async def test_the_job_role_deletes_only_what_it_cleans(job: AsyncSession) -> None:
+    from sqlalchemy import text
+    from sqlalchemy.exc import DBAPIError
+
+    for statement in (
+        "DELETE FROM app_setting",
+        "DELETE FROM user_account",
+        "DELETE FROM tailor",
+        "DELETE FROM measurer",
+        "SELECT * FROM alembic_version",
+        "SELECT password_hash FROM user_account",
+    ):
+        with pytest.raises(DBAPIError):
+            await job.execute(text(statement))
+        await job.rollback()
+
+
+async def test_a_request_with_no_round_is_left_for_the_admin(
+    job: AsyncSession, session: AsyncSession, owner_url: str, tmp_path: Path
+) -> None:
+    """An old request with no round recorded must not reach every round (D45)."""
+    client = await session.scalar(select(Client).where(Client.client_code == "AB1006"))
+    assert client
+    request = DeletionRequest(
+        client_id=client.client_id, client_code_hash="y" * 64, reason="delete",
+        status="partially_done", claim_round=None,
+    )  # fmt: skip
+    session.add(request)
+    await session.commit()
+    owner = f"(SELECT order_id FROM \"order\" WHERE client_id = '{client.client_id}')"
+    await owner_execute(
+        owner_url,
+        "UPDATE order_status_history SET changed_at = now() - interval '31 days'"
+        f" WHERE status = 'collected' AND order_id IN {owner}",
+    )
+    report = await run(job, tmp_path)
+    assert report.orders_after_collection == 0
+    await session.refresh(request)
+    assert request.status == "partially_done"

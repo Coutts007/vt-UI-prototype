@@ -125,6 +125,7 @@ The tailor directory (D27) is behind the web switch `VITE_FEATURE_DIRECTORY` and
 | `GET /study/participants` | Lists participants and how complete their data is |
 | `POST /study/participants` | Enrols a participant. **On the live server this is refused until the ethics, research licence and data protection approvals are recorded.** Audited |
 | `PATCH /study/participants/{participant_id}` | Changes a participant's details. The cohort cannot change once tape readings exist. Audited |
+| `POST /study/participants/{participant_id}/withdraw` | Records a withdrawal given on paper or in person. The participant's rows stay but leave every export and get no new readings (D44 default). Cannot be undone. Audited |
 | `POST /study/reference-readings` | A measurer saves one set of nine tape readings, which then locks. Blocked on the live server until approvals exist, as above. Audited |
 | `GET /study/reference-readings/mine` | A measurer sees their own readings only |
 | `GET /admin/study/reference-readings` | The admin reads one participant's readings, with any corrections |

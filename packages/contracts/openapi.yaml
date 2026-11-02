@@ -1168,6 +1168,25 @@ paths:
         '403': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
+  /study/participants/{participant_id}/withdraw:
+    post:
+      operationId: withdrawParticipant
+      tags: [study]
+      summary: >
+        Record a participant's withdrawal (D44 default, open for the owner). Their rows are kept,
+        left out of every export and refused for new readings. One way.
+      x-audit: participant_update
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: participant_id, in: path, required: true, schema: { type: string, format: uuid, maxLength: 36 } }
+      responses:
+        '200':
+          description: Withdrawn
+          content: { application/json: { schema: { $ref: '#/components/schemas/Participant' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
   /study/reference-readings:
     post:
       operationId: submitReferenceReadings
@@ -2274,7 +2293,9 @@ components:
     Approvals:
       description: >
         A9. Study writes are refused in production until the first five fields are filled and either
-        60 days have passed since dpia_submitted_on or odpc_response_on is recorded.
+        60 days have passed since dpia_submitted_on or odpc_response_on is recorded with its
+        reference, on or after the DPIA date. No date may be in the future. The server sets
+        approvals_confirmed_by and confirmed_at from the signed-in admin; values sent are ignored.
       type: object
       additionalProperties: false
       required:
@@ -2304,6 +2325,11 @@ components:
         current_rules_version: { $ref: '#/components/schemas/RulesVersion' }
         min_app_version: { type: string, maxLength: 20 }
         approvals: { $ref: '#/components/schemas/Approvals' }
+        confirm_study_deletion:
+          description: >
+            Needed with a new study_collection_end, which schedules the deletion of study records
+            12 months later. A past end is refused while study mode is on.
+          type: boolean
     AdminSettings:
       type: object
       additionalProperties: false

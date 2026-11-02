@@ -843,6 +843,8 @@ class AdminSettingsInput(Input):
     current_rules_version: RulesVersionName | None = None
     min_app_version: str | None = Field(default=None, max_length=20, pattern=r"^\d+\.\d+\.\d+$")
     approvals: Approvals | None = None
+    # A collection end schedules the deletion of study records 12 months later (backend-spec 14.6).
+    confirm_study_deletion: bool | None = None
 
 
 class DeletionRequest(BaseModel):

@@ -26,8 +26,9 @@ from app.security.deps import CurrentPrincipal, Session, require_role
 from app.security.ip_hash import ip_hash
 from app.security.passwords import hash_password
 from app.services import audit
-from app.services.approvals import earliest_collection, missing
+from app.services.approvals import earliest_collection, missing, problems
 from app.services.csvout import csv_response, to_csv
+from app.services.data_requests import STUDY_KEPT, withdraw_participant
 from app.services.erasure import erase_profiles
 from app.services.ingest import invalid
 from app.services.settings import read_settings, write_setting
@@ -226,15 +227,58 @@ async def get_settings(session: Session) -> AdminSettings:
     return _settings_view(await read_settings(session))
 
 
+SUBSTANCE = ("ierc_ref", "nacosti_licence_no", "dpia_submitted_on", "odpc_response_on",
+             "odpc_response_ref")  # fmt: skip
+
+
+def _approvals(
+    new: dict[str, Any], old: dict[str, Any], email: str, moment: datetime
+) -> dict[str, Any]:
+    """Who confirmed and when are the server's to record, from the signed-in admin (A9)."""
+    if all(new.get(k) == old.get(k) for k in SUBSTANCE):
+        return {**new, "approvals_confirmed_by": old.get("approvals_confirmed_by"),
+                "confirmed_at": old.get("confirmed_at")}  # fmt: skip
+    filled = all(new.get(k) for k in ("ierc_ref", "nacosti_licence_no", "dpia_submitted_on"))
+    return {
+        **new,
+        "approvals_confirmed_by": email if filled else None,
+        "confirmed_at": moment.isoformat() if filled else None,
+    }
+
+
 @router.put("/settings", operation_id="putAdminSettings", response_model=AdminSettings,
             dependencies=[ADMIN])  # fmt: skip
 async def put_settings(
     body: AdminSettingsInput, request: Request, session: Session, principal: CurrentPrincipal
 ) -> AdminSettings:
     changes = body.model_dump(mode="json", exclude_unset=True)
+    confirmed = bool(changes.pop("confirm_study_deletion", False))
+    current = await read_settings(session)
+    moment = datetime.now(UTC)
+    today = moment.date()
     version = changes.get("current_rules_version")
     if version and version not in request.app.state.rules:
         raise invalid("current_rules_version", "unknown")
+    detail: dict[str, Any] = {}
+    if "study_collection_end" in changes:
+        end = changes["study_collection_end"]
+        if end != current.get("study_collection_end") and end is not None:
+            # A past end while the study runs would delete its records at the next run.
+            if changes.get("study_mode", current["study_mode"]) and date.fromisoformat(end) < today:
+                raise invalid("study_collection_end", "in_past")
+            if not confirmed:
+                raise invalid("confirm_study_deletion", "required")
+        detail["study_collection_end"] = {"old": current.get("study_collection_end"), "new": end}
+    if "approvals" in changes:
+        approvals = _approvals(
+            changes["approvals"], current.get("approvals") or {}, principal.user.email, moment
+        )
+        found = problems(approvals, today)
+        if found:
+            raise ApiError("validation_failed", errors=[{"field": f, "code": c} for f, c in found])
+        changes["approvals"] = approvals
+        # The approval references are the evidence the A9 guard rests on, so the row keeps them.
+        detail["approvals"] = approvals
     for key, value in changes.items():
         await write_setting(session, key, value, principal.user.user_id)
     if changes:
@@ -246,8 +290,7 @@ async def put_settings(
             entity_id="admin",
             user_id=principal.user.user_id,
             ip_hash=ip_hash(request),
-            # The names of what changed only. Approval references are kept in the settings row.
-            detail={"changed": sorted(changes)},
+            detail={"changed": sorted(changes), **detail},
         )
     await session.commit()
     return _settings_view(await read_settings(session))
@@ -294,6 +337,7 @@ async def honour_deletion_request(
     if client is None:
         raise ApiError("not_found")
     moment = datetime.now(UTC)
+    participant = await withdraw_participant(session, client.client_id, moment)
     if row.reason == "withdraw_consent":
         await session.execute(
             update(Consent)
@@ -301,11 +345,14 @@ async def honour_deletion_request(
             .values(withdrawn_at=moment)
         )
     # The admin has checked the request, so it covers every claim round of the code (D45).
+    # Study sets stay, unused (D44 default), so they never hold a request open.
     erased = await erase_profiles(session, client.client_id, None)
     details_cleared = client.display_name is not None or client.height_mm is not None
     client.display_name = None
     client.height_mm = None
-    row.claim_round = None
+    row.all_rounds = True
+    if participant:
+        row.note = ((row.note or "") + STUDY_KEPT)[:256]
     row.status = "partially_done" if erased.retained else "done"
     row.completed_at = None if erased.retained else moment
     audit.record(
@@ -323,6 +370,8 @@ async def honour_deletion_request(
             "retained": erased.retained,
             "details_cleared": details_cleared,
             "all_rounds": True,
+            "study_kept": erased.study_kept,
+            "participant_withdrawn": participant,
         },
     )
     await session.commit()

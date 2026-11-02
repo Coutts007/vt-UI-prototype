@@ -13,10 +13,22 @@ from app.models import CaptureSession, DeletedProfile, MeasurementProfile, Order
 class Erased:
     deleted: int
     retained: int
+    study_kept: int = 0
+
+
+def study_set() -> ColumnElement[bool]:
+    """A profile captured as a study set. D44's default keeps these, unused, until the owner
+    decides what withdrawal does to study records: no deletion path removes them."""
+    return MeasurementProfile.session_id.in_(
+        select(CaptureSession.session_id).where(CaptureSession.participant_id.isnot(None))
+    )
 
 
 def _scope(client_id: uuid.UUID, claim_round: int | None) -> list[ColumnElement[bool]]:
-    conditions: list[ColumnElement[bool]] = [MeasurementProfile.client_id == client_id]
+    conditions: list[ColumnElement[bool]] = [
+        MeasurementProfile.client_id == client_id,
+        ~study_set(),
+    ]
     if claim_round is not None:
         conditions.append(MeasurementProfile.claim_round == claim_round)
     return conditions
@@ -47,4 +59,9 @@ async def erase_profiles(
     retained = await session.scalar(
         select(func.count()).select_from(MeasurementProfile).where(*_scope(client_id, claim_round))
     )
-    return Erased(deleted=len(rows), retained=retained or 0)
+    kept = await session.scalar(
+        select(func.count())
+        .select_from(MeasurementProfile)
+        .where(MeasurementProfile.client_id == client_id, study_set())
+    )
+    return Erased(deleted=len(rows), retained=retained or 0, study_kept=kept or 0)

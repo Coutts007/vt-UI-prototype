@@ -38,6 +38,9 @@ AFTER_COLLECTION = timedelta(days=30)  # D10: an order's profile stays 30 days a
 TOMBSTONE_DAYS = 90  # D45: long enough for any phone's queue, which is refused after 90 days
 DIRECTORY_UNUSED_DAYS = 30  # D27: a directory code nobody measured with
 STUDY_KEEP_MONTHS = 12  # 14.6 step 3: after the collection end
+# Study records go only after a dry run at least this long before showed their deletion, for the
+# same collection end (review of PR #14): a wrong date can be caught before anything is lost.
+STUDY_NOTICE = timedelta(days=7)
 
 
 @dataclass
@@ -56,6 +59,7 @@ class RetentionReport:
     revoked_tokens: int = 0
     tombstones: int = 0
     sheet_files: int = 0
+    study_collection_end: str | None = None
     notes: list[str] = field(default_factory=list)
 
     def counts(self) -> dict[str, int]:
@@ -101,19 +105,27 @@ async def _finish_requests(session: AsyncSession, now: datetime, report: Retenti
     )
     for request in list(held):
         assert request.client_id is not None
+        if request.all_rounds:
+            scope = None
+        elif request.claim_round is None:
+            # No round recorded: never read as every round. The admin carries it out (D45).
+            report.notes.append("A held request with no claim round was left for the admin.")
+            continue
+        else:
+            scope = request.claim_round
         query = select(Order.order_id).where(
             Order.client_id == request.client_id,
             Order.status == "collected",
             _collected_at() <= now - AFTER_COLLECTION,
         )
-        if request.claim_round is not None:
+        if scope is not None:
             # A request a phone proved reaches only its own round's orders (D45).
             query = query.join(
                 MeasurementProfile, MeasurementProfile.profile_id == Order.profile_id
-            ).where(MeasurementProfile.claim_round == request.claim_round)
+            ).where(MeasurementProfile.claim_round == scope)
         old_orders = list(await session.scalars(query))
         report.orders_after_collection += await _delete_orders(session, old_orders)
-        erased = await erase_profiles(session, request.client_id, request.claim_round)
+        erased = await erase_profiles(session, request.client_id, scope)
         report.profiles_after_collection += erased.deleted
         if erased.retained == 0:
             request.status = "done"
@@ -184,18 +196,45 @@ async def _old_clients(
     report.directory_codes_unused = await _remove_clients(session, unused)
 
 
+def _noticed(reports_dir: Path | None, end: str, now: datetime) -> bool:
+    """A dry-run report, a week or more old, showed this study deletion for this end date."""
+    if reports_dir is None or not reports_dir.is_dir():
+        return False
+    for path in reports_dir.glob("retention-*-dry-run.json"):
+        try:
+            earlier = json.loads(path.read_text())
+            run_at = datetime.fromisoformat(earlier["run_at"])
+        except (OSError, ValueError, KeyError):
+            continue
+        shown = earlier.get("study_readings", 0) or earlier.get("study_participants", 0)
+        if earlier.get("study_collection_end") == end and shown and run_at <= now - STUDY_NOTICE:
+            return True
+    return False
+
+
 async def _study_records(
-    session: AsyncSession, now: datetime, end: Any, report: RetentionReport
+    session: AsyncSession,
+    now: datetime,
+    end: Any,
+    report: RetentionReport,
+    reports_dir: Path | None,
 ) -> None:
-    """Step 3: study records go 12 months after the collection end."""
+    """Step 3: study records go 12 months after the collection end, after a week's notice."""
     if not end:
         return
+    report.study_collection_end = str(end)
     collection_end = date.fromisoformat(str(end))
     keep_until = months_before(
         datetime(collection_end.year, collection_end.month, collection_end.day, tzinfo=UTC),
         -STUDY_KEEP_MONTHS,
     )
     if now < keep_until:
+        return
+    if not report.dry_run and not _noticed(reports_dir, str(end), now):
+        report.notes.append(
+            "Study records are due but were kept: no dry run a week or more ago showed this"
+            " deletion for this collection end. Run `vt jobs retention --dry-run` and check it."
+        )
         return
     study_profiles = (
         select(MeasurementProfile.profile_id)
@@ -266,7 +305,7 @@ async def run_retention(
     values = await read_settings(session)
     await _finish_requests(session, moment, report)
     await _old_clients(session, moment, int(values["retention_months"]), report)
-    await _study_records(session, moment, values.get("study_collection_end"), report)
+    await _study_records(session, moment, values.get("study_collection_end"), report, reports_dir)
     await _small_rows(session, moment, int(values["audit_retention_months"]), report)
     if dry_run:
         report.sheet_files = (

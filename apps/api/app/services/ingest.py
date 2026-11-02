@@ -3,7 +3,7 @@
 import hashlib
 import json
 import uuid
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -29,6 +29,7 @@ from app.schemas import MeasurementProfilePayload
 from app.security.client_secret import hash_secret, matches, well_formed
 from app.security.ip_hash import ip_hash
 from app.services import audit
+from app.services.approvals import require_approvals
 from app.services.profile_checks import (
     Check,
     change_since_last,
@@ -322,6 +323,9 @@ async def ingest(
         raise ApiError("stale_app_version")
     await _check_consent(session, body, client, settings["consent_version"])
     participant = await _participant_for(session, body, client, settings["study_mode"])
+    if participant is not None:
+        # A study set is study data: in production it waits for the approvals too (A9).
+        require_approvals(request.app.state.settings.env, settings, datetime.now(UTC).date())
 
     if await session.get(CaptureSession, body.session.session_id):
         raise invalid("session.session_id", "session_id_reused")
