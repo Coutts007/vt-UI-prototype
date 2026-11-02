@@ -541,6 +541,8 @@ async def _conflict_json(session: AsyncSession, row: Conflict, code: str) -> dic
     "/conflicts",
     operation_id="listConflicts",
     response_model=list[ConflictView],
+    # Optional measurement numbers are left out, never null (found by fuzzing, M12).
+    response_model_exclude_unset=True,
     tags=["profiles"],
     dependencies=[TAILOR],
 )
@@ -582,6 +584,8 @@ async def list_conflicts(
     "/conflicts/{conflict_id}/resolve",
     operation_id="resolveConflict",
     response_model=ConflictView,
+    # Optional measurement numbers are left out, never null (found by fuzzing, M12).
+    response_model_exclude_unset=True,
     tags=["profiles"],
     dependencies=[TAILOR],
 )

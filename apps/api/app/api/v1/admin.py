@@ -307,13 +307,14 @@ async def _request_view(session: AsyncSession, row: DeletionRequest) -> Deletion
         received_at=row.received_at,
         status=row.status,  # type: ignore[arg-type]
         completed_at=row.completed_at,
-        note=row.note,
         client_code=code,
+        # Left unset when empty: the contract allows no null note, and completed_at stays as null.
+        **({"note": row.note} if row.note else {}),
     )
 
 
 @router.get("/deletion-requests", operation_id="listDeletionRequests",
-            response_model=list[DeletionRequestView], response_model_exclude_none=True,
+            response_model=list[DeletionRequestView], response_model_exclude_unset=True,
             dependencies=[ADMIN])  # fmt: skip
 async def list_deletion_requests(session: Session) -> list[DeletionRequestView]:
     rows = await session.scalars(
@@ -323,7 +324,7 @@ async def list_deletion_requests(session: Session) -> list[DeletionRequestView]:
 
 
 @router.post("/deletion-requests/{request_id}/honour", operation_id="honourDeletionRequest",
-             response_model=DeletionRequestView, response_model_exclude_none=True,
+             response_model=DeletionRequestView, response_model_exclude_unset=True,
              dependencies=[ADMIN])  # fmt: skip
 async def honour_deletion_request(
     request_id: uuid.UUID, request: Request, session: Session, principal: CurrentPrincipal
