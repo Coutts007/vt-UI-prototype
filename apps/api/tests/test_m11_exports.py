@@ -143,3 +143,16 @@ async def test_exports_are_audited(client: AsyncClient, session: AsyncSession) -
         select(AuditLog).where(AuditLog.action == "export", AuditLog.entity_id == "reference.csv")
     )
     assert row and row.detail["rows"] == 63
+
+
+def test_the_shared_column_file_matches_the_export() -> None:
+    """The MSW mock writes its CSV headers from this file, so both sides keep spec 12.1."""
+    import json
+    from pathlib import Path
+
+    from app.services.exports import CAPTURE_COLUMNS, REFERENCE_COLUMNS
+
+    shared = json.loads(
+        (Path(__file__).parents[3] / "packages/contracts/study-export-columns.json").read_text()
+    )
+    assert shared == {"captures": list(CAPTURE_COLUMNS), "reference": list(REFERENCE_COLUMNS)}

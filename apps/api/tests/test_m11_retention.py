@@ -247,3 +247,17 @@ def test_the_nightly_job_runs_at_two_in_nairobi() -> None:
     assert seconds_until_next(datetime(2026, 11, 1, 22, 30, tzinfo=UTC)) == 1800
     # 23:00 UTC is 02:00 exactly, so the next run is a day later.
     assert seconds_until_next(datetime(2026, 11, 1, 23, 0, tzinfo=UTC)) == 86400
+
+
+def test_production_refuses_the_default_retention_password() -> None:
+    from app.config import Settings
+
+    with pytest.raises(ValueError, match="own secrets"):
+        Settings(  # type: ignore[call-arg]
+            env="production",
+            jwt_secret="x" * 40,
+            ip_pepper="p",
+            vt_app_db_password="q",
+            signed_url_secret="s" * 40,
+            _env_file=None,
+        )
