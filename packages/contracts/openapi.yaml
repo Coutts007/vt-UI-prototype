@@ -982,6 +982,29 @@ paths:
               schema: { type: array, items: { $ref: '#/components/schemas/DeletionRequest' } }
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }
+  /admin/deletion-requests/{request_id}/honour:
+    post:
+      operationId: honourDeletionRequest
+      tags: [admin]
+      summary: Carry out a held deletion request, on every claim round of the code
+      description: >-
+        For requests the phone could not prove, such as those held on a freed code (D45).
+        Deletes every profile no uncollected order uses, clears the typed name and height and
+        sets the request to done or partially_done. Profiles an order still uses go 30 days
+        after collection, through the retention job.
+      x-audit: deletion
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: request_id, in: path, required: true, schema: { type: string, format: uuid, maxLength: 36 } }
+      responses:
+        '200':
+          description: The request after it was carried out
+          content: { application/json: { schema: { $ref: '#/components/schemas/DeletionRequest' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
   /admin/rules:
     get:
       operationId: listRules
@@ -1343,6 +1366,7 @@ components:
         - code_issue
         - code_rotate
         - code_reset
+        - retention
         - claim_review
         - client_update
         - conflict_resolve
@@ -1775,6 +1799,11 @@ components:
         status: { $ref: '#/components/schemas/DeletionStatus' }
         completed_at: { type: [string, 'null'], format: date-time, maxLength: 32 }
         note: { type: string, maxLength: 256 }
+        client_code:
+          description: The code the request was made under, for the admin only. Null once the client row is gone.
+          type: [string, 'null']
+          pattern: '^[A-Z]{2}[0-9]{4}$'
+          maxLength: 6
     AccessRequestInput:
       type: object
       additionalProperties: false
@@ -2336,7 +2365,7 @@ components:
     Participant:
       type: object
       additionalProperties: false
-      required: [participant_id, participant_code, client_code, sex, age_band, venue, cohort, enrolled_at, sets_captured, readings_entered]
+      required: [participant_id, participant_code, client_code, sex, age_band, venue, cohort, enrolled_at, sets_captured, readings_entered, withdrawn]
       properties:
         participant_id: { type: string, format: uuid, maxLength: 36 }
         participant_code: { $ref: '#/components/schemas/ParticipantCode' }
@@ -2348,6 +2377,9 @@ components:
         enrolled_at: { type: string, format: date-time, maxLength: 32 }
         sets_captured: { type: integer, minimum: 0, maximum: 3 }
         readings_entered: { type: integer, minimum: 0, maximum: 4 }
+        withdrawn:
+          description: The participant withdrew consent. Their readings stay on record but are left out of every export and refused for new entries (D44, open).
+          type: boolean
     AgeBand: { type: string, enum: ['18-24', '25-34', '35-44', '45-54', '55+'] }
     ParticipantInput:
       type: object

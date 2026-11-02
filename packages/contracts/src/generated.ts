@@ -829,6 +829,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/deletion-requests/{request_id}/honour": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Carry out a held deletion request, on every claim round of the code
+         * @description For requests the phone could not prove, such as those held on a freed code (D45). Deletes every profile no uncollected order uses, clears the typed name and height and sets the request to done or partially_done. Profiles an order still uses go 30 days after collection, through the retention job.
+         */
+        post: operations["honourDeletionRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/rules": {
         parameters: {
             query?: never;
@@ -1081,7 +1101,7 @@ export interface components {
         /** @enum {string} */
         ProfileStatus: "final" | "conflict" | "superseded" | "deleted";
         /** @enum {string} */
-        AuditAction: "register" | "login" | "login_failed" | "logout" | "settings_change" | "profile_ingest" | "client_code_claim" | "profile_view" | "deletion_request" | "access_request" | "deletion" | "code_issue" | "code_rotate" | "code_reset" | "claim_review" | "client_update" | "conflict_resolve" | "order_create" | "order_update" | "order_delete" | "status_change" | "override" | "export" | "share" | "approve" | "account_reject" | "account_disable" | "account_enable" | "account_create" | "rules_register" | "rules_freeze" | "rederive" | "participant_create" | "participant_update" | "reference_entry" | "reference_correction";
+        AuditAction: "register" | "login" | "login_failed" | "logout" | "settings_change" | "profile_ingest" | "client_code_claim" | "profile_view" | "deletion_request" | "access_request" | "deletion" | "code_issue" | "code_rotate" | "code_reset" | "retention" | "claim_review" | "client_update" | "conflict_resolve" | "order_create" | "order_update" | "order_delete" | "status_change" | "override" | "export" | "share" | "approve" | "account_reject" | "account_disable" | "account_enable" | "account_create" | "rules_register" | "rules_freeze" | "rederive" | "participant_create" | "participant_update" | "reference_entry" | "reference_correction";
         PublicSettings: {
             study_mode: boolean;
             consent_version: string;
@@ -1351,6 +1371,8 @@ export interface components {
             /** Format: date-time */
             completed_at: string | null;
             note?: string;
+            /** @description The code the request was made under, for the admin only. Null once the client row is gone. */
+            client_code?: string | null;
         };
         AccessRequestInput: {
             client_code: components["schemas"]["ClientCode"];
@@ -1772,6 +1794,8 @@ export interface components {
             enrolled_at: string;
             sets_captured: number;
             readings_entered: number;
+            /** @description The participant withdrew consent. Their readings stay on record but are left out of every export and refused for new entries (D44, open). */
+            withdrawn: boolean;
         };
         /** @enum {string} */
         AgeBand: "18-24" | "25-34" | "35-44" | "45-54" | "55+";
@@ -3316,6 +3340,32 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    honourDeletionRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request after it was carried out */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletionRequest"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     listRules: {

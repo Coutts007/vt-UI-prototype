@@ -112,6 +112,7 @@ The tailor directory (D27) is behind the web switch `VITE_FEATURE_DIRECTORY` and
 | `GET /admin/settings` | Reads retention periods, study mode, current rules and approvals. It also lists which approvals are missing and the earliest date collection may start |
 | `PUT /admin/settings` | Changes those settings. Audited |
 | `GET /admin/deletion-requests` | Shows the status of client deletion requests |
+| `POST /admin/deletion-requests/{request_id}/honour` | The admin carries out a deletion request the phone could not prove, such as one held on a freed code. It covers every claim round of the code. Profiles an open order still uses wait until 30 days after collection. Audited |
 | `GET /admin/rules` | Lists rules versions and which are frozen |
 | `POST /admin/rules` | Registers a new draft rules file. Audited |
 | `POST /admin/rules/{version}/freeze` | Freezes a rules version permanently. **Only the owner decides this**, and the code never does it alone. Audited |

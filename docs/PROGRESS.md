@@ -2,6 +2,10 @@
 
 The newest entry comes first. Every change or improvement adds a line in the same commit.
 
+## 2026-11-02: M11 admin, study mode, approvals guard, exports, retention
+
+- Contract: participants say whether they withdrew (D44 default, open for the owner), an admin can carry out a held deletion request on every claim round (`POST /admin/deletion-requests/{request_id}/honour`), the admin's deletion list names the code, and the audit log gains a `retention` action.
+
 ## 2026-11-02: M10 specification sheets and sharing
 
 - The WhatsApp share text has one source: `packages/contracts/share-text.json` holds its labels in English and Kiswahili and four expected texts. The API builder and the mock's builder both pass every case character for character. Lines are the order's sites in sheet order, with the body value, a ✓ or ▲ check mark, "not measured" or "measure at fitting". Centimetres to one decimal; inches to the nearest eighth, which never ties for whole millimetres, so the two languages cannot round differently. A new error code, `sheet_link_invalid` (403), and a 429 on sheet generation are in the contract.

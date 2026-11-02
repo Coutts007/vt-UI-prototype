@@ -1504,7 +1504,8 @@
    "readings_entered": 4,
    "sets_captured": 1,
    "sex": "male",
-   "venue": "Synthetic venue"
+   "venue": "Synthetic venue",
+   "withdrawn": false
   },
   {
    "age_band": "35-44",
@@ -1516,7 +1517,8 @@
    "readings_entered": 2,
    "sets_captured": 1,
    "sex": "unspecified",
-   "venue": "Synthetic venue"
+   "venue": "Synthetic venue",
+   "withdrawn": false
   },
   {
    "age_band": "18-24",
@@ -1528,7 +1530,8 @@
    "readings_entered": 1,
    "sets_captured": 1,
    "sex": "female",
-   "venue": "Synthetic venue"
+   "venue": "Synthetic venue",
+   "withdrawn": false
   },
   {
    "age_band": "45-54",
@@ -1540,7 +1543,8 @@
    "readings_entered": 0,
    "sets_captured": 1,
    "sex": "unspecified",
-   "venue": "Synthetic venue"
+   "venue": "Synthetic venue",
+   "withdrawn": false
   },
   {
    "age_band": "25-34",
@@ -1552,7 +1556,8 @@
    "readings_entered": 0,
    "sets_captured": 0,
    "sex": "female",
-   "venue": "Synthetic venue"
+   "venue": "Synthetic venue",
+   "withdrawn": false
   }
  ],
  "profiles": [

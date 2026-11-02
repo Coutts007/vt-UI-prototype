@@ -444,6 +444,7 @@ def build_study(profiles: dict[str, dict]) -> tuple[list[dict], list[dict]]:
                 "enrolled_at": at(-30),
                 "sets_captured": sets,
                 "readings_entered": len(plan_readings),
+                "withdrawn": False,
             }
         )
         profile = next((p for p in profiles.values() if p["client_code"] ==
