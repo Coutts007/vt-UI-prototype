@@ -37,6 +37,7 @@ The newest entry comes first. Every change or improvement adds a line in the sam
   - The tape queue keeps a locked reading whose saved values differ and tells the measurer, dropping it only on an exact match.
   - The mock follows the API.
   - A duplicate `hdrMenu` key from the header change, which broke the web typecheck in `0385a26`, is removed.
+- Review of PR #14, documents: the DPIA annex, retention schedule and data inventory now describe withdrawal on the participant row, study capture sets kept by every deletion path, the A9 date rules and server-set confirmer, the week's dry-run notice before study deletion, and the narrower `vt_retention` (which keeps DELETE on audit rows past their period, as spec 14.6 needs).
 
 ## 2026-11-02: M10 specification sheets and sharing
 

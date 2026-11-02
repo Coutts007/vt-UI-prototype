@@ -13,11 +13,11 @@ Periods marked *setting* are changed by the admin in Settings and are audited.
 | Profile kept for an order after a deletion request | 30 days after the order is collected (D10), only within the claim round the request covered (D45) | Nightly job, which then marks the request done |
 | A held deletion request the admin carries out | At once, on every claim round, for profiles no order uses; the typed name and height are cleared | Admin, Settings › Deletion requests |
 | Record that a profile was deleted (tombstone) | 90 days (the longest a phone's queue can wait) | Nightly job |
-| Study records: participants, tape readings, corrections, re-derivations, the study columns of capture sessions | 12 months after `study_collection_end` (setting) | Nightly job |
+| Study records: participants, tape readings, corrections, re-derivations, the study columns of capture sets | 12 months after `study_collection_end` (setting), and only once a dry-run report at least 7 days older showed the deletion for that same date. Setting the date needs an explicit confirmation, and a past date is refused while study mode is on | Nightly job |
 | Audit log | `audit_retention_months` (setting, default 24) | Nightly job (only `vt_retention` may delete audit rows) |
 | Revoked sign-in tokens | Until they would have expired | Nightly job |
 | Specification sheet files | 30 days; unnamed files after an hour | Nightly job (`clean_sheets`) |
 | Data on the client's phone | Until the client deletes it or clears the browser | The client |
 | Backups | Not built yet (M12) | — |
 
-**Withdrawal of study consent (D44, open for the owner).** Until the owner decides, the most protective reversible default applies: the participant's row, capture sets and tape readings are kept but are excluded from both study exports, and no new readings are accepted for them. Nothing is destroyed, so the owner's later decision can still go either way.
+**Withdrawal of study consent (D44, open for the owner).** Until the owner decides, the most protective reversible default applies: the participant's row, capture sets and tape readings are kept but are excluded from both study exports, and no new readings are accepted for them. No deletion path (the client's request, the admin's "Carry out", the 30-day step) removes study capture sets. Nothing is destroyed, so the owner's later decision can still go either way. Withdrawal is recorded on the participant row, needs no consent record, and cannot be undone.

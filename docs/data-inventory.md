@@ -33,7 +33,7 @@ No binary columns exist and the API accepts JSON only; a privacy guard refuses i
 | `order`, `order_item`, `order_status_history` | Garment, sizes, due date, free-text notes | The tailor's work |
 | `spec_sheet`, `sheet_share` | Whether the name was included, file hashes, how it was shared | Sheets and their share log |
 | `deletion_request`, `deleted_profile` | Hash of the client code, reason, status; profile ids already deleted | Carrying out deletions; stopping a queue from bringing a profile back |
-| `participant` | Participant code (P###), link to a pseudonymous client code, sex, age band, venue, cohort | The validation study. No name, phone, weight or key list is ever entered (the screen says so) |
+| `participant` | Participant code (P###), link to a pseudonymous client code, sex, age band, venue, cohort, when they withdrew | The validation study. No name, phone, weight or key list is ever entered (the screen says so) |
 | `measurer`, `reference_measurement`, `reference_correction` | Measurer code, training date; tape readings and corrections | Study reference values. Readings cannot be changed or deleted by the API role |
 | `audit_log` | Who did what and when, the entity id, a keyed hash of the IP address, a short detail without measurements or names | Accountability (append-only) |
 | `app_setting` | Retention periods, study settings, approval references and dates | Configuration and the A9 guard |
