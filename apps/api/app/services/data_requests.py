@@ -22,7 +22,7 @@ from app.schemas import DeletionRequestInput
 from app.security.client_secret import matches
 from app.security.ip_hash import ip_hash, keyed_hash
 from app.services import audit
-from app.services.profiles import consent_json, profile_json
+from app.services.profiles import consent_json, for_phone, profile_json
 
 BACKUPS = "Copies leave the backups within 30 days."
 RETAINED = " Profiles on an order stay until 30 days after the order is collected."
@@ -209,6 +209,8 @@ async def request_access(
         .order_by(MeasurementProfile.version, MeasurementProfile.captured_at)
     )
     profiles = [await profile_json(session, client, row, consents) for row in rows.all()]
+    for profile in profiles:
+        profile["server_checks"] = for_phone(profile["server_checks"])
     orders = await session.scalar(
         select(func.count())
         .select_from(Order)

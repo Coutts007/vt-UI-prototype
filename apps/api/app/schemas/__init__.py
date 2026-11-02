@@ -566,6 +566,7 @@ class ProfileSummary(BaseModel):
     captured_at: datetime
     status: ProfileStatus
     capture_mode: Literal["self", "assisted"]
+    claim_round: int
     flag_counts: FlagCounts
     server_check_count: int
 

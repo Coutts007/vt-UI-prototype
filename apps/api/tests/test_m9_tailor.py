@@ -546,7 +546,9 @@ async def test_the_review_is_explicit_and_needs_a_freed_code(
     )
     assert cleared.status_code == 200 and cleared.json()["withdrawals"] == []
     assert (await upload(client, forged2, OTHER_SECRET)).status_code == 201
-    assert len(await logged(session, "claim_review")) == 1
+    # One summary row, and one naming the withdrawal it cleared.
+    rows = await logged(session, "claim_review")
+    assert [r.detail.get("did") for r in rows].count("clear_withdrawal") == 1 and len(rows) == 2
 
 
 async def test_supersede_refuses_a_profile_on_an_order_and_anothers_ids(

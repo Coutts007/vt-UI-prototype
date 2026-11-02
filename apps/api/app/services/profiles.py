@@ -42,6 +42,11 @@ async def checks_of(session: AsyncSession, profile_id: uuid.UUID) -> list[dict[s
     ]
 
 
+def for_phone(checks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Holding a code's secret does not prove the height the tailor typed belongs to that phone."""
+    return [row for row in checks if row["kind"] != "height_mismatch"]
+
+
 def consent_json(row: Consent) -> dict[str, Any]:
     body = {
         "consent_version": row.consent_version,

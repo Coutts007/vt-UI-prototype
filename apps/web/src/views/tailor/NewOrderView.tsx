@@ -9,6 +9,7 @@ import {
   Card,
   currentUnit,
   EaseSuggestion,
+  defaultProfileId,
   GARMENT_SITES,
   GARMENTS,
   GarmentType,
@@ -76,7 +77,7 @@ export const NewOrderView: React.FC<{ initialProfileId?: string; onNavigate: (pa
       .then((rows) => {
         const usable = rows.filter((row) => row.status === 'final');
         setSummaries(usable);
-        setProfileId((current) => (usable.some((row) => row.profile_id === current) ? current : usable[0]?.profile_id ?? ''));
+        setProfileId((current) => defaultProfileId(usable, current));
       })
       .catch(() => setError(tx('loadFailed')));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -167,6 +168,7 @@ export const NewOrderView: React.FC<{ initialProfileId?: string; onNavigate: (pa
           <div>
             <label htmlFor="order-profile" className={labelClass}>{tx('pickProfile')}</label>
             <select id="order-profile" value={profileId} onChange={(e) => setProfileId(e.target.value)} className={inputClass}>
+              {!profileId && summaries.length > 0 && <option value="">{tx('pickProfile')}</option>}
               {summaries.map((row) => (
                 <option key={row.profile_id} value={row.profile_id}>
                   v{row.version} · {date(row.captured_at)}

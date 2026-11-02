@@ -1296,6 +1296,7 @@ export interface components {
             status: components["schemas"]["ProfileStatus"];
             /** @enum {string} */
             capture_mode: "self" | "assisted";
+            claim_round: number;
             flag_counts: components["schemas"]["FlagCounts"];
             server_check_count: number;
         };

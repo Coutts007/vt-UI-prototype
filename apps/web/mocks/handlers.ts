@@ -452,6 +452,9 @@ export function createHandlers(options: MockOptions = {}) {
           resolved_at: null,
           resolution: null,
         });
+        // An earlier round is the tailor's to settle, so this phone learns nothing of it.
+        if (rowRound(server) !== roundOf(client))
+          return created({ profile_id: body.profile_id, version: body.version, server_checks: [] });
         return problem('profile_version_conflict', {
           server_version: max,
           conflict_id: conflictId,
@@ -787,6 +790,7 @@ export function createHandlers(options: MockOptions = {}) {
           captured_at: p.captured_at,
           status: p.status,
           capture_mode: p.session.capture_mode,
+          claim_round: rowRound(p),
           flag_counts: flagCounts(p),
           server_check_count: p.server_checks.length,
         }));
@@ -891,6 +895,10 @@ export function createHandlers(options: MockOptions = {}) {
       const profile = profileById(body.profile_id);
       if (!client || !profile) return problem('not_found');
       if (client.tailor_id !== user!.user_id) return problem('forbidden');
+      if (profile.status === 'conflict')
+        return problem('validation_failed', {
+          errors: [{ field: 'profile_id', code: 'profile_in_conflict' }],
+        });
       if (body.due_date < db.today) return problem('due_date_past');
       const flags = Object.fromEntries(
         profile.measurements.map((m: Row) => [m.site_code, m.confidence_flag]),

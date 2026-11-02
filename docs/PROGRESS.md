@@ -2,6 +2,14 @@
 
 The newest entry comes first. Every change or improvement adds a line in the same commit.
 
+## 2026-11-02: M9 review fixes
+
+- After a reset the next phone was told the earlier client's measurements through `change_since_last`. Comparisons now read only the phone's own claim round. A phone is never told the height check, since holding a code's secret does not prove the typed height is theirs. A low version against an earlier round goes to the tailor as a conflict and answers 201, so the phone learns nothing about what came before.
+- Reading `/conflicts` writes a `profile_view` row for each side. Superseding the row a conflict waited on makes the other row final and records `conflict_resolve` with the tailor's id; before, it closed the conflict silently and stranded the row.
+- A code review's audit now names each profile, withdrawal (with its date) and request it touched. The deletion banner ends once a request is done or refused. Rotating a code locks the client row.
+- Orders: each flagged row of the garment must be answered, an override must change the value, a row in conflict cannot be ordered on, and a collected order's items are locked. The override reason stays optional, as frontend-spec 13 says.
+- Profile lists give each row's `claim_round`. When rows from different claims sit side by side, the order form makes the tailor choose instead of defaulting to the newest.
+
 ## 2026-11-02: M9 tailor slice
 
 - The API now serves the tailor's clients, profiles, conflicts, orders, ease suggestions and presets, and the audit list, with the role matrix covering each. Finished is always body plus ease; flagged rows must be confirmed or overridden; due dates run from today to 180 days in Nairobi time.

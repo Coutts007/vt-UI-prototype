@@ -39,6 +39,19 @@ export const GARMENT_SITES: Record<GarmentType, SiteCode[]> = {
   other: ALL_SITES,
 };
 
+/**
+ * The newest row is the default, unless rows from different claims sit side by side: one of them
+ * may be a stranger's, so the tailor chooses (D45).
+ */
+export function defaultProfileId(
+  usable: readonly { profile_id: string; claim_round: number }[],
+  current: string,
+): string {
+  if (usable.some((row) => row.profile_id === current)) return current;
+  if (new Set(usable.map((row) => row.claim_round)).size > 1) return '';
+  return usable[0]?.profile_id ?? '';
+}
+
 const MM_PER_INCH = 25.4;
 
 export const currentUnit = (): Unit => readSessionUser()?.unit_pref ?? 'cm';

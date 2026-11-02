@@ -37,7 +37,7 @@ from app.services.profile_checks import (
     rederive_checks,
     static_bounds,
 )
-from app.services.profiles import checks_of
+from app.services.profiles import checks_of, for_phone
 from app.services.rules import lookup_rules
 from app.services.settings import read_settings
 
@@ -95,21 +95,18 @@ async def _reply(session: AsyncSession, row: MeasurementProfile) -> JSONResponse
             Conflict.incoming_profile_id == row.profile_id, Conflict.resolved_at.is_(None)
         )
     )
-    if conflict:
-        server_version = await session.scalar(
-            select(MeasurementProfile.version).where(
-                MeasurementProfile.profile_id == conflict.server_profile_id
-            )
-        )
+    server = await session.get(MeasurementProfile, conflict.server_profile_id) if conflict else None
+    # A conflict with an earlier round is the tailor's to settle: this phone learns nothing of it.
+    if conflict and server and server.claim_round == row.claim_round:
         return problem_response(
             "profile_version_conflict",
-            server_version=server_version,
+            server_version=server.version,
             conflict_id=str(conflict.conflict_id),
         )
     body = {
         "profile_id": str(row.profile_id),
         "version": row.version,
-        "server_checks": await checks_of(session, row.profile_id),
+        "server_checks": for_phone(await checks_of(session, row.profile_id)),
     }
     return JSONResponse(body, status_code=201)
 
@@ -330,6 +327,13 @@ async def ingest(
         .limit(1)
     )
     is_final = newest is None or body.version > newest.version
+    # The comparison reads only this round, whose values this phone may be told (D45).
+    previous = await session.scalar(
+        select(MeasurementProfile)
+        .where(*_this_round(client), MeasurementProfile.status == "final")
+        .order_by(MeasurementProfile.version.desc())
+        .limit(1)
+    )
     covariates = {**raw["covariates"], "code_verified": True}
     try:
         session.add(_capture_session(body, client, participant))
@@ -421,7 +425,9 @@ async def ingest(
         await session.rollback()
         raise invalid("body", "not_storable") from None
 
-    await _store_checks(session, raw, body, client, row, newest, settings, request.app.state.rules)
+    await _store_checks(
+        session, raw, body, client, row, previous, settings, request.app.state.rules
+    )
     reply = await _reply(session, row)
     await session.commit()
     return reply

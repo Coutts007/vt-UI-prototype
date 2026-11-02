@@ -260,7 +260,9 @@ async def _detail(session: AsyncSession, client: Client) -> ClientDetail:
     requested = await session.scalar(
         select(
             exists().where(
-                DeletionRequest.client_id == client.client_id, DeletionRequest.status != "rejected"
+                DeletionRequest.client_id == client.client_id,
+                # Finished and refused requests leave the banner; partly done still has data kept.
+                DeletionRequest.status.in_(("received", "partially_done")),
             )
         )
     )
@@ -326,6 +328,8 @@ async def rotate_code(
     client_id: uuid.UUID, principal: CurrentPrincipal, request: Request, session: Session
 ) -> ClientCodeRotated:
     client = await owned_client(session, principal.user, client_id)
+    # As in freeing: a claim landing now must wait, or its secret would stay on the new code.
+    await session.refresh(client, with_for_update={"key_share": True})
     old = client.client_code
     for _ in range(CODE_ATTEMPTS):
         try:
@@ -382,6 +386,7 @@ async def list_client_profiles(
             captured_at=row.MeasurementProfile.captured_at,
             status=row.MeasurementProfile.status,
             capture_mode=row.capture_mode,
+            claim_round=row.MeasurementProfile.claim_round,
             flag_counts=flags[row.MeasurementProfile.profile_id],
             server_check_count=checks.get(row.MeasurementProfile.profile_id, 0),
         )
@@ -440,14 +445,29 @@ async def review_client_claim(
 ) -> dict[str, Any]:
     client = await owned_client(session, principal.user, client_id)
     await session.refresh(client, with_for_update={"key_share": True})
-    done = await apply_review(
+    done, named, settled = await apply_review(
         session,
         client,
         body.supersede_profile_ids,
         body.clear_consent_ids,
         body.close_request_ids,
+        principal.user.user_id,
     )
     _record(request, session, principal.user, "claim_review", client, **done)
+    for detail in named:
+        _record(request, session, principal.user, "claim_review", client, **detail)
+    for conflict in settled:
+        audit.record(
+            session,
+            actor_type="user",
+            user_id=principal.user.user_id,
+            action="conflict_resolve",
+            entity_type="conflict",
+            entity_id=conflict.conflict_id,
+            client_id=client.client_id,
+            ip_hash=ip_hash(request),
+            detail={"keep": conflict.resolution, "via": "claim_review"},
+        )
     await session.flush()
     reply = await claim_view(session, client)
     await session.commit()
@@ -524,7 +544,9 @@ async def _conflict_json(session: AsyncSession, row: Conflict, code: str) -> dic
     tags=["profiles"],
     dependencies=[TAILOR],
 )
-async def list_conflicts(principal: CurrentPrincipal, session: Session) -> list[dict[str, Any]]:
+async def list_conflicts(
+    principal: CurrentPrincipal, request: Request, session: Session
+) -> list[dict[str, Any]]:
     tailor = await tailor_of(session, principal.user)
     rows = await session.execute(
         select(Conflict, Client.client_code)
@@ -536,7 +558,24 @@ async def list_conflicts(principal: CurrentPrincipal, session: Session) -> list[
         )
         .order_by(Conflict.created_at.desc())
     )
-    return [await _conflict_json(session, row.Conflict, row.client_code) for row in rows.all()]
+    found = rows.all()
+    reply = [await _conflict_json(session, row.Conflict, row.client_code) for row in found]
+    # Both sides carry every measurement, so each is a profile view like any other.
+    for row in found:
+        for profile_id in (row.Conflict.server_profile_id, row.Conflict.incoming_profile_id):
+            audit.record(
+                session,
+                actor_type="user",
+                user_id=principal.user.user_id,
+                action="profile_view",
+                entity_type="measurement_profile",
+                entity_id=profile_id,
+                client_id=row.Conflict.client_id,
+                ip_hash=ip_hash(request),
+                detail={"via": "conflicts"},
+            )
+    await session.commit()
+    return reply
 
 
 @router.post(

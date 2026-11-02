@@ -55,6 +55,20 @@ NAIROBI = ZoneInfo("Africa/Nairobi")
 LONGEST_LEAD = timedelta(days=180)
 
 
+# Matches the order form (common.tsx), so a shirt is not held up by a flagged inside leg.
+_ALL_SITES = frozenset(
+    {"stature", "shoulder", "chest", "waist", "hip", "sleeve", "outleg", "inleg", "neck"}
+)
+GARMENT_SITES: dict[str, frozenset[str]] = {
+    "shirt": frozenset({"shoulder", "chest", "waist", "sleeve", "neck"}),
+    "dress": frozenset({"shoulder", "chest", "waist", "hip", "sleeve"}),
+    "trousers": frozenset({"waist", "hip", "outleg", "inleg"}),
+    "suit_jacket": frozenset({"shoulder", "chest", "waist", "hip", "sleeve", "neck"}),
+    "skirt": frozenset({"waist", "hip", "outleg"}),
+    "other": _ALL_SITES,
+}
+
+
 def _check_due(due: date) -> None:
     today = datetime.now(NAIROBI).date()
     if not today <= due <= today + LONGEST_LEAD:
@@ -72,10 +86,16 @@ async def _flags_of(
     return {site: (flag, value) for site, flag, value in rows}
 
 
-def _check_items(items: list[OrderItemInput], measured: dict[str, tuple[str, int | None]]) -> None:
+def _check_items(
+    items: list[OrderItemInput], measured: dict[str, tuple[str, int | None]], garment: str
+) -> None:
     sites = [item.site_code for item in items]
     if len(set(sites)) != len(sites):
         raise invalid("items", "duplicate_site")
+    # The tailor must answer each flagged row of this garment, not just leave it off (spec 13).
+    for site in sorted(GARMENT_SITES[garment] - set(sites)):
+        if site in measured and measured[site][0] in ("check", "fail"):
+            raise invalid(f"items.{site}", "flag_not_confirmed")
     for item in items:
         field = f"items.{item.site_code}"
         if item.site_code not in measured:
@@ -84,6 +104,8 @@ def _check_items(items: list[OrderItemInput], measured: dict[str, tuple[str, int
         if not item.overridden and item.body_mm != value:
             # A changed body value without saying so would hide who decided it.
             raise invalid(field, "override_required")
+        if item.overridden and item.body_mm == value and not item.pending_fitting:
+            raise invalid(field, "override_unchanged")
         if item.body_mm is None and not item.pending_fitting:
             raise invalid(field, "value_or_pending_required")
         if flag == "check" and not (item.flag_confirmed or item.overridden):
@@ -276,9 +298,11 @@ async def create_order(
     profile = await session.get(MeasurementProfile, body.profile_id)
     if not profile or profile.client_id != client.client_id or profile.status == "superseded":
         raise ApiError("not_found")
+    if profile.status == "conflict":
+        raise invalid("profile_id", "profile_in_conflict")
     _check_due(body.due_date)
     measured = await _flags_of(session, profile.profile_id)
-    _check_items(body.items, measured)
+    _check_items(body.items, measured, body.garment_type)
     # The tailor's row is locked so two saves cannot take the same order number.
     await session.scalar(
         select(Tailor).where(Tailor.tailor_id == client.tailor_id).with_for_update(key_share=True)
@@ -345,6 +369,8 @@ async def update_order(
 ) -> dict[str, Any]:
     order = await _owned_order(session, principal.user, order_id)
     user = principal.user
+    if body.items is not None and order.status == "collected":
+        raise invalid("items", "order_collected")
     if body.status and body.status != order.status:
         session.add(
             OrderStatusHistory(order_id=order.order_id, status=body.status, user_id=user.user_id)
@@ -361,7 +387,7 @@ async def update_order(
         edited.append("notes")
     if body.items is not None:
         measured = await _flags_of(session, order.profile_id)
-        _check_items(body.items, measured)
+        _check_items(body.items, measured, order.garment_type)
         before = {
             row.site_code: row.overridden
             for row in await session.scalars(

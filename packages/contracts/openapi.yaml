@@ -1705,13 +1705,14 @@ components:
     ProfileSummary:
       type: object
       additionalProperties: false
-      required: [profile_id, version, captured_at, status, capture_mode, flag_counts, server_check_count]
+      required: [profile_id, version, captured_at, status, capture_mode, claim_round, flag_counts, server_check_count]
       properties:
         profile_id: { type: string, format: uuid, maxLength: 36 }
         version: { type: integer, minimum: 1, maximum: 100000 }
         captured_at: { type: string, format: date-time, maxLength: 32 }
         status: { $ref: '#/components/schemas/ProfileStatus' }
         capture_mode: { type: string, enum: [self, assisted] }
+        claim_round: { type: integer, minimum: 0 }
         flag_counts: { $ref: '#/components/schemas/FlagCounts' }
         server_check_count: { type: integer, minimum: 0 }
     Conflict:
