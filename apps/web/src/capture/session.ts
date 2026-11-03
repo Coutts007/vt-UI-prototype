@@ -3,6 +3,7 @@ import type { LocalProfile } from '../db/storage';
 import { trackFrame, untrackFrame } from '../vision/ledger';
 import type { PersonMask, View, ViewChecks } from '../vision/types';
 import type { CombinedView } from './burst';
+import type { CameraFacing } from './camera';
 import type { FreeArm } from './checks';
 import { CaptureEvent, CaptureMode, Machine, initialMachine, transition } from './machine';
 
@@ -20,6 +21,8 @@ export class CaptureSession {
   /** What the camera and the models really used, read back at capture (10.1). */
   streamSize: { width: number; height: number } | null = null;
   modelVariant: 'lite' | 'full' = 'lite';
+  /** Rear by default (A3); the front camera only through its flag (A4). */
+  cameraFacing: CameraFacing = 'environment';
   startedAt = '';
   /** Set after a save, so Saved can show the status while the profile syncs. */
   savedProfileId: string | null = null;
@@ -42,13 +45,19 @@ export class CaptureSession {
   }
 
   /** A fresh capture from /setup, whatever happened before. */
-  begin(mode: CaptureMode): void {
+  begin(mode: CaptureMode, facing: CameraFacing = 'environment'): void {
     this.machine = initialMachine();
     this.views = {};
     this.releaseMasks();
     this.profile = null;
+    this.cameraFacing = facing;
     this.startedAt = new Date().toISOString();
     this.send({ type: 'START', mode });
+  }
+
+  /** A3 item 7 and A4: spoken guidance only when the client cannot see the screen. */
+  get guidanceMode(): 'voice' | 'visual' {
+    return this.machine.context.mode === 'self' && this.cameraFacing === 'environment' ? 'voice' : 'visual';
   }
 
   /** The client could not hear the phone and fetched a helper (A3 item 2). */

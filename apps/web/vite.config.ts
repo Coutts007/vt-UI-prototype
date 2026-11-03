@@ -67,13 +67,17 @@ export default defineConfig(({ command, mode }) => {
     mode === 'mock' ||
     loadEnv(mode, envDir, 'VITE_').VITE_API_MODE === 'mock' ||
     process.env.VITE_API_MODE === 'mock';
-  const directoryFlag = loadEnv(mode, envDir, 'VITE_').VITE_FEATURE_DIRECTORY;
-  const directoryOn =
-    directoryFlag === 'true' ||
-    ((command === 'serve' || mode === 'mock') && directoryFlag !== 'false');
+  // A flag is on when set to 'true', or in dev and mock builds unless set to 'false' (D27, A4, D25).
+  const env = loadEnv(mode, envDir, 'VITE_');
+  const flag = (name: string) =>
+    env[name] === 'true' || ((command === 'serve' || mode === 'mock') && env[name] !== 'false');
   return {
     envDir,
-    define: { __VT_DIRECTORY__: JSON.stringify(directoryOn) },
+    define: {
+      __VT_DIRECTORY__: JSON.stringify(flag('VITE_FEATURE_DIRECTORY')),
+      __VT_FRONT_CAMERA__: JSON.stringify(flag('VITE_FEATURE_FRONT_CAMERA')),
+      __VT_TORCH_CUE__: JSON.stringify(flag('VITE_FEATURE_TORCH_CUE')),
+    },
     plugins: [react(), tailwindcss(), dropMockWorker(mockMode), precacheList()],
     server: {
       proxy: { '/api': process.env.VT_API_PROXY ?? 'http://localhost:8000' },

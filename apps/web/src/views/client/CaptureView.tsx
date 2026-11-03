@@ -3,7 +3,7 @@ import { Camera, Check, Circle, HelpCircle, Volume2, VolumeX, X } from 'lucide-r
 import { voiceGuide } from '../../capture/audio';
 import { CheckId } from '../../capture/checks';
 import { CaptureRunner, RunnerSnapshot } from '../../capture/runner';
-import { attachRunner, detachRunner, onCameraRelease, stopRunner } from '../../capture/runnerHost';
+import { attachRunner, detachRunner, onCameraRelease, onCameraTrack, stopRunner } from '../../capture/runnerHost';
 import { captureSession } from '../../capture/session';
 import { Button } from '../../components/ui/Button';
 import { LevelBubble } from '../../components/ui/LevelBubble';
@@ -27,6 +27,24 @@ const ROWS: { key: TranslationKey; checks: CheckId[] }[] = [
 ];
 
 const BORDER = { ok: 'border-emerald-500', wait: 'border-amber-400', stop: 'border-rose-600' };
+/** Visual guidance (A4) shows two or three words instead of the spoken sentence. */
+const SHORT: Partial<Record<TranslationKey, TranslationKey>> = {
+  corrTilt: 'corrTiltShort',
+  corrStepIn: 'corrStepInShort',
+  corrHeadCut: 'corrHeadCutShort',
+  corrTooFar: 'corrTooFarShort',
+  corrTooClose: 'corrTooCloseShort',
+  corrTurnFace: 'corrTurnFaceShort',
+  corrTurnRight: 'corrTurnRightShort',
+  corrArmsAway: 'corrArmsAwayShort',
+  corrArmsForward: 'corrArmsForwardShort',
+  corrHoldSheetFlat: 'corrHoldSheetFlatShort',
+  corrMoveFingers: 'corrMoveFingersShort',
+  corrStepCloserSheet: 'corrStepCloserSheetShort',
+  corrTooDark: 'corrTooDarkShort',
+  corrTooBright: 'corrTooBrightShort',
+  corrHoldStill: 'corrHoldStillShort',
+};
 const EMPTY_SNAPSHOT: RunnerSnapshot = {
   results: null,
   instruction: null,
@@ -39,10 +57,13 @@ const EMPTY_SNAPSHOT: RunnerSnapshot = {
 };
 const noSubscribe = () => () => {};
 
-/** The target outline: one hand holds the sheet, the other arm hangs clear of the body (A14). */
-const Outline: React.FC<{ view: View; label: string; sheetLabel: string }> = ({ view, label, sheetLabel }) => (
+/**
+ * The target outline: one hand holds the sheet, the other arm hangs clear of the body (A14). With the
+ * front camera the preview is a mirror, so the shapes flip with it and the label stays readable (A4).
+ */
+const Outline: React.FC<{ view: View; label: string; sheetLabel: string; mirrored: boolean }> = ({ view, label, sheetLabel, mirrored }) => (
   <svg viewBox="0 0 200 400" role="img" aria-label={label} className="h-[52vh] w-auto">
-    <g stroke="#fff" strokeWidth="2.5" strokeDasharray="5,4" fill="none" opacity="0.7">
+    <g stroke="#fff" strokeWidth="2.5" strokeDasharray="5,4" fill="none" opacity="0.7" transform={mirrored ? 'translate(200 0) scale(-1 1)' : undefined}>
       <ellipse cx="100" cy="36" rx="18" ry="24" />
       {view === 'front' ? (
         <>
@@ -115,8 +136,9 @@ export const CaptureView: React.FC<{ view: View; onNavigate: (path: string) => v
     void import('../../capture/cameraManager').then(({ captureCamera, keepScreenOn }) => {
       if (!live) return;
       onCameraRelease(() => captureCamera.stop());
+      onCameraTrack(() => (captureCamera.applied?.torch ? captureCamera.track() : null));
       captureCamera.mount(videoRef.current);
-      void captureCamera.start().catch(() => {
+      void captureCamera.start(captureSession.cameraFacing).catch(() => {
         if (live) captureSession.send({ type: 'VISION_UNAVAILABLE' });
       });
       release = keepScreenOn();
@@ -146,6 +168,10 @@ export const CaptureView: React.FC<{ view: View; onNavigate: (path: string) => v
     );
   }
 
+  // A4: the client sees themself as in a mirror; the frame the pipeline reads is not mirrored.
+  const mirrored = captureSession.cameraFacing === 'user';
+  // Visual guidance for a client who can see the screen: a wider border and a bigger word (A4).
+  const visual = captureSession.guidanceMode === 'visual' && context.mode === 'self';
   const rowState = (checks: CheckId[]) => {
     if (!snapshot.results || state.name === 'walkAway') return 'wait';
     return checks.every((id) => snapshot.results![id]) ? 'pass' : 'fail';
@@ -153,14 +179,16 @@ export const CaptureView: React.FC<{ view: View; onNavigate: (path: string) => v
   const message = (): string => {
     if (state.name === 'burst') return t('holdStill');
     if (state.name === 'viewDone') return t('done');
-    if (snapshot.instruction) return t(snapshot.instruction);
+    if (snapshot.instruction) return t((visual && SHORT[snapshot.instruction]) || snapshot.instruction);
     return snapshot.results ? t('holdStill') : t('checksStarting');
   };
 
   return (
     <main
-      className={`fixed inset-0 z-50 bg-[#0E0E10] text-white flex flex-col select-none border-[16px] ${BORDER[snapshot.border]}`}
+      className={`fixed inset-0 z-50 bg-[#0E0E10] text-white flex flex-col select-none ${visual ? 'border-[28px]' : 'border-[16px]'} ${BORDER[snapshot.border]}`}
       data-state={state.name}
+      data-camera={captureSession.cameraFacing}
+      data-guidance={captureSession.guidanceMode}
     >
       <div className="flex items-center justify-between gap-2 px-2 py-1 bg-black/70 z-30">
         <div className="bg-white text-black rounded-lg">
@@ -173,9 +201,15 @@ export const CaptureView: React.FC<{ view: View; onNavigate: (path: string) => v
       </div>
 
       <div className="relative flex-1 overflow-hidden flex items-center justify-center">
-        <video ref={videoRef} playsInline muted className="absolute inset-0 w-full h-full object-contain" />
+        <video
+          ref={videoRef}
+          playsInline
+          muted
+          className="absolute inset-0 w-full h-full object-contain"
+          style={mirrored ? { transform: 'scaleX(-1)' } : undefined}
+        />
         <div className="relative z-10 pointer-events-none">
-          <Outline view={view} label={t('outlineLabel')} sheetLabel={t('sheetHere')} />
+          <Outline view={view} label={t('outlineLabel')} sheetLabel={t('sheetHere')} mirrored={mirrored} />
         </div>
 
         <ul aria-label={t('checksLabel')} className="absolute left-1 top-1 z-20 p-1.5 rounded-lg bg-black/70 text-xs space-y-0.5 max-w-[46%]">
@@ -203,7 +237,7 @@ export const CaptureView: React.FC<{ view: View; onNavigate: (path: string) => v
           <p
             role="status"
             data-testid="instruction"
-            className="inline-block bg-black/85 rounded-2xl px-3 py-2 font-black leading-tight text-[clamp(28px,9vw,56px)]"
+            className={`inline-block bg-black/85 rounded-2xl px-3 py-2 font-black leading-tight ${visual ? 'text-[clamp(36px,12vw,80px)]' : 'text-[clamp(28px,9vw,56px)]'}`}
           >
             {message()}
           </p>

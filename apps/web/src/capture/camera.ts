@@ -1,6 +1,8 @@
 // Camera permission and motion sensors. The capture stream itself is in cameraManager.ts.
 export type CameraResult = { ok: true } | { ok: false; reason: 'denied' | 'unavailable' };
 
+export type CameraFacing = 'environment' | 'user';
+
 export const CAMERA_VIDEO: MediaTrackConstraints = {
   facingMode: { ideal: 'environment' },
   width: { ideal: 1080 },
@@ -9,10 +11,17 @@ export const CAMERA_VIDEO: MediaTrackConstraints = {
   frameRate: { ideal: 30, max: 30 },
 };
 
+/** The same stream for either camera (10.1.1, A4). The front camera is asked for exactly. */
+export function cameraConstraints(facing: CameraFacing): MediaTrackConstraints {
+  return facing === 'user' ? { ...CAMERA_VIDEO, facingMode: { exact: 'user' } } : CAMERA_VIDEO;
+}
+
 /** Asks for the camera once and lets it go, so capture can open it without another prompt. */
-export async function requestCameraPermission(): Promise<CameraResult & { streamMax?: number }> {
+export async function requestCameraPermission(
+  facing: CameraFacing = 'environment',
+): Promise<CameraResult & { streamMax?: number }> {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: CAMERA_VIDEO, audio: false });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: cameraConstraints(facing), audio: false });
     const capabilities = stream.getVideoTracks()[0]?.getCapabilities?.();
     const streamMax = capabilities ? Math.max(capabilities.width?.max ?? 0, capabilities.height?.max ?? 0) : 0;
     stream.getTracks().forEach((track) => track.stop());

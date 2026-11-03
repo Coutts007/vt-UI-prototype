@@ -117,6 +117,12 @@ export const Header: React.FC<HeaderProps> = ({
                 {t('navStudy')}
               </button>
               <button
+                onClick={() => onNavigate('/admin/capture-modes')}
+                className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
+              >
+                {t('navCaptureModes')}
+              </button>
+              <button
                 onClick={() => onNavigate('/admin/settings')}
                 className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
               >

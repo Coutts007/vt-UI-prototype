@@ -68,6 +68,10 @@ export interface ClientDraftSettings {
   print_check_ok?: boolean;
   audio_muted?: boolean;
   capture_mode?: 'self' | 'assisted';
+  /** A4: which camera the client chose. Absent means the rear camera. */
+  camera_facing?: 'environment' | 'user';
+  /** A4: this phone's front camera could not give 1080p, so the option stays hidden. */
+  front_camera_unavailable?: boolean;
   /** The researcher's study block (frontend-spec 15.1). Absent on every client's own capture. */
   study?: components['schemas']['StudyBlock'];
 }

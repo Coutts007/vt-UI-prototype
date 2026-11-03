@@ -48,6 +48,7 @@ const admin = {
   Participants: view(() => import('../views/admin/AdminStudyParticipantsView'), 'AdminStudyParticipantsView'),
   Export: view(() => import('../views/admin/AdminStudyExportView'), 'AdminStudyExportView'),
   Measurers: view(() => import('../views/admin/AdminMeasurersView'), 'AdminMeasurersView'),
+  CaptureModes: view(() => import('../views/admin/AdminCaptureModesView'), 'AdminCaptureModesView'),
 };
 const study = {
   Capture: view(() => import('../views/study/StudyCaptureView'), 'StudyCaptureView'),
@@ -123,6 +124,7 @@ export const VIEWS: Record<string, Render> = {
   '/admin/accounts': (c) => <admin.Accounts onNavigate={c.navigate} />,
   '/admin/audit': (c) => <admin.Audit onNavigate={c.navigate} />,
   '/admin/settings': (c) => <admin.Settings onNavigate={c.navigate} />,
+  '/admin/capture-modes': (c) => <admin.CaptureModes onNavigate={c.navigate} />,
   '/admin/study/participants': (c) => <admin.Participants onNavigate={c.navigate} />,
   '/admin/study/measurers': (c) => <admin.Measurers onNavigate={c.navigate} />,
   '/admin/study/export': (c) => <admin.Export onNavigate={c.navigate} />,

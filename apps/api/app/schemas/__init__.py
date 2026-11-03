@@ -770,6 +770,23 @@ class RederiveResult(BaseModel):
     profiles_processed: int = Field(ge=0)
 
 
+class CaptureModeStats(BaseModel):
+    capture_mode: Literal["self", "assisted"]
+    camera_facing: Literal["environment", "user"]
+    guidance_mode: Literal["voice", "visual"]
+    sessions: int = Field(ge=0)
+    within_three_attempts: int = Field(ge=0)
+    within_three_attempts_pct: float = Field(ge=0, le=100)
+    mean_retake_count: float = Field(ge=0)
+    level_unchecked: int = Field(ge=0)
+    capture_fallback: int = Field(ge=0)
+
+
+class CaptureStats(BaseModel):
+    sessions: int = Field(ge=0)
+    modes: list[CaptureModeStats] = Field(max_length=8)
+
+
 class SheetInput(Input):
     include_name: StrictBool
 

@@ -45,6 +45,7 @@ export const ROUTES: RouteDef[] = [
   { pattern: '/admin/accounts', area: 'admin', roles: ['admin'] },
   { pattern: '/admin/audit', area: 'admin', roles: ['admin'] },
   { pattern: '/admin/settings', area: 'admin', roles: ['admin'] },
+  { pattern: '/admin/capture-modes', area: 'admin', roles: ['admin'] },
   { pattern: '/admin/study/participants', area: 'admin', roles: ['admin'], study: true },
   { pattern: '/admin/study/measurers', area: 'admin', roles: ['admin'], study: true },
   { pattern: '/admin/study/export', area: 'admin', roles: ['admin'], study: true },

@@ -58,6 +58,15 @@ test.describe('a production build with the flag unset', () => {
     }
   });
 
+  test('the built files hold no front camera, torch cue or capture log (A4, D25, M15)', () => {
+    const assets = readdirSync(join(dist, 'assets'));
+    expect(assets.filter((name) => /^(torch|sessionLog)-/.test(name))).toEqual([]);
+    const setup = assets.find((name) => name.startsWith('PhoneSetupView-'))!;
+    const code = readFileSync(join(dist, 'assets', setup), 'utf8');
+    expect(code.includes('seeScreenQuestion')).toBe(false);
+    expect(code.includes('frontCameraTooSmall')).toBe(false);
+  });
+
   test('the running build has no route or link to it', async ({ page }) => {
     await page.goto(`${BASE}/tailors`);
     await expect(page.getByRole('heading', { name: en.errorNotFoundTitle })).toBeVisible();

@@ -197,6 +197,7 @@ const CASES: Record<string, Case> = {
     path: { participant_id: seed.participants[1].participant_id },
   },
   listRules: { role: 'admin' },
+  getCaptureStats: { role: 'admin' },
   registerRules: {
     role: 'admin',
     body: {

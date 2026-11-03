@@ -5,13 +5,14 @@ from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Path, Query, Request, Response
-from sqlalchemy import func, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
 from app.errors import ApiError
 from app.models import (
     AuditLog,
+    CaptureSession,
     Client,
     Consent,
     DeletionRequest,
@@ -27,6 +28,8 @@ from app.schemas import (
     AdminSettings,
     AdminSettingsInput,
     Approvals,
+    CaptureModeStats,
+    CaptureStats,
     MeasurerInput,
     RederiveResult,
     RejectInput,
@@ -329,6 +332,55 @@ async def put_settings(
 
 RULES_PATTERN = r"^[0-9]+\.[0-9]+-[a-z0-9-]+$"
 RulesName = Annotated[str, Path(pattern=RULES_PATTERN, max_length=40)]
+
+
+@router.get("/capture-stats", operation_id="getCaptureStats", response_model=CaptureStats,
+            dependencies=[ADMIN])  # fmt: skip
+async def capture_stats(session: Session) -> CaptureStats:
+    """Completion per mode for NFR-07 (M15): sessions are stored only once a profile was saved,
+    so "within three attempts" is a saved profile after at most two retakes. Counts only."""
+    within = func.sum(case((CaptureSession.retake_count <= 2, 1), else_=0))
+    unchecked = func.sum(case((CaptureSession.level_unchecked.is_(True), 1), else_=0))
+    fallback = func.sum(case((CaptureSession.capture_fallback.is_(True), 1), else_=0))
+    rows = (
+        await session.execute(
+            select(
+                CaptureSession.capture_mode,
+                CaptureSession.camera_facing,
+                CaptureSession.guidance_mode,
+                func.count().label("sessions"),
+                within.label("within"),
+                func.avg(CaptureSession.retake_count).label("mean_retakes"),
+                unchecked.label("unchecked"),
+                fallback.label("fallback"),
+            )
+            .group_by(
+                CaptureSession.capture_mode,
+                CaptureSession.camera_facing,
+                CaptureSession.guidance_mode,
+            )
+            .order_by(
+                CaptureSession.capture_mode,
+                CaptureSession.camera_facing,
+                CaptureSession.guidance_mode,
+            )
+        )
+    ).all()
+    modes = [
+        CaptureModeStats(
+            capture_mode=row.capture_mode,
+            camera_facing=row.camera_facing,
+            guidance_mode=row.guidance_mode,
+            sessions=row.sessions,
+            within_three_attempts=int(row.within),
+            within_three_attempts_pct=round(100 * int(row.within) / row.sessions, 1),
+            mean_retake_count=round(float(row.mean_retakes), 2),
+            level_unchecked=int(row.unchecked),
+            capture_fallback=int(row.fallback),
+        )
+        for row in rows
+    ]
+    return CaptureStats(sessions=sum(m.sessions for m in modes), modes=modes)
 
 
 @router.get("/rules", operation_id="listRules", response_model=list[RulesSummary],
