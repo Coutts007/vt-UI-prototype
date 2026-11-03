@@ -1197,21 +1197,26 @@ export function createHandlers(options: MockOptions = {}) {
         const key = `${p.session.capture_mode}|${p.session.camera_facing}|${p.session.guidance_mode}`;
         groups.set(key, [...(groups.get(key) ?? []), p.session]);
       }
-      const modes = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, sessions]) => {
-        const [capture_mode, camera_facing, guidance_mode] = key.split('|');
-        const within = sessions.filter((x) => x.retake_count <= 2).length;
-        return {
-          capture_mode,
-          camera_facing,
-          guidance_mode,
-          sessions: sessions.length,
-          within_three_attempts: within,
-          within_three_attempts_pct: Math.round((1000 * within) / sessions.length) / 10,
-          mean_retake_count: Math.round((100 * sessions.reduce((sum, x) => sum + x.retake_count, 0)) / sessions.length) / 100,
-          level_unchecked: sessions.filter((x) => x.level_unchecked).length,
-          capture_fallback: sessions.filter((x) => x.capture_fallback).length,
-        };
-      });
+      const modes = [...groups.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, sessions]) => {
+          const [capture_mode, camera_facing, guidance_mode] = key.split('|');
+          const within = sessions.filter((x) => x.retake_count <= 2).length;
+          return {
+            capture_mode,
+            camera_facing,
+            guidance_mode,
+            sessions: sessions.length,
+            within_three_attempts: within,
+            within_three_attempts_pct: Math.round((1000 * within) / sessions.length) / 10,
+            mean_retake_count:
+              Math.round(
+                (100 * sessions.reduce((sum, x) => sum + x.retake_count, 0)) / sessions.length,
+              ) / 100,
+            level_unchecked: sessions.filter((x) => x.level_unchecked).length,
+            capture_fallback: sessions.filter((x) => x.capture_fallback).length,
+          };
+        });
       return { sessions: db.profiles.length, modes };
     }),
     route('get', '/admin/rules', ['admin'], () =>

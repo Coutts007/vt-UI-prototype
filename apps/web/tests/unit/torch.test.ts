@@ -68,7 +68,11 @@ describe('TorchCue', () => {
     await wait(3000);
     expect(none.changes).toEqual([]);
     await none.off();
-    const refusing = new TorchCue(() => ({ applyConstraints: vi.fn(async () => { throw new Error('no'); }) }));
+    const refusing = new TorchCue(() => ({
+      applyConstraints: vi.fn(async () => {
+        throw new Error('no');
+      }),
+    }));
     refusing.phase('countdown');
     await wait(1000);
     await refusing.off();
@@ -110,7 +114,13 @@ describe('the session log', () => {
   it('records numbers per sample and the capture events, nothing else', async () => {
     const { log, runner } = start();
     await wait(8100 + 1300 + 3100 + 1100);
-    expect(log.events.map((e) => e.event)).toEqual(['walk_away', 'checking', 'countdown', 'burst', 'view_done']);
+    expect(log.events.map((e) => e.event)).toEqual([
+      'walk_away',
+      'checking',
+      'countdown',
+      'burst',
+      'view_done',
+    ]);
     expect(log.samples.length).toBeGreaterThan(5);
     const sample = log.samples[0];
     expect(sample.view).toBe('front');
@@ -122,9 +132,22 @@ describe('the session log', () => {
     }
     const text = JSON.stringify(log.toJSON());
     expect(text).not.toMatch(/data:|base64|mask|landmarks/);
-    expect(Object.keys(log.toJSON().meta).sort()).toEqual(['camera_facing', 'capture_mode', 'started_at']);
+    expect(Object.keys(log.toJSON().meta).sort()).toEqual([
+      'camera_facing',
+      'capture_mode',
+      'started_at',
+    ]);
     expect(Object.keys(sample).sort()).toEqual([
-      'beta', 'checks', 'gamma', 'luminance', 'marker_px', 'person_height', 'sharpness', 'state', 't', 'view',
+      'beta',
+      'checks',
+      'gamma',
+      'luminance',
+      'marker_px',
+      'person_height',
+      'sharpness',
+      'state',
+      't',
+      'view',
     ]);
     runner.stop();
   });
@@ -133,8 +156,15 @@ describe('the session log', () => {
     const log = new SessionLog();
     log.begin({ capture_mode: 'self' }, 5);
     const entry = {
-      view: 'front' as const, state: 'checking', checks: {} as never, person_height: null, marker_px: null,
-      luminance: 1, sharpness: 2, beta: 90, gamma: 0,
+      view: 'front' as const,
+      state: 'checking',
+      checks: {} as never,
+      person_height: null,
+      marker_px: null,
+      luminance: 1,
+      sharpness: 2,
+      beta: 90,
+      gamma: 0,
     };
     for (let i = 0; i < 4100; i += 1) log.sample(entry, 5 + i);
     expect(log.samples.length).toBe(4000);
