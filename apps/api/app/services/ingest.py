@@ -337,7 +337,7 @@ async def ingest(
         raise invalid("session.session_id", "session_id_reused")
 
     # Last, so refused and replayed requests cannot use up the honest client's hour.
-    request.app.state.limiter.hit("profile-code", body.client_code, CODE_LIMIT, HOUR)
+    await request.app.state.limiter.hit("profile-code", body.client_code, CODE_LIMIT, HOUR)
 
     newest = await session.scalar(
         select(MeasurementProfile)

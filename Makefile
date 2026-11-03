@@ -1,4 +1,4 @@
-.PHONY: frozen-guard setup dev-web dev-api up down seed lint typecheck test test-web test-api parity contract e2e e2e-real-api walkthrough stack-check fuzz load study-secrets study-up study-admin study-cert study-down licences build
+.PHONY: prod-secrets prod-up prod-admin prod-backup prod-restore-drill prod-down frozen-guard setup dev-web dev-api up down seed lint typecheck test test-web test-api parity contract e2e e2e-real-api walkthrough stack-check fuzz load study-secrets study-up study-admin study-cert study-down licences build
 
 COMPOSE = docker compose -f deploy/docker-compose.yml
 
@@ -114,6 +114,20 @@ study-cert:
 	sh scripts/study.sh cert
 study-down:
 	sh scripts/study.sh down
+
+# The production VM (M16, backend-spec 16). See docs/runbook.md.
+prod-secrets:
+	sh scripts/prod.sh secrets
+prod-up:
+	sh scripts/prod.sh up
+prod-admin:
+	sh scripts/prod.sh admin
+prod-backup:
+	sh scripts/prod.sh backup
+prod-restore-drill:
+	sh scripts/prod.sh restore-drill
+prod-down:
+	sh scripts/prod.sh down
 
 licences:
 	node scripts/licences.mjs

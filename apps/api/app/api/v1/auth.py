@@ -133,7 +133,7 @@ async def login(body: LoginInput, request: Request, session: Session) -> LoginRe
         # An unknown email locks the same way as a real one, so a lockout reveals no account.
         email_key = keyed_hash(request, body.email)
         try:
-            request.app.state.limiter.hit(
+            await request.app.state.limiter.hit(
                 "login-unknown", email_key, MAX_FAILURES - 1, LOCK_SECONDS
             )
         except ApiError as error:
@@ -277,7 +277,7 @@ async def change_password(
     user = principal.user
     # A stolen session must not be able to guess the password behind it.
     limiter = request.app.state.limiter
-    limiter.hit("password", str(user.user_id), PASSWORD_ATTEMPTS, LOCK_SECONDS)
+    await limiter.hit("password", str(user.user_id), PASSWORD_ATTEMPTS, LOCK_SECONDS)
     if not await run_in_threadpool(verify_password, user.password_hash, body.current_password):
         audit.record(
             session,

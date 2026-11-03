@@ -28,6 +28,7 @@ __pycache__/
 coverage/
 .coverage
 playwright-report/
+.lighthouseci/
 test-results/
 .DS_Store
 *.log
@@ -67,5 +68,8 @@ docs/i18n-review.md
 # Generated synthetic camera clips (the script that draws them is committed)
 apps/web/tests/fixtures/video/generated/
 deploy/study.env
+deploy/prod.env
+deploy/*.age
+deploy/age-key*
 deploy/study-root.crt
 .schemathesis/

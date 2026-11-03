@@ -288,9 +288,9 @@ async def test_a_user_is_limited_to_300_requests_a_minute(
 ) -> None:
     token = await sign_in(client, WANJIRU)
     user_id = (await client.get("/api/v1/me", headers=bearer(token))).json()["user_id"]
-    app.state.limiter.windows.pop(("user", user_id))
+    await app.state.limiter.reset("user", user_id)
     for _ in range(300):
-        app.state.limiter.hit("user", user_id, 300, 60)
+        await app.state.limiter.hit("user", user_id, 300, 60)
     response = await client.get("/api/v1/me", headers=bearer(token))
     assert response.status_code == 429
     assert response.json()["code"] == "rate_limited"

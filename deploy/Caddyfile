@@ -2,7 +2,8 @@
 # VT_SITE_ADDRESS is vt.localhost on a laptop, the router address on the study site (M12),
 # and localhost for the tests. The certificate comes from Caddy's own local authority.
 {$VT_SITE_ADDRESS:vt.localhost} {
-	tls internal
+	# tls internal on a laptop and the study site; the ACME account email in production (M16).
+	tls {$VT_TLS:internal}
 	encode gzip
 
 	header {

@@ -189,7 +189,7 @@ async def create_sheet(
 ) -> dict[str, Any]:
     order = await _owned_order(session, principal.user, order_id)
     settings = _settings(request)
-    request.app.state.limiter.hit(
+    await request.app.state.limiter.hit(
         "sheet", str(principal.user.user_id), settings.sheets_per_tailor_hour, HOUR
     )
     data, share = await _sheet_data(session, order, principal.user, body.include_name)
@@ -201,6 +201,21 @@ async def create_sheet(
     sheet_id = uuid.uuid4()
     directory = Path(settings.sheets_dir)
     await asyncio.to_thread(render_service.store, directory, str(sheet_id), pdf, png)
+    # The second transaction checks again what the first one read: the order and its client
+    # may have gone while the sheet rendered. The lock holds the order until the sheet row is
+    # in (review of M12, carried to M16).
+    locked = await session.scalar(
+        select(Order).where(Order.order_id == order.order_id).with_for_update()
+    )
+    client = await session.get(Client, order.client_id, populate_existing=True) if locked else None
+    if (
+        locked is None
+        or locked.tailor_id != order.tailor_id
+        or client is None
+        or client.deleted_at is not None
+    ):
+        render_service.remove_files(directory, str(sheet_id))
+        raise ApiError("not_found")
     generated = data.generated_at or datetime.now(UTC)
     session.add(
         SpecSheet(
