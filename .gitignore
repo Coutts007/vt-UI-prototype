@@ -42,6 +42,12 @@ bundle.json
 /reports/
 /data/
 docs/reports/calibration-*/
+# Real validation reports hold pseudonymous participant codes (M14). Only the two synthetic
+# samples under docs/reports/ are committed.
+docs/reports/*/
+!docs/reports/sample/
+!docs/reports/sample-calibration/
+report/
 docs/proposal/
 *.vtimg
 paper_covariates*.csv

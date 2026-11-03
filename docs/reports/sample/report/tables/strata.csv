@@ -1,0 +1,154 @@
+site,stratum,level,n_participants,n_pairs,bias_mm,bias_ci_low,bias_ci_high,loa_lower_mm,loa_upper_mm,note
+stature,sex,female,12,36,-1.09,-2.79,0.65,-12.69,10.51,exploratory
+stature,sex,male,12,36,0.81,-0.89,2.58,-11.72,13.33,exploratory
+stature,bmi_class,25_to_30,9,27,-1.35,-2.82,0.19,-14.59,11.89,exploratory
+stature,bmi_class,30_or_more,4,12,1.88,-0.19,3.88,-9.95,13.7,exploratory
+stature,bmi_class,under_25,11,33,0.11,-2.09,2.38,-11.84,12.07,exploratory
+stature,clothing_fit,fitted,22,47,-0.52,-2.5,1.42,-13.17,12.09,exploratory
+stature,clothing_fit,loose,17,25,0.52,-1.52,2.47,-11.48,12.7,exploratory
+stature,lighting,indoor,14,15,0.04,-3.21,3.43,-13.0,12.74,exploratory
+stature,lighting,outdoor,19,30,1.61,-0.71,3.83,-10.37,12.75,exploratory
+stature,lighting,window,18,27,-2.12,-4.36,0.06,-13.87,10.61,exploratory
+stature,camera_facing,environment,24,72,-0.14,-1.42,1.18,-12.21,11.93,exploratory
+stature,device_model,Redmi 12,6,18,-1.4,-2.72,-0.11,-12.82,10.02,exploratory
+stature,device_model,Samsung A14,6,18,0.68,-2.08,3.46,-11.23,12.59,exploratory
+stature,device_model,Tecno Spark 10,6,18,-0.78,-3.86,2.25,-13.73,12.18,exploratory
+stature,device_model,iPhone 12,6,18,0.93,-1.11,3.25,-12.79,14.65,exploratory
+stature,capture_mode,assisted,24,24,0.09,-2.31,2.43,-11.58,11.76,exploratory
+stature,capture_mode,self,24,48,-0.26,-1.99,1.48,-12.29,11.77,exploratory
+shoulder,sex,female,12,36,-0.06,-2.02,1.92,-11.93,11.82,exploratory
+shoulder,sex,male,12,36,0.88,-0.69,2.42,-8.46,10.23,exploratory
+shoulder,bmi_class,25_to_30,9,27,0.06,-2.34,2.53,-11.12,11.25,exploratory
+shoulder,bmi_class,30_or_more,4,12,1.29,-1.75,4.33,-9.27,11.86,exploratory
+shoulder,bmi_class,under_25,11,33,0.38,-0.92,1.7,-11.14,11.9,exploratory
+shoulder,clothing_fit,fitted,22,47,0.86,-0.68,2.41,-9.82,11.1,exploratory
+shoulder,clothing_fit,loose,17,25,0.04,-2.54,2.37,-11.24,11.2,exploratory
+shoulder,lighting,indoor,14,15,2.11,0.05,4.18,-21.83,25.29,exploratory
+shoulder,lighting,outdoor,19,30,0.61,-1.51,2.78,-11.08,11.7,exploratory
+shoulder,lighting,window,18,27,-0.82,-3.15,1.21,-10.31,9.9,exploratory
+shoulder,camera_facing,environment,24,72,0.41,-0.85,1.65,-10.23,11.06,exploratory
+shoulder,device_model,Redmi 12,6,18,-0.36,-2.85,2.27,-10.96,10.23,exploratory
+shoulder,device_model,Samsung A14,6,18,0.88,-0.92,2.58,-10.26,12.01,exploratory
+shoulder,device_model,Tecno Spark 10,6,18,0.25,-2.67,2.99,-13.31,13.81,exploratory
+shoulder,device_model,iPhone 12,6,18,0.89,-1.71,3.38,-7.82,9.59,exploratory
+shoulder,capture_mode,assisted,24,24,1.14,-1.15,3.41,-10.08,12.35,exploratory
+shoulder,capture_mode,self,24,48,0.05,-1.34,1.4,-10.97,11.07,exploratory
+chest,sex,female,12,36,12.83,11.59,14.33,1.29,24.37,exploratory
+chest,sex,male,12,36,11.51,9.81,13.33,0.74,22.29,exploratory
+chest,bmi_class,25_to_30,9,27,13.5,11.9,15.28,4.37,22.63,exploratory
+chest,bmi_class,30_or_more,4,12,10.6,8.67,12.54,1.99,19.22,exploratory
+chest,bmi_class,under_25,11,33,11.66,10.01,13.49,-1.4,24.72,exploratory
+chest,clothing_fit,fitted,22,47,12.22,10.61,13.88,1.67,23.55,exploratory
+chest,clothing_fit,loose,17,25,11.73,9.43,14.06,0.8,21.92,exploratory
+chest,lighting,indoor,14,15,11.64,9.11,14.32,-1.01,23.94,exploratory
+chest,lighting,outdoor,19,30,12.78,10.33,15.47,1.18,24.17,exploratory
+chest,lighting,window,18,27,12.35,10.12,14.67,1.57,22.45,exploratory
+chest,camera_facing,environment,24,72,12.17,11.05,13.4,1.14,23.21,exploratory
+chest,device_model,Redmi 12,6,18,13.4,11.33,15.94,2.8,24.01,exploratory
+chest,device_model,Samsung A14,6,18,11.24,9.87,12.46,-1.53,24.01,exploratory
+chest,device_model,Tecno Spark 10,6,18,12.26,11.18,13.4,-0.29,24.81,exploratory
+chest,device_model,iPhone 12,6,18,11.79,8.35,15.1,0.91,22.67,exploratory
+chest,capture_mode,assisted,24,24,12.06,9.85,14.58,-0.09,24.22,exploratory
+chest,capture_mode,self,24,48,12.23,10.82,13.57,2.17,22.29,exploratory
+waist,sex,female,12,36,-1.82,-4.05,0.66,-13.34,9.7,exploratory
+waist,sex,male,12,36,-4.7,-5.9,-3.56,-15.22,5.81,exploratory
+waist,bmi_class,25_to_30,9,27,-2.39,-5.28,1.03,-14.26,9.48,exploratory
+waist,bmi_class,30_or_more,4,12,-6.1,-7.62,-4.02,-20.02,7.81,exploratory
+waist,bmi_class,under_25,11,33,-2.94,-4.14,-1.53,-12.56,6.68,exploratory
+waist,clothing_fit,fitted,22,47,-2.78,-4.56,-0.86,-14.55,9.16,exploratory
+waist,clothing_fit,loose,17,25,-4.09,-6.05,-2.14,-12.94,4.28,exploratory
+waist,lighting,indoor,14,15,-3.36,-7.2,0.52,-18.15,12.19,exploratory
+waist,lighting,outdoor,19,30,-2.23,-4.2,-0.25,-12.44,7.26,exploratory
+waist,lighting,window,18,27,-4.24,-6.08,-2.32,-13.69,5.38,exploratory
+waist,camera_facing,environment,24,72,-3.26,-4.67,-1.57,-14.14,7.62,exploratory
+waist,device_model,Redmi 12,6,18,-4.32,-6.35,-2.26,-15.26,6.62,exploratory
+waist,device_model,Samsung A14,6,18,-4.94,-6.53,-3.74,-15.18,5.29,exploratory
+waist,device_model,Tecno Spark 10,6,18,0.68,-2.25,4.44,-9.98,11.34,exploratory
+waist,device_model,iPhone 12,6,18,-4.46,-6.31,-2.74,-15.24,6.33,exploratory
+waist,capture_mode,assisted,24,24,-2.39,-4.3,-0.41,-11.85,7.08,exploratory
+waist,capture_mode,self,24,48,-3.7,-5.57,-1.72,-15.21,7.82,exploratory
+hip,sex,female,12,36,-0.35,-2.08,1.51,-13.43,12.72,exploratory
+hip,sex,male,12,36,0.73,-1.59,2.85,-10.87,12.33,exploratory
+hip,bmi_class,25_to_30,9,27,-0.32,-2.14,1.59,-13.2,12.55,exploratory
+hip,bmi_class,30_or_more,4,12,0.15,-1.29,1.58,-9.69,9.98,exploratory
+hip,bmi_class,under_25,11,33,0.62,-1.96,3.23,-12.53,13.77,exploratory
+hip,clothing_fit,fitted,22,47,-0.09,-1.48,1.36,-13.27,13.27,exploratory
+hip,clothing_fit,loose,17,25,-0.47,-3.43,2.58,-12.12,13.2,exploratory
+hip,lighting,indoor,14,15,1.48,-1.72,4.64,-11.79,13.69,exploratory
+hip,lighting,outdoor,19,30,-1.18,-4.19,1.39,-15.52,14.59,exploratory
+hip,lighting,window,18,27,1.03,-0.5,2.5,-7.99,8.97,exploratory
+hip,camera_facing,environment,24,72,0.19,-1.21,1.62,-11.84,12.21,exploratory
+hip,device_model,Redmi 12,6,18,-0.46,-2.68,2.44,-12.04,11.12,exploratory
+hip,device_model,Samsung A14,6,18,1.43,-1.22,4.21,-8.21,11.07,exploratory
+hip,device_model,Tecno Spark 10,6,18,-0.25,-2.68,2.49,-14.68,14.18,exploratory
+hip,device_model,iPhone 12,6,18,0.03,-3.35,3.42,-13.54,13.6,exploratory
+hip,capture_mode,assisted,24,24,-0.27,-2.56,1.89,-11.91,11.37,exploratory
+hip,capture_mode,self,24,48,0.42,-1.26,2.19,-11.92,12.76,exploratory
+sleeve,sex,female,12,35,5.92,4.01,8.03,-8.34,20.0,exploratory
+sleeve,sex,male,12,36,5.86,3.93,7.9,-6.98,18.71,exploratory
+sleeve,bmi_class,25_to_30,9,27,5.01,3.08,6.93,-9.65,19.67,exploratory
+sleeve,bmi_class,30_or_more,4,12,5.1,1.33,8.98,-9.24,19.45,exploratory
+sleeve,bmi_class,under_25,11,32,6.89,4.79,9.25,-5.76,19.41,exploratory
+sleeve,clothing_fit,fitted,22,46,6.61,3.98,8.94,-6.67,20.44,exploratory
+sleeve,clothing_fit,loose,17,25,3.1,0.6,5.77,-7.96,15.82,exploratory
+sleeve,lighting,indoor,14,15,4.77,0.14,9.23,-13.07,23.34,exploratory
+sleeve,lighting,outdoor,18,29,6.74,4.9,8.63,-4.1,17.2,exploratory
+sleeve,lighting,window,18,27,5.26,2.38,8.13,-8.05,19.01,exploratory
+sleeve,camera_facing,environment,24,71,5.89,4.43,7.46,-7.67,19.36,exploratory
+sleeve,device_model,Redmi 12,6,18,2.99,1.89,3.92,-11.52,17.49,exploratory
+sleeve,device_model,Samsung A14,6,18,5.78,2.69,8.99,-7.71,19.27,exploratory
+sleeve,device_model,Tecno Spark 10,6,17,8.85,6.36,10.88,-4.96,22.64,exploratory
+sleeve,device_model,iPhone 12,6,18,5.94,3.87,8.03,-7.6,19.48,exploratory
+sleeve,capture_mode,assisted,24,24,7.54,5.35,9.54,-2.77,17.85,exploratory
+sleeve,capture_mode,self,24,47,5.17,3.01,7.43,-9.26,19.22,exploratory
+outleg,sex,female,12,36,-0.19,-2.76,1.96,-12.42,12.03,exploratory
+outleg,sex,male,12,36,0.77,-1.17,2.71,-11.56,13.1,exploratory
+outleg,bmi_class,25_to_30,9,27,-0.92,-4.36,2.07,-13.6,11.77,exploratory
+outleg,bmi_class,30_or_more,4,12,0.81,-0.83,2.46,-11.18,12.8,exploratory
+outleg,bmi_class,under_25,11,33,1.08,-0.55,3.06,-12.13,14.3,exploratory
+outleg,clothing_fit,fitted,22,47,1.42,-0.47,3.17,-11.51,14.16,exploratory
+outleg,clothing_fit,loose,17,25,-1.51,-3.5,0.35,-12.77,9.45,exploratory
+outleg,lighting,indoor,14,15,1.3,-1.59,4.07,-9.46,11.92,exploratory
+outleg,lighting,outdoor,19,30,-0.75,-2.64,1.18,-14.0,12.36,exploratory
+outleg,lighting,window,18,27,1.21,-1.82,3.89,-13.3,15.28,exploratory
+outleg,camera_facing,environment,24,72,0.29,-1.34,1.75,-11.92,12.5,exploratory
+outleg,device_model,Redmi 12,6,18,-1.71,-5.88,1.43,-15.98,12.56,exploratory
+outleg,device_model,Samsung A14,6,18,0.18,-3.44,4.06,-12.62,12.99,exploratory
+outleg,device_model,Tecno Spark 10,6,18,1.32,-0.92,3.53,-8.06,10.7,exploratory
+outleg,device_model,iPhone 12,6,18,1.36,-0.25,2.85,-12.51,15.23,exploratory
+outleg,capture_mode,assisted,24,24,-0.28,-2.5,2.14,-12.24,11.68,exploratory
+outleg,capture_mode,self,24,48,0.57,-1.36,2.51,-11.85,13.0,exploratory
+inleg,sex,female,12,35,2.65,1.31,4.24,-7.19,12.35,exploratory
+inleg,sex,male,12,36,-1.17,-3.11,1.14,-14.11,11.77,exploratory
+inleg,bmi_class,25_to_30,9,27,1.01,-0.61,2.38,-8.21,10.23,exploratory
+inleg,bmi_class,30_or_more,4,12,-0.94,-2.06,0.94,-14.27,12.39,exploratory
+inleg,bmi_class,under_25,11,32,1.14,-1.86,4.22,-13.23,15.24,exploratory
+inleg,clothing_fit,fitted,22,46,0.66,-0.95,2.32,-10.45,12.59,exploratory
+inleg,clothing_fit,loose,17,25,1.16,-1.37,3.84,-13.86,13.78,exploratory
+inleg,lighting,indoor,14,15,0.89,-1.34,2.91,-8.51,11.38,exploratory
+inleg,lighting,outdoor,18,29,2.12,-0.35,4.45,-12.55,15.89,exploratory
+inleg,lighting,window,18,27,0.07,-2.31,2.71,-12.43,10.82,exploratory
+inleg,camera_facing,environment,24,71,0.74,-0.8,2.26,-11.24,12.6,exploratory
+inleg,device_model,Redmi 12,6,18,2.49,1.47,3.44,-6.21,11.18,exploratory
+inleg,device_model,Samsung A14,6,18,-0.33,-2.83,3.53,-15.19,14.52,exploratory
+inleg,device_model,Tecno Spark 10,6,17,2.82,0.38,5.42,-8.87,14.22,exploratory
+inleg,device_model,iPhone 12,6,18,-2.0,-4.56,0.49,-12.99,8.99,exploratory
+inleg,capture_mode,assisted,24,24,2.35,0.34,4.27,-7.42,12.13,exploratory
+inleg,capture_mode,self,24,47,-0.17,-1.93,1.71,-12.81,12.46,exploratory
+neck,sex,female,12,33,0.36,-1.84,2.58,-10.85,11.44,exploratory
+neck,sex,male,12,35,-0.24,-2.38,1.85,-13.51,12.82,exploratory
+neck,bmi_class,25_to_30,9,26,-1.2,-2.56,0.34,-13.44,11.28,exploratory
+neck,bmi_class,30_or_more,4,11,0.77,-3.38,4.71,-13.03,14.12,exploratory
+neck,bmi_class,under_25,11,31,0.83,-1.97,3.4,-12.23,13.5,exploratory
+neck,clothing_fit,fitted,22,44,0.1,-2.02,2.09,-10.16,10.57,exploratory
+neck,clothing_fit,loose,16,24,-0.23,-3.28,2.69,-17.46,16.52,exploratory
+neck,lighting,indoor,13,13,1.46,-0.87,3.46,-6.44,9.36,exploratory
+neck,lighting,outdoor,19,30,0.13,-2.86,2.95,-14.39,13.06,exploratory
+neck,lighting,window,17,25,0.1,-2.41,2.52,-12.18,12.08,exploratory
+neck,camera_facing,environment,24,68,0.06,-1.47,1.62,-12.16,12.1,exploratory
+neck,device_model,Redmi 12,6,18,1.1,-1.1,3.56,-10.04,12.23,exploratory
+neck,device_model,Samsung A14,6,18,-0.82,-4.33,3.08,-15.76,14.12,exploratory
+neck,device_model,Tecno Spark 10,6,15,-0.38,-4.29,3.0,-12.29,10.96,exploratory
+neck,device_model,iPhone 12,6,17,0.33,-1.31,2.06,-12.89,13.22,exploratory
+neck,capture_mode,assisted,21,21,-3.08,-5.8,-0.57,-15.42,9.25,exploratory
+neck,capture_mode,self,24,47,1.24,-0.34,2.82,-10.03,12.69,exploratory

@@ -1,0 +1,7 @@
+participant,set_no,site,reason
+P005,1,sleeve,site_failed
+P005,1,inleg,site_failed
+P005,3,neck,site_failed
+P009,2,neck,site_failed
+P012,3,neck,site_failed
+P017,3,neck,site_failed

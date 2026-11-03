@@ -1,0 +1,9 @@
+site,verdict,tier1,tier1_value,tier1_target,tier2,tier2_value,tier2_target,tier3,tier3_value,tier3_target
+shoulder,PASS,PASS,+0.4 mm,|bias| <= 9 mm,PASS,100.0% within 15 mm,>= 90% within 15 mm,PASS,outer bounds -12.4 to +12.7 mm,"within +/- 30 mm, confidence bounds included"
+sleeve,FAIL,PASS,+5.9 mm,|bias| <= 9 mm,FAIL,88.7% within 15 mm,>= 90% within 15 mm,PASS,outer bounds -10.3 to +21.6 mm,"within +/- 30 mm, confidence bounds included"
+outleg,PASS,PASS,+0.3 mm,|bias| <= 9 mm,PASS,97.2% within 15 mm,>= 90% within 15 mm,PASS,outer bounds -14.9 to +15.0 mm,"within +/- 30 mm, confidence bounds included"
+inleg,PASS,PASS,+0.7 mm,|bias| <= 9 mm,PASS,98.6% within 15 mm,>= 90% within 15 mm,PASS,outer bounds -13.6 to +15.2 mm,"within +/- 30 mm, confidence bounds included"
+chest,FAIL,FAIL,+12.2 mm,|bias| <= 9 mm,PASS,100.0% within 30 mm,>= 90% within 30 mm,PASS,outer bounds -1.4 to +25.6 mm,"within +/- 40 mm, confidence bounds included"
+waist,PASS,PASS,-3.3 mm,|bias| <= 9 mm,PASS,100.0% within 30 mm,>= 90% within 30 mm,PASS,outer bounds -16.3 to +11.0 mm,"within +/- 40 mm, confidence bounds included"
+hip,PASS,PASS,+0.2 mm,|bias| <= 9 mm,PASS,100.0% within 30 mm,>= 90% within 30 mm,PASS,outer bounds -14.7 to +15.1 mm,"within +/- 40 mm, confidence bounds included"
+neck,PASS,PASS,+0.1 mm,|bias| <= 9 mm,PASS,100.0% within 30 mm,>= 90% within 30 mm,PASS,outer bounds -14.9 to +14.4 mm,"within +/- 40 mm, confidence bounds included"
