@@ -9,6 +9,7 @@ export default tseslint.config(
       'public/wasm/**',
       'public/opencv/**',
       'dist',
+      'dist-*/**',
       'dist-directory-off',
       'dist-directory-default',
       'dist-real-api',

@@ -36,6 +36,7 @@ from app.services.profile_checks import (
     check,
     height_mismatch,
     rederive_checks,
+    reference_checks,
     static_bounds,
 )
 from app.services.profiles import checks_of, for_phone
@@ -226,7 +227,12 @@ async def _server_checks(
             # The other checks still stand, and the tailor can see this one did not run.
             log.error("rederivation_failed", error_type=type(error).__name__)
             found.append(check("rederive_failed", "check", None))
-        found += static_bounds(values, rules.get("anomaly", {}).get("static_ratio_bounds", {}))
+        anomaly = rules.get("anomaly", {})
+        if anomaly.get("per_sex"):
+            # A fitted reference (11.5.1) replaces the literature bounds it was built to supersede.
+            found += reference_checks(values, raw.get("covariates", {}).get("sex"), anomaly)
+        else:
+            found += static_bounds(values, anomaly.get("static_ratio_bounds", {}))
     if previous is not None and abs(previous.captured_at - body.captured_at) <= CHANGE_WINDOW:
         found += change_since_last(values, await _stored_values(session, previous.profile_id))
     found += height_mismatch(values.get("stature"), client.height_mm)

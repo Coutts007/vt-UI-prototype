@@ -256,5 +256,47 @@ def study_allocate(seed: int = typer.Option(..., "--seed", min=0, max=2**31 - 1)
         raise typer.Exit(1)
 
 
+@study.command("export-calibration")
+def study_export_calibration(
+    out: str = typer.Option(..., "--out", help="Where to write the calibration bundle (JSON)"),
+) -> None:
+    """Writes the calibration cohort's numbers and tape readings for vt-ml calibrate (11.1, 11.3).
+
+    Calibration participants only, by participant code: no names, contacts or client codes.
+    Pilot and test rows never leave the database through this command.
+    """
+    import json
+    import os
+    from pathlib import Path
+
+    from app.services.calibration_export import calibration_bundle
+
+    path = Path(out)
+    if "frozen" in path.resolve().parts:
+        raise typer.BadParameter("A bundle never goes into a frozen folder.")
+    settings = Settings()
+
+    async def run() -> dict[str, int]:
+        engine = make_engine(settings.database_url)
+        try:
+            async with make_sessions(engine)() as session:
+                bundle = await calibration_bundle(session)
+        finally:
+            await engine.dispose()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Owner-readable only: the bundle is person-level study data on the study laptop.
+        with open(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as handle:
+            handle.write(json.dumps(bundle, ensure_ascii=False) + "\n")
+        people = bundle["participants"]
+        return {
+            "participants": len(people),
+            "capture_sets": sum(len(p["sets"]) for p in people),
+            "readings": sum(len(p["readings"]) for p in people),
+        }
+
+    counts = asyncio.run(run())
+    typer.echo(", ".join(f"{key}: {value}" for key, value in counts.items()))
+
+
 def main() -> None:
     cli()

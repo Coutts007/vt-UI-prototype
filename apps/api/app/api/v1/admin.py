@@ -2,15 +2,24 @@
 
 import uuid
 from datetime import UTC, date, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Depends, Path, Query, Request, Response
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
 from app.errors import ApiError
-from app.models import AuditLog, Client, Consent, DeletionRequest, Measurer, Tailor, UserAccount
+from app.models import (
+    AuditLog,
+    Client,
+    Consent,
+    DeletionRequest,
+    Measurer,
+    RulesVersion,
+    Tailor,
+    UserAccount,
+)
 from app.schemas import (
     Account,
     AccountPage,
@@ -19,7 +28,10 @@ from app.schemas import (
     AdminSettingsInput,
     Approvals,
     MeasurerInput,
+    RederiveResult,
     RejectInput,
+    RulesArtifact,
+    RulesSummary,
 )
 from app.schemas import DeletionRequest as DeletionRequestView
 from app.security.deps import CurrentPrincipal, Session, require_role
@@ -29,8 +41,19 @@ from app.services import audit
 from app.services.approvals import earliest_collection, missing, problems
 from app.services.csvout import csv_response, to_csv
 from app.services.data_requests import STUDY_KEPT, withdraw_participant
+from app.services.derivation import rederive
 from app.services.erasure import erase_profiles
 from app.services.ingest import invalid
+from app.services.rules import (
+    all_rules,
+    freeze_row,
+    known_versions,
+    lookup_rules,
+    registration_problems,
+    row_intact,
+    rules_status,
+    summary,
+)
 from app.services.settings import read_settings, write_setting
 
 from .directory import Page, PageSize
@@ -257,8 +280,14 @@ async def put_settings(
     moment = datetime.now(UTC)
     today = moment.date()
     version = changes.get("current_rules_version")
-    if version and version not in request.app.state.rules:
-        raise invalid("current_rules_version", "unknown")
+    if version:
+        status = await rules_status(request.app.state.rules, session, version)
+        if status is None:
+            raise invalid("current_rules_version", "unknown")
+        # A registered version becomes current only once frozen (11.3.7). The files in
+        # packages/rules stay usable as drafts until the owner freezes one (D31).
+        if version not in request.app.state.rules and status != "frozen":
+            raise invalid("current_rules_version", "not_frozen")
     detail: dict[str, Any] = {}
     if "study_collection_end" in changes:
         end = changes["study_collection_end"]
@@ -294,6 +323,136 @@ async def put_settings(
         )
     await session.commit()
     return _settings_view(await read_settings(session))
+
+
+# ---- the rules registry (backend-spec 10.6, 11.7; M13) ----
+
+RULES_PATTERN = r"^[0-9]+\.[0-9]+-[a-z0-9-]+$"
+RulesName = Annotated[str, Path(pattern=RULES_PATTERN, max_length=40)]
+
+
+@router.get("/rules", operation_id="listRules", response_model=list[RulesSummary],
+            dependencies=[ADMIN])  # fmt: skip
+async def list_rules(request: Request, session: Session) -> list[dict[str, Any]]:
+    current = (await read_settings(session))["current_rules_version"]
+    return await all_rules(request.app.state.rules, session, current)
+
+
+@router.post("/rules", operation_id="registerRules", status_code=201, response_model=RulesSummary,
+             dependencies=[ADMIN])  # fmt: skip
+async def register_rules(
+    body: RulesArtifact, request: Request, session: Session, principal: CurrentPrincipal
+) -> dict[str, Any]:
+    """Registers a draft. Freezing is a separate, deliberate step that only the owner takes."""
+    artifact = body.model_dump(mode="json")
+    problems = registration_problems(
+        artifact, await known_versions(request.app.state.rules, session)
+    )
+    if problems:
+        raise ApiError("validation_failed", errors=problems)
+    fit = artifact.get("fit") or {}
+    row = RulesVersion(
+        rules_version=artifact["rules_version"],
+        status="draft",
+        artifact=artifact,
+        checksum=artifact["checksum"],
+        parent=artifact.get("parent"),
+        fitted_cohort_hash=fit.get("cohort_hash"),
+        created_by=principal.user.user_id,
+    )
+    session.add(row)
+    await session.flush()
+    audit.record(
+        session,
+        actor_type="user",
+        action="rules_register",
+        entity_type="rules_version",
+        entity_id=row.rules_version,
+        user_id=principal.user.user_id,
+        ip_hash=ip_hash(request),
+        detail={
+            "checksum": row.checksum,
+            "parent": row.parent,
+            "n_participants": fit.get("n_participants"),
+        },  # fmt: skip
+    )
+    await session.commit()
+    current = (await read_settings(session))["current_rules_version"]
+    return summary(row.rules_version, row.status, row.checksum, row.parent, row.frozen_at,
+                   row.created_at, current)  # fmt: skip
+
+
+@router.post("/rules/{version}/freeze", operation_id="freezeRules", response_model=RulesSummary,
+             dependencies=[ADMIN])  # fmt: skip
+async def freeze_rules(
+    version: RulesName, request: Request, session: Session, principal: CurrentPrincipal
+) -> dict[str, Any]:
+    """One way. A version shipped as a file is entered in the registry as it is frozen."""
+    row = await session.get(RulesVersion, version)
+    if row is None:
+        artifact = await lookup_rules(request.app.state.rules, session, version)
+        if artifact is None:
+            raise ApiError("rules_version_unknown")
+        row = RulesVersion(
+            rules_version=version,
+            status="draft",
+            artifact=artifact,
+            checksum=artifact["checksum"],
+            parent=artifact.get("parent"),
+            fitted_cohort_hash=(artifact.get("fit") or {}).get("cohort_hash"),
+            created_by=principal.user.user_id,
+        )
+        session.add(row)
+        await session.flush()
+    if row.status == "draft":
+        # Never freeze a record the server would then refuse everywhere.
+        if not row_intact(row):
+            raise ApiError("rules_version_unknown")
+        freeze_row(row, datetime.now(UTC))
+        audit.record(
+            session,
+            actor_type="user",
+            action="rules_freeze",
+            entity_type="rules_version",
+            entity_id=version,
+            user_id=principal.user.user_id,
+            ip_hash=ip_hash(request),
+            detail={"checksum": row.checksum},
+        )
+        await session.commit()
+    current = (await read_settings(session))["current_rules_version"]
+    return summary(row.rules_version, row.status, row.checksum, row.parent, row.frozen_at,
+                   row.created_at, current)  # fmt: skip
+
+
+@router.post("/rederive", operation_id="rederive", response_model=RederiveResult,
+             dependencies=[ADMIN])  # fmt: skip
+async def rederive_cohort(
+    request: Request,
+    session: Session,
+    principal: CurrentPrincipal,
+    rules_version: Annotated[str, Query(pattern=RULES_PATTERN, max_length=40)],
+    cohort: Annotated[Literal["pilot", "calibration", "test"], Query()],
+) -> dict[str, Any]:
+    """Recomputes a cohort under a frozen version into measurement_derivation (2.3.3)."""
+    artifact = await lookup_rules(request.app.state.rules, session, rules_version)
+    if artifact is None:
+        raise ApiError("rules_version_unknown")
+    if artifact["status"] != "frozen":
+        raise ApiError("rules_not_frozen")
+    processed = await rederive(session, artifact, cohort)
+    audit.record(
+        session,
+        actor_type="user",
+        action="rederive",
+        entity_type="rules_version",
+        entity_id=rules_version,
+        user_id=principal.user.user_id,
+        ip_hash=ip_hash(request),
+        detail={"cohort": cohort, "profiles_processed": processed},
+    )
+    await session.commit()
+    return {"rules_version": rules_version, "cohort": cohort, "profiles_processed": processed}
 
 
 async def _request_view(session: AsyncSession, row: DeletionRequest) -> DeletionRequestView:

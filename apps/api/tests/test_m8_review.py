@@ -357,9 +357,25 @@ async def test_a_rederivation_failure_keeps_the_other_checks_and_records_itself(
     assert "rederive_failed" in kinds and "unusual_proportion" in kinds
 
 
+def registered(version: str, status: str) -> RulesVersion:
+    """A registry row the server accepts: since M13 it checks the checksum on every load."""
+    from pathlib import Path
+
+    from app.services.rules import checksum_of
+
+    base = json.loads(
+        (Path(__file__).parents[3] / "packages/rules/rules-0.1-uncalibrated.json").read_text()
+    )
+    artifact = {**base, "rules_version": version, "status": status}
+    artifact["checksum"] = checksum_of(artifact)
+    return RulesVersion(
+        rules_version=version, status=status, artifact=artifact, checksum=artifact["checksum"]
+    )
+
+
 async def test_newer_known_rules_are_not_stale(client: AsyncClient, session: AsyncSession) -> None:
     for version in ("0.0-older", "0.2-newer"):
-        session.add(RulesVersion(rules_version=version, status="frozen", artifact={}, checksum="x"))
+        session.add(registered(version, "frozen"))
     await session.commit()
     older = await post(client, payload(rules_version="0.0-older"))
     assert "stale_rules" in [c["kind"] for c in older.json()["server_checks"]]
@@ -370,12 +386,8 @@ async def test_newer_known_rules_are_not_stale(client: AsyncClient, session: Asy
 async def test_public_rules_serve_frozen_and_the_current_draft_only(
     client: AsyncClient, session: AsyncSession
 ) -> None:
-    base = {"checksum": "sha256:" + "0" * 64}
     for version, status in (("0.2-draft", "draft"), ("0.3-frozen", "frozen")):
-        artifact = {"rules_version": version, "status": status, **base}
-        session.add(
-            RulesVersion(rules_version=version, status=status, checksum="x", artifact=artifact)
-        )
+        session.add(registered(version, status))
     await session.commit()
     assert (await client.get("/api/v1/rules/0.2-draft")).status_code == 404
     assert (await client.get("/api/v1/rules/0.3-frozen")).status_code == 200

@@ -30,6 +30,10 @@ class Body:
     neck_a: float = 60.0
     neck_b: float = 55.0
     sex: str = "female"
+    # How much the head widens above the neck. Varying it between people is what makes the neck
+    # level identifiable in a calibration recovery test; the default keeps the parity cases, and
+    # it stays last so callers that build a Body positionally are unchanged.
+    neck_taper: float = 25.0
 
 
 def _interpolate(points: list[tuple[float, float]], u: float) -> float:
@@ -42,7 +46,7 @@ def _interpolate(points: list[tuple[float, float]], u: float) -> float:
 def _outlines(body: Body) -> tuple[list[float], list[float]]:
     width = [
         (0.0, 30.0),
-        (0.06, body.neck_a + 25),
+        (0.06, body.neck_a + body.neck_taper),
         (0.14, body.neck_a),
         (0.15, body.neck_a),
         (U_SHOULDER, body.shoulder / 2),
@@ -57,7 +61,7 @@ def _outlines(body: Body) -> tuple[list[float], list[float]]:
     ]
     depth = [
         (0.0, 30.0),
-        (0.06, body.neck_b + 30),
+        (0.06, body.neck_b + body.neck_taper + 5),
         (0.14, body.neck_b),
         (0.15, body.neck_b),
         (U_SHOULDER, body.chest_b * 0.8),

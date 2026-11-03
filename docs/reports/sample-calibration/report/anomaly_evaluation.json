@@ -1,0 +1,9 @@
+{
+  "n": 25,
+  "genuine_flagged_share": 0.04,
+  "caught_share": {
+    "scale_x1.1": 1.0,
+    "waist_level_swapped": 0.84,
+    "girth_plus_50mm": 0.04
+  }
+}

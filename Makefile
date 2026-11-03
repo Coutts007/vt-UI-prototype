@@ -1,4 +1,4 @@
-.PHONY: setup dev-web dev-api up down seed lint typecheck test test-web test-api parity contract e2e e2e-real-api walkthrough stack-check fuzz load study-secrets study-up study-admin study-cert study-down licences build
+.PHONY: frozen-guard setup dev-web dev-api up down seed lint typecheck test test-web test-api parity contract e2e e2e-real-api walkthrough stack-check fuzz load study-secrets study-up study-admin study-cert study-down licences build
 
 COMPOSE = docker compose -f deploy/docker-compose.yml
 
@@ -6,6 +6,7 @@ setup:
 	corepack enable
 	pnpm install --frozen-lockfile
 	uv sync --frozen
+	git config core.hooksPath .githooks
 
 dev-web:
 	pnpm --filter @vt/web dev
@@ -116,6 +117,10 @@ study-down:
 
 licences:
 	node scripts/licences.mjs
+
+# Nothing under packages/rules/frozen/ may change once on main (backend-spec 11.7).
+frozen-guard:
+	sh scripts/frozen_guard.sh
 
 build:
 	pnpm --filter @vt/web build

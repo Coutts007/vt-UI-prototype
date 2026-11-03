@@ -3,7 +3,19 @@ name = "vt-ml"
 version = "0.1.0"
 description = "Virtual Tailor: calibration and ML pipeline"
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+  "vt-measure",
+  "numpy>=2.1",
+  "scipy>=1.14",
+  "scikit-learn>=1.5",
+  "typer>=0.15",
+]
+
+[project.scripts]
+vt-ml = "vt_ml.cli:main"
+
+[tool.uv.sources]
+vt-measure = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
