@@ -6,7 +6,9 @@
 #                            decrypt FILE with the owner's private key, restore it into a scratch
 #                            database, print the row counts, drop the scratch database
 # The dump is pg_dump's custom format (already compressed), piped straight into age, so no
-# clear-text copy ever touches the disk. Output lines carry counts and file names only.
+# clear-text copy ever touches the disk. It carries the grants to vt_app, vt_retention and
+# vt_readonly (a live restore keeps them) but no owners. Output lines carry counts and file
+# names only.
 set -eu
 BACKUPS=${BACKUPS_DIR:-/backups}
 # Backup files are readable by root only on the VM.
@@ -18,7 +20,7 @@ dump() {
   case "$recipient" in age1*) ;; *) echo "BACKUP_AGE_RECIPIENT must be an age public key" >&2; exit 1 ;; esac
   stamp=$(date -u +%Y-%m-%dT%H%MZ)
   out="$BACKUPS/vt-$stamp.dump.age"
-  pg_dump --format=custom --no-owner --no-privileges | age -r "$recipient" > "$out.part"
+  pg_dump --format=custom --no-owner | age -r "$recipient" > "$out.part"
   mv "$out.part" "$out"
   # Keep KEEP days: a file older than that goes (mtime is the dump time).
   find "$BACKUPS" -maxdepth 1 -name 'vt-*.dump.age' -mtime +"$((KEEP - 1))" -delete
@@ -31,7 +33,7 @@ restore_drill() {
   echo "restore drill: $(basename "$file") into $scratch"
   psql -v ON_ERROR_STOP=1 -q -d postgres -c "CREATE DATABASE \"$scratch\""
   trap 'psql -q -d postgres -c "DROP DATABASE IF EXISTS \"$scratch\"" >/dev/null; echo "scratch database dropped"' EXIT
-  # The dump carries no owners or grants, so the restore needs none of the application roles.
+  # The drill skips the grants, so it also works on a machine without the application roles.
   age -d -i "$key" "$file" | pg_restore --no-owner --no-privileges --exit-on-error -d "$scratch"
   psql -v ON_ERROR_STOP=1 -q -At -d "$scratch" -c "
     SELECT relname || ': ' || n_live_tup FROM pg_stat_user_tables ORDER BY relname" \
