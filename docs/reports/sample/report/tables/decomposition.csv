@@ -1,0 +1,5 @@
+site,n_pairs,mae_before_mm,scale_term_mean_abs_change_mm,scale_term_share,level_term,oracle_factor,cross_section_term_mean_abs_change_mm,cross_section_term_share,remainder_rmse_mm,remainder_share,note
+chest,72,12.17,2.61,-0.027,"not estimated: needs capture profiles, not in the CSV export",0.9862,12.28,0.85,5.61,0.177,"diagnostic; oracle terms fitted on the test cohort, never used for acceptance"
+waist,72,4.99,2.21,-0.349,"not estimated: needs capture profiles, not in the CSV export",1.0043,3.19,0.25,6.7,1.099,"diagnostic; oracle terms fitted on the test cohort, never used for acceptance"
+hip,72,5.02,2.75,-0.232,"not estimated: needs capture profiles, not in the CSV export",0.9997,0.32,0.003,6.75,1.229,"diagnostic; oracle terms fitted on the test cohort, never used for acceptance"
+neck,68,4.95,1.07,-0.091,"not estimated: needs capture profiles, not in the CSV export",0.9997,0.09,0.0,6.41,1.09,"diagnostic; oracle terms fitted on the test cohort, never used for acceptance"

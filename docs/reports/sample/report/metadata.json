@@ -1,0 +1,66 @@
+{
+  "bootstrap_resamples": 2000,
+  "capture_sets_analysed": 72,
+  "cohort": "test",
+  "cohort_counts_in_export": {
+    "test": {
+      "capture_sets": 72,
+      "participants": 24
+    }
+  },
+  "exclusions": [
+    {
+      "participant": "P005",
+      "reason": "site_failed",
+      "set_no": 1,
+      "site": "sleeve"
+    },
+    {
+      "participant": "P005",
+      "reason": "site_failed",
+      "set_no": 1,
+      "site": "inleg"
+    },
+    {
+      "participant": "P005",
+      "reason": "site_failed",
+      "set_no": 3,
+      "site": "neck"
+    },
+    {
+      "participant": "P009",
+      "reason": "site_failed",
+      "set_no": 2,
+      "site": "neck"
+    },
+    {
+      "participant": "P012",
+      "reason": "site_failed",
+      "set_no": 3,
+      "site": "neck"
+    },
+    {
+      "participant": "P017",
+      "reason": "site_failed",
+      "set_no": 3,
+      "site": "neck"
+    }
+  ],
+  "frozen_at": "2027-05-01T08:00:00Z",
+  "notes": [
+    "Bias and LoA on participant means; LoA from a REML mixed model, bootstrap intervals from the Bland-Altman (1999) moments estimate over participant resamples.",
+    "Stature is reported but not tiered. Neck is tiered unless the owner decides otherwise.",
+    "Oracle terms in the error decomposition are diagnostic and never used for acceptance."
+  ],
+  "participants_analysed": 24,
+  "rules_version": "1.0-ke-test",
+  "seed": 5,
+  "software": {
+    "matplotlib": "3.11.2",
+    "numpy": "2.5.4",
+    "python": "3.12.3",
+    "scipy": "1.18.1",
+    "statsmodels": "0.15.0",
+    "vt_analysis": "0.1.0"
+  }
+}

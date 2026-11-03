@@ -3,7 +3,17 @@ name = "vt-analysis"
 version = "0.1.0"
 description = "Virtual Tailor: validation analytics"
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+  "numpy>=2.1",
+  "scipy>=1.14",
+  "statsmodels>=0.14",
+  "pandas>=2.2",
+  "matplotlib>=3.9",
+  "typer>=0.15",
+]
+
+[project.scripts]
+vt-analysis = "vt_analysis.cli:main"
 
 [build-system]
 requires = ["hatchling"]
