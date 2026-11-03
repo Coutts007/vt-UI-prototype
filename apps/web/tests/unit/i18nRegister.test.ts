@@ -22,7 +22,8 @@ function registeredKeys(text: string) {
 }
 
 describe.skipIf(!existsSync(REGISTER))('the Kiswahili review register', () => {
-  const text = readFileSync(REGISTER, 'utf8');
+  // describe.skipIf still runs this body to collect the tests, so read only when present.
+  const text = existsSync(REGISTER) ? readFileSync(REGISTER, 'utf8') : '';
   const registered = registeredKeys(text);
 
   it('lists every key of the shared dictionary', () => {
