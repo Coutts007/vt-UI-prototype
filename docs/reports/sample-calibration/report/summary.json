@@ -1,0 +1,188 @@
+{
+  "rules_version": "0.9-synthetic-sample",
+  "parent": "0.1-uncalibrated",
+  "seed": 20270301,
+  "resamples": 2000,
+  "min_readings": 4,
+  "fit": {
+    "cohort": "calibration",
+    "n_participants": 25,
+    "n_capture_sets": 75,
+    "cohort_hash": "acffad87c5271a0847a65233db9504cb6950883c4148bcf1cf314af994489402",
+    "loo": {
+      "chest": {
+        "n": 25,
+        "level": 0.3,
+        "level_female": 0.3,
+        "level_male": 0.3,
+        "best_level": 0.3,
+        "kept_prior": false,
+        "cf": 1.0301,
+        "loo_mae_mm": 0.8,
+        "prior_loo_mae_mm": 3.29,
+        "affine_loo_mae_mm": 0.85,
+        "affine_adopted": false
+      },
+      "waist": {
+        "n": 25,
+        "level": 0.55,
+        "best_level": 0.55,
+        "kept_prior": false,
+        "cf": 0.9801,
+        "loo_mae_mm": 0.81,
+        "prior_loo_mae_mm": 3.75,
+        "affine_loo_mae_mm": 0.81,
+        "affine_adopted": false
+      },
+      "hip": {
+        "n": 25,
+        "level": 0.25,
+        "best_level": 0.12,
+        "kept_prior": true,
+        "cf": 1.0197,
+        "loo_mae_mm": 0.79,
+        "prior_loo_mae_mm": 0.79,
+        "affine_loo_mae_mm": 0.83,
+        "affine_adopted": false
+      },
+      "neck": {
+        "n": 25,
+        "level": 0.15,
+        "best_level": 0.15,
+        "kept_prior": false,
+        "cf": 1.0496,
+        "loo_mae_mm": 0.71,
+        "prior_loo_mae_mm": 7.33,
+        "affine_loo_mae_mm": 0.72,
+        "affine_adopted": false
+      },
+      "shoulder": {
+        "n": 25,
+        "offset_mm": 11.6,
+        "prior_offset_mm": 0.0,
+        "prior_mae_mm": 11.61,
+        "loo_mae_mm": 1.01
+      },
+      "sleeve": {
+        "n": 25,
+        "offset_mm": -8.0,
+        "prior_offset_mm": 0.0,
+        "prior_mae_mm": 7.95,
+        "loo_mae_mm": 0.73
+      },
+      "outleg": {
+        "n": 25,
+        "offset_mm": 15.0,
+        "prior_offset_mm": 0.0,
+        "prior_mae_mm": 15.01,
+        "loo_mae_mm": 0.9
+      },
+      "inleg": {
+        "n": 25,
+        "offset_mm": -10.1,
+        "prior_offset_mm": 0.0,
+        "prior_mae_mm": 10.08,
+        "loo_mae_mm": 0.89
+      }
+    },
+    "bootstrap_ci": {
+      "chest": {
+        "level": [
+          0.25,
+          0.3
+        ],
+        "cf": [
+          1.0199,
+          1.0326
+        ],
+        "loo_mae": [
+          0.6351,
+          8.0661
+        ],
+        "affine_gain": [
+          -0.7964,
+          0.7964
+        ]
+      },
+      "waist": {
+        "level": [
+          0.55,
+          0.6
+        ],
+        "cf": [
+          0.9796,
+          0.9968
+        ],
+        "loo_mae": [
+          0.5812,
+          2.6858
+        ],
+        "affine_gain": [
+          -0.1678,
+          0.141
+        ]
+      },
+      "hip": {
+        "level": [
+          0.25,
+          0.25
+        ],
+        "cf": [
+          1.0192,
+          1.0201
+        ],
+        "loo_mae": [
+          0.5068,
+          1.2018
+        ],
+        "affine_gain": [
+          -0.1819,
+          0.0335
+        ]
+      },
+      "neck": {
+        "level": [
+          0.15,
+          0.15
+        ],
+        "cf": [
+          1.0488,
+          1.0505
+        ],
+        "loo_mae": [
+          0.5125,
+          0.9507
+        ],
+        "affine_gain": [
+          -0.1278,
+          0.1583
+        ]
+      },
+      "shoulder": {
+        "offset_mm": [
+          11.1195,
+          12.1215
+        ]
+      },
+      "sleeve": {
+        "offset_mm": [
+          -8.3038,
+          -7.5941
+        ]
+      },
+      "outleg": {
+        "offset_mm": [
+          14.6063,
+          15.4233
+        ]
+      },
+      "inleg": {
+        "offset_mm": [
+          -10.4708,
+          -9.6887
+        ]
+      }
+    },
+    "notes": "Fitted by vt_ml.calibrate on 25 calibration participants; LOO by participant; 2000 participant bootstrap resamples, seed 20270301."
+  }
+}

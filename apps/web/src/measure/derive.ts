@@ -86,7 +86,12 @@ export interface Rules {
     neck_above_shoulder_frac: number;
   };
   offsets_mm: { acromion: number; shoulder: number; sleeve: number; outleg: number; inleg: number };
-  girth_model: { type: string; correction_factors: Record<'chest' | 'waist' | 'hip' | 'neck', number> };
+  girth_model: {
+    type: string;
+    correction_factors: Record<'chest' | 'waist' | 'hip' | 'neck', number>;
+    // Present only when calibration adopted the affine variant a*P + c (backend-spec 11.3.2).
+    intercepts_mm?: Partial<Record<'chest' | 'waist' | 'hip' | 'neck', number>>;
+  };
   plausible_mm: Record<Site, number[]>;
   flags: { visibility_fail: number; visibility_check: number; marker_conf_check: number; free_arm_min_distance_ratio: number };
 }
@@ -255,7 +260,8 @@ function girth(site: 'chest' | 'waist' | 'hip' | 'neck', a: number | null, b: nu
   }
   const perimeter = ellipsePerimeter(a, b);
   const factor = rules.girth_model.correction_factors[site];
-  return { ...blank(site, perimeter * factor, fraction), a_mm: a, b_mm: b, perimeter_mm: perimeter, correction_factor: factor };
+  const intercept = rules.girth_model.intercepts_mm?.[site] ?? 0;
+  return { ...blank(site, perimeter * factor + intercept, fraction), a_mm: a, b_mm: b, perimeter_mm: perimeter, correction_factor: factor };
 }
 
 export function derive(data: DeriveInput, rules: Rules): Derivation {

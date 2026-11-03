@@ -52,9 +52,24 @@ def test_uncalibrated_rules_are_a_draft_with_no_correction():
     assert set(artifact["girth_model"]["correction_factors"].values()) == {1.0}
 
 
-def test_only_the_owner_freezes():
-    """Nothing in frozen/ until the owner freezes a version."""
-    assert [p.name for p in (ROOT / "frozen").iterdir() if p.name != ".gitkeep"] == []
+FROZEN = sorted((ROOT / "frozen").glob("*.json"))
+
+
+def test_frozen_copies_are_frozen_and_intact():
+    """Only the owner puts a file here (golden rule 8). Each one must say so and verify."""
+    for path in FROZEN:
+        artifact = load(path)
+        assert artifact["status"] == "frozen", path.name
+        assert artifact["checksum"] == checksum_module.rules_checksum(artifact), path.name
+        assert path.name == f"rules-{artifact['rules_version']}.json"
+        Draft202012Validator(SCHEMA, format_checker=FormatChecker()).validate(artifact)
+
+
+def test_the_checksum_ignores_the_status_so_freezing_keeps_it():
+    """The registry owns the status (backend-spec 10.6), so a frozen copy keeps its checksum."""
+    artifact = load(ROOT / "rules-0.1-uncalibrated.json")
+    frozen = {**artifact, "status": "frozen"}
+    assert checksum_module.rules_checksum(frozen) == artifact["checksum"]
 
 
 @pytest.mark.parametrize("field", ["anomaly", "fit.loo", "fit.bootstrap_ci", "girth_model.extra"])

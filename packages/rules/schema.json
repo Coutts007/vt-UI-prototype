@@ -271,6 +271,31 @@
               "$ref": "#/$defs/factor"
             }
           }
+        },
+        "intercepts_mm": {
+          "description": "Only when calibration adopted the affine variant a*P + c (backend-spec 11.3.2). Millimetres added after the factor.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "chest",
+            "waist",
+            "hip",
+            "neck"
+          ],
+          "properties": {
+            "chest": {
+              "type": "number"
+            },
+            "waist": {
+              "type": "number"
+            },
+            "hip": {
+              "type": "number"
+            },
+            "neck": {
+              "type": "number"
+            }
+          }
         }
       },
       "maxProperties": 8,

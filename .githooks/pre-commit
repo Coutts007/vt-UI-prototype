@@ -1,0 +1,10 @@
+#!/bin/sh
+# Frozen rules artifacts are immutable (backend-spec 11.7). New files may be added; nothing
+# already there may be changed, renamed or removed. make setup points core.hooksPath here.
+changed=$(git diff --cached --name-status -- packages/rules/frozen/ | grep -E '^[MDRT]' || true)
+if [ -n "$changed" ]; then
+  echo "Refused: packages/rules/frozen/ is immutable. Create a new rules version instead." >&2
+  echo "$changed" >&2
+  exit 1
+fi
+exit 0

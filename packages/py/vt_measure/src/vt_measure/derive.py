@@ -282,7 +282,10 @@ def _girth(
         return SiteResult(site, None, None, "fail", [], fraction, a, b)
     perimeter = ellipse_perimeter(a, b)
     factor = rules["girth_model"]["correction_factors"][site]
-    return SiteResult(site, None, perimeter * factor, "pass", [], fraction, a, b, perimeter, factor)
+    # Present only when calibration adopted the affine variant a*P + c (backend-spec 11.3.2).
+    intercept = rules["girth_model"].get("intercepts_mm", {}).get(site, 0)
+    raw = perimeter * factor + intercept
+    return SiteResult(site, None, raw, "pass", [], fraction, a, b, perimeter, factor)
 
 
 def _front_half(front: View, y_px: float) -> float | None:

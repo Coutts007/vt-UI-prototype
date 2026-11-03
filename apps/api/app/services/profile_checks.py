@@ -3,6 +3,7 @@
 They warn the tailor and never refuse a profile. Details hold numbers only; the UI builds the words.
 """
 
+import math
 from collections.abc import Mapping
 from typing import Any
 
@@ -69,6 +70,66 @@ def static_bounds(values: Values, bounds: Mapping[str, Any]) -> list[Check]:
             found.append(
                 check("unusual_proportion", "check", top, ratio=round(ratio, 3), low=low, high=high)
             )
+    return found
+
+
+def reference_group(sex: str | None, per_sex: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    """The fitted reference for this sex, or the pooled one (backend-spec 11.5.1)."""
+    group = per_sex.get(sex or "unspecified") or per_sex.get("unspecified")
+    return group or None
+
+
+def robust_z(values: Values, group: Mapping[str, Any]) -> dict[str, tuple[float, str]]:
+    """Robust z of log(site / stature) per site and of log(waist / hip), with the site to report."""
+    out: dict[str, tuple[float, str]] = {}
+    stature = values.get("stature")
+    for site, stats in group.get("sites", {}).items():
+        value = values.get(site)
+        if value and stature and stats["mad"] > 0:
+            out[site] = ((math.log(value / stature) - stats["median"]) / stats["mad"], site)
+    waist, hip, stats = values.get("waist"), values.get("hip"), group.get("waist_hip")
+    if waist and hip and stats and stats["mad"] > 0:
+        out["waist_hip"] = ((math.log(waist / hip) - stats["median"]) / stats["mad"], "waist")
+    return out
+
+
+def mahalanobis(values: Values, group: Mapping[str, Any]) -> tuple[float, list[str]] | None:
+    """d^2 of the log-measurements and the sites that contribute most, or None if any is missing."""
+    model = group.get("mahalanobis")
+    if not model:
+        return None
+    sites = list(model["sites"])
+    if any(not values.get(site) for site in sites):
+        return None
+    diff = [
+        math.log(float(values[site] or 1)) - mean
+        for site, mean in zip(sites, model["mean"], strict=True)
+    ]
+    projected = [sum(row[j] * diff[j] for j in range(len(sites))) for row in model["precision"]]
+    contributions = [diff[i] * projected[i] for i in range(len(sites))]
+    d2 = sum(contributions)
+    ranked = sorted(range(len(sites)), key=lambda i: -contributions[i])
+    return d2, [sites[i] for i in ranked[:3]]
+
+
+def reference_checks(values: Values, sex: str | None, anomaly: Mapping[str, Any]) -> list[Check]:
+    """The fitted reference (11.5.2 and 11.5.3): warnings only, numbers only in the detail."""
+    group = reference_group(sex, anomaly.get("per_sex") or {})
+    if group is None:
+        return []
+    found = []
+    z_limit = float(anomaly.get("z_limit", 3.5))
+    for key, (z, site) in robust_z(values, group).items():
+        if abs(z) > z_limit:
+            found.append(check("unusual_proportion", "check", site, z=round(z, 2), ratio=key,
+                               limit=z_limit))  # fmt: skip
+    distance = mahalanobis(values, group)
+    if distance is not None:
+        d2, top = distance
+        threshold = float(group["mahalanobis"]["threshold"])
+        if d2 > threshold:
+            found.append(check("outlier_profile", "info", None, d2=round(d2, 2),
+                               threshold=round(threshold, 2), sites=",".join(top)))  # fmt: skip
     return found
 
 

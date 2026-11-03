@@ -9,6 +9,9 @@ from typing import Any
 
 from vt_measure.derive import derive
 from vt_measure.synthetic import Body, asymmetric_input, make_input
+from vt_ml.calibrate import calibrate, checksum
+from vt_ml.data import CalibrationRepository
+from vt_ml.synthetic import synthetic_bundle
 
 ROOT = Path(__file__).parent
 RULES = json.loads((ROOT.parent / "rules" / "rules-0.1-uncalibrated.json").read_text())
@@ -190,7 +193,34 @@ def edge_cases() -> list[tuple[str, dict[str, Any], dict[str, Any]]]:
         ("edge-offsets", make_input(Body()), changed_rules(["offsets_mm", "sleeve"], 7)),
         ("edge-depth-correction", make_input(Body()),
          changed_rules(["scale", "depth_correction_mm", "front"], 100)),
+        ("edge-intercepts", make_input(Body()),
+         changed_rules(["girth_model", "intercepts_mm"],
+                       {"chest": 12.5, "waist": -8.0, "hip": 0.0, "neck": 3.2})),
     ]  # fmt: skip
+
+
+def calibrated_rules() -> dict[str, Any]:
+    """A draft fitted by vt_ml.calibrate on a synthetic cohort (M13): per-sex chest levels,
+    fitted factors and offsets. The fit and anomaly blocks are dropped because derivation
+    never reads them and their intervals are the only numbers that could drift between machines."""
+    bundle = synthetic_bundle(12, seed=11, base=RULES)
+    people = CalibrationRepository(bundle).calibration_data()
+    fit = calibrate(people, RULES, version="0.9-parity-synthetic",
+                    created_at="2026-11-03T00:00:00Z", resamples=50)  # fmt: skip
+    rules = fit.artifact
+    rules["fit"] = {**RULES["fit"], "notes": "synthetic parity case; see generate.py"}
+    rules["anomaly"] = RULES["anomaly"]
+    rules["checksum"] = checksum(rules)
+    return rules
+
+
+def calibrated_cases() -> list[tuple[str, dict[str, Any], dict[str, Any]]]:
+    rules = calibrated_rules()
+    return [
+        ("calibrated-female", make_input(Body()), rules),
+        ("calibrated-male", make_input(Body(sex="male", stature=1800.0)), rules),
+        ("calibrated-views-differ", asymmetric(), rules),
+    ]
 
 
 def random_cases() -> list[tuple[str, dict[str, Any], dict[str, Any]]]:
@@ -233,7 +263,7 @@ def render(name: str, data: dict[str, Any], rules: dict[str, Any]) -> str:
 
 
 def all_cases() -> dict[str, str]:
-    cases = analytic_cases() + edge_cases() + random_cases()
+    cases = analytic_cases() + edge_cases() + random_cases() + calibrated_cases()
     return {name: render(name, data, rules) for name, data, rules in cases}
 
 

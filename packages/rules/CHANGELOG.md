@@ -5,3 +5,7 @@
 Literature starting values. No tape data has informed these numbers. Scale depth correction is 0 mm (A14) until M6 has measured the bias.
 
 Added in M2 while still a draft: `scale.nominal_distance_mm` (2250, the middle of the 2 to 2.5 m stance) and `flags.free_arm_min_distance_ratio` (1.05). Neither changes a value until the correction is non-zero.
+
+### Checksum rule (M13, 2026-11-03)
+
+The checksum now covers every field except `checksum` and `status`, so freezing a version in the registry (or copying it into `frozen/`) keeps its checksum (decision M13-1). The 0.1 file's checksum was recomputed; nothing else in it changed.

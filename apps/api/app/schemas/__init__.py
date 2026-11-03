@@ -754,6 +754,22 @@ class RulesArtifact(BaseModel):
     checksum: str
 
 
+class RulesSummary(BaseModel):
+    rules_version: str = Field(max_length=40)
+    status: Literal["draft", "frozen", "retired"]
+    checksum: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    parent: str | None = Field(max_length=40)
+    frozen_at: datetime | None
+    created_at: datetime
+    is_current: bool
+
+
+class RederiveResult(BaseModel):
+    rules_version: str = Field(max_length=40)
+    cohort: Literal["pilot", "calibration", "test"]
+    profiles_processed: int = Field(ge=0)
+
+
 class SheetInput(Input):
     include_name: StrictBool
 

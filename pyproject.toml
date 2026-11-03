@@ -47,10 +47,16 @@ select = ["E", "F", "I", "B", "UP"]
 [tool.ruff.lint.per-file-ignores]
 "apps/api/migrations/versions/*" = ["E501"]
 "apps/api/app/api/**" = ["B008"]
+"packages/py/vt_ml/src/vt_ml/cli.py" = ["B008"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
+
+# Libraries without type stubs. Their calls are checked where our own annotations say what they return.
+[[tool.mypy.overrides]]
+module = ["jsonschema.*", "scipy.*", "sklearn.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

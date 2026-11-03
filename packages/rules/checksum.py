@@ -1,4 +1,8 @@
-"""Compute or write the checksum of a rules artifact: python checksum.py <file> [--write]."""
+"""Compute or write the checksum of a rules artifact: python checksum.py <file> [--write].
+
+The checksum covers every field except `checksum` and `status`. The registry owns the status
+(backend-spec 10.6), so a copy frozen in the registry or in frozen/ keeps the same checksum.
+"""
 
 import hashlib
 import json
@@ -8,7 +12,7 @@ from typing import Any
 
 
 def rules_checksum(artifact: dict[str, Any]) -> str:
-    body = {k: v for k, v in artifact.items() if k != "checksum"}
+    body = {k: v for k, v in artifact.items() if k not in ("checksum", "status")}
     canonical = json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return "sha256:" + hashlib.sha256(canonical.encode()).hexdigest()
 

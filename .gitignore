@@ -35,6 +35,13 @@ test-results/
 research/data/
 research/images/
 docs/reports/**/private/
+# Calibration bundles and fit reports hold person-level study numbers (M13). Only the synthetic
+# sample under docs/reports/sample-calibration/ is committed.
+*calibration-bundle*.json
+bundle.json
+/reports/
+/data/
+docs/reports/calibration-*/
 docs/proposal/
 *.vtimg
 paper_covariates*.csv

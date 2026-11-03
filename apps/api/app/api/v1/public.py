@@ -54,8 +54,9 @@ async def rules_by_version(
     session: Session,
 ) -> dict[str, Any]:
     # Spec 8 serves frozen artifacts. The current one stays readable while it is still a draft.
+    # The status comes from the registry when it knows the version (10.6).
     artifact = await find_rules(request.app.state.rules, session, version)
     current = (await read_settings(session))["current_rules_version"]
-    if artifact.get("status") != "frozen" and version != current:
+    if artifact["status"] != "frozen" and version != current:
         raise ApiError("rules_version_unknown")
     return artifact
