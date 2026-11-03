@@ -92,6 +92,8 @@ async def test_limiter_keys_hold_no_address_or_email_in_clear(
     await client.post(f"{API}/auth/login", json={"email": "nobody@vt.test", "password": "x" * 10})
     keys = list(await session.scalars(select(RateLimitWindow.bucket_key)))
     assert keys and all("@" not in key and "." not in key for key in keys)
+    codes = set(await session.scalars(select(Client.client_code)))
+    assert not codes & set(keys)
 
 
 async def test_a_signed_in_user_is_limited_through_the_database(
@@ -161,3 +163,20 @@ async def test_a_client_deleted_while_rendering_gets_no_sheet(
     assert reply.status_code == 404 and reply.json()["code"] == "not_found", reply.text
     assert list(Path(settings.sheets_dir).glob("*")) == []
     assert await session.scalar(select(func.count()).select_from(SpecSheet)) == 0
+
+
+async def test_the_profile_limit_keeps_no_client_code_in_clear(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    # Privacy review of M16: the window row outlives the request and goes into every backup.
+    from ingest_support import FREE_CODE, ROUTE, key, payload
+
+    body = payload()
+    reply = await client.post(ROUTE, json=body, headers=key(body))
+    assert reply.status_code in (200, 201), reply.text
+    keys = list(
+        await session.scalars(
+            select(RateLimitWindow.bucket_key).where(RateLimitWindow.bucket == "profile-code")
+        )
+    )
+    assert len(keys) == 1 and FREE_CODE not in keys[0]

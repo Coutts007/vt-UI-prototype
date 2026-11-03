@@ -8,7 +8,7 @@ DATA_DIR=${VT_DATA_DIR:-/srv/vt}
 ALLOW=${VT_SSH_ALLOW:?set VT_SSH_ALLOW to the addresses that may use SSH}
 
 apt-get update
-apt-get install -y --no-install-recommends ca-certificates curl ufw unattended-upgrades docker.io docker-compose-v2
+apt-get install -y --no-install-recommends ca-certificates curl ufw unattended-upgrades age docker.io docker-compose-v2
 systemctl enable --now docker
 
 # Firewall: 80 and 443 for everyone, SSH only from the allow-list, nothing else.

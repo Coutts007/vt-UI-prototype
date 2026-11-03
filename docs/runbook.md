@@ -60,13 +60,19 @@ Migrations run on every `make prod-up` through the `migrate` service (`vt db upg
 
 **What runs:** the `backup` container dumps the database every night at 03:00 Nairobi (after the 02:00 retention job): `pg_dump` custom format piped straight into `age`, encrypted to `BACKUP_AGE_RECIPIENT`, written to `/srv/vt/backups/vt-<UTC stamp>.dump.age`, root-only, kept 30 days. No clear-text copy touches the disk. A manual backup: `make prod-backup`. Check that last night's file exists: `ls -la /srv/vt/backups`. Copy the files off the VM to the owner's encrypted storage in the same region at least weekly (they are useless without the private key).
 
-**Restore drill (monthly; record it in section 11):** copy the owner's identity file to the VM for the duration of the drill only, then:
+**Restore drill (monthly; record it in section 11):** run it on the owner's laptop, so the private key never reaches the VM. Copy a backup file off the VM, then from a checkout of the repository:
+
 ```sh
-VT_AGE_KEY=/root/vt-backup-key.txt make prod-restore-drill          # latest file
-VT_AGE_KEY=/root/vt-backup-key.txt VT_BACKUP_FILE=/srv/vt/backups/vt-....dump.age make prod-restore-drill
-shred -u /root/vt-backup-key.txt
+scp vm:/srv/vt/backups/vt-<stamp>.dump.age ~/vt-backups/
+docker build -f deploy/Dockerfile.backup -t vt-backup .
+docker run -d --name vt-drill-db -e POSTGRES_PASSWORD=drill postgres:16-alpine
+docker run --rm --link vt-drill-db:db -e PGHOST=db -e PGUSER=postgres -e PGPASSWORD=drill \
+  -v ~/vt-backup-key.txt:/run/age-key:ro -v ~/vt-backups/vt-<stamp>.dump.age:/run/b.age:ro \
+  vt-backup vt-backup restore-drill /run/b.age /run/age-key
+docker rm -f vt-drill-db
 ```
-The drill decrypts, restores into a scratch database on the same server, prints the row counts and the migration head, and drops the scratch database. It skips grants, so it also works on a laptop with only the `backup` image.
+
+The drill decrypts, restores into a scratch database, prints the row counts and the migration head, and drops the scratch database. It skips grants, so it needs none of the application roles. `make prod-restore-drill` runs the same drill on the VM; use it only when the laptop cannot reach a backup, because it needs the key on the VM.
 
 **Full restore (data loss, failed VM):**
 1. On a fresh VM, do section 1 up to `make prod-up`, which creates an empty, migrated database with the roles and their grants.
@@ -80,7 +86,9 @@ The drill decrypts, restores into a scratch database on the same server, prints 
    ```
 4. `make prod-up` again: migrations find the restored head and set the role passwords; the API starts.
 5. Sheet files under `/srv/vt/sheets` are not in the database dump. A missing file answers 404 and the tailor renders the sheet again from the order.
-6. Shred the key file. Record the restore in section 11 and in the incident log if it followed an incident.
+6. Remove the key file from the VM (`rm`; on SSD or LUKS storage `shred` gives no guarantee, so never leave the key there longer than the restore). Record the restore in section 11 and in the incident log if it followed an incident.
+
+Caddy obtains its certificate from Let's Encrypt (ZeroSSL as fallback), which sees only the host name and `VT_ACME_EMAIL`. It is the only outside service the stack contacts.
 
 ## 6. Rotate secrets
 

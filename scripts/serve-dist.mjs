@@ -35,7 +35,14 @@ const FRESH = new Set(['/', '/index.html', '/sw.js', '/manifest.webmanifest']);
 
 const server = createServer((request, response) => {
   const url = new URL(request.url ?? '/', 'http://localhost');
-  let path = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, '');
+  let decoded;
+  try {
+    decoded = decodeURIComponent(url.pathname);
+  } catch {
+    response.writeHead(400).end();
+    return;
+  }
+  let path = normalize(decoded).replace(/^(\.\.[/\\])+/, '');
   let file = join(dist, path);
   const isFile = existsSync(file) && statSync(file).isFile();
   if (!isFile) {
