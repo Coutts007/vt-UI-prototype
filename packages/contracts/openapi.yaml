@@ -1005,6 +1005,23 @@ paths:
         '403': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
+  /admin/capture-stats:
+    get:
+      operationId: getCaptureStats
+      tags: [admin]
+      summary: Completion of captures per mode (NFR-07), counts only
+      description: >-
+        One row per combination of capture mode, camera facing and guidance mode seen in the stored
+        capture sessions, with how many finished within three attempts (retake_count of 2 or less).
+        Aggregates only; nothing identifies a client.
+      x-roles: [admin]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Completion per mode
+          content: { application/json: { schema: { $ref: '#/components/schemas/CaptureStats' } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
   /admin/rules:
     get:
       operationId: listRules
@@ -2387,6 +2404,33 @@ components:
         rules_version: { $ref: '#/components/schemas/RulesVersion' }
         cohort: { $ref: '#/components/schemas/Cohort' }
         profiles_processed: { type: integer, minimum: 0 }
+    CaptureModeStats:
+      type: object
+      additionalProperties: false
+      required: [capture_mode, camera_facing, guidance_mode, sessions, within_three_attempts, within_three_attempts_pct, mean_retake_count, level_unchecked, capture_fallback]
+      properties:
+        capture_mode: { type: string, enum: [self, assisted] }
+        camera_facing: { type: string, enum: [environment, user] }
+        guidance_mode: { type: string, enum: [voice, visual] }
+        sessions: { type: integer, minimum: 0 }
+        within_three_attempts:
+          description: Sessions whose profile was saved after at most two retakes (NFR-07).
+          type: integer
+          minimum: 0
+        within_three_attempts_pct: { type: number, minimum: 0, maximum: 100 }
+        mean_retake_count: { type: number, minimum: 0 }
+        level_unchecked: { type: integer, minimum: 0 }
+        capture_fallback: { type: integer, minimum: 0 }
+    CaptureStats:
+      type: object
+      additionalProperties: false
+      required: [sessions, modes]
+      properties:
+        sessions: { type: integer, minimum: 0 }
+        modes:
+          type: array
+          maxItems: 8
+          items: { $ref: '#/components/schemas/CaptureModeStats' }
 
     Participant:
       type: object

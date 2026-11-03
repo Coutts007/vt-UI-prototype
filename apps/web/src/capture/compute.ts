@@ -87,9 +87,9 @@ export function buildProfile(
       session_id: crypto.randomUUID(),
       started_at: session.startedAt || new Date().toISOString(),
       capture_mode: context.mode,
-      camera_facing: 'environment',
-      // A3 item 7: voice for self-capture with the rear camera, visual with a helper.
-      guidance_mode: context.mode === 'self' ? 'voice' : 'visual',
+      camera_facing: session.cameraFacing,
+      // A3 item 7, A4: voice for self-capture with the rear camera; visual with a helper or the front camera.
+      guidance_mode: session.guidanceMode,
       free_arm: front.free_arm,
       app_version: APP_VERSION,
       device_model: preflight?.device_model ?? 'unknown',

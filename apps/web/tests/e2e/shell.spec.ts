@@ -31,6 +31,7 @@ const ADMIN = [
   '/admin/accounts',
   '/admin/audit',
   '/admin/settings',
+  '/admin/capture-modes',
   '/admin/study/participants',
   '/admin/study/measurers',
   '/admin/study/export',

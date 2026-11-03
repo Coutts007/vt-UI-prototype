@@ -1,8 +1,10 @@
 // Keeps one runner alive across the /capture/front and /capture/side screens.
+import { APP_VERSION } from '../appVersion';
 import { createVisionClient, VisionClient } from '../vision/client';
 import { voiceGuide } from './audio';
 import { subscribeToOrientation, Tilt } from './camera';
-import { CaptureRunner } from './runner';
+import { CAPTURE_CONFIG, configHash } from './config';
+import { CaptureRunner, RunnerDeps } from './runner';
 import { captureSession } from './session';
 
 interface Host {
@@ -16,10 +18,41 @@ let stopTimer: ReturnType<typeof setTimeout> | null = null;
 let stopSensors: (() => void) | null = null;
 let tilt: Tilt | null = null;
 let releaseCamera: () => void = () => {};
+let cameraTrack: () => MediaStreamTrack | null = () => null;
 
 /** Set by the capture screen once the camera module has loaded. */
 export function onCameraRelease(release: () => void): void {
   releaseCamera = release;
+}
+
+/** Set by the capture screen: the live track when its torch can be driven, else null. */
+export function onCameraTrack(getter: () => MediaStreamTrack | null): void {
+  cameraTrack = getter;
+}
+
+/**
+ * The torch cue (A3 item 5) exists only in builds with its flag, and only for voice guidance. The
+ * flag is tested by its build-time name here, so a build without it drops the chunk (globals.d.ts).
+ */
+async function torchFor(): Promise<RunnerDeps['torch']> {
+  if (!__VT_TORCH_CUE__ || captureSession.guidanceMode !== 'voice') return undefined;
+  const { TorchCue } = await import('./torch');
+  return new TorchCue(() => cameraTrack());
+}
+
+/** Pilot instrumentation lives in dev and mock builds only (M15). Numbers only. */
+async function logFor(): Promise<RunnerDeps['log']> {
+  if (!(import.meta.env.DEV || import.meta.env.MODE === 'mock')) return undefined;
+  const { sessionLog } = await import('./sessionLog');
+  sessionLog.begin({
+    capture_mode: captureSession.machine.context.mode,
+    camera_facing: captureSession.cameraFacing,
+    guidance_mode: captureSession.guidanceMode,
+    level_unchecked: captureSession.machine.context.levelUnchecked,
+    config: `${CAPTURE_CONFIG.version}-${configHash()}`,
+    app_version: APP_VERSION,
+  });
+  return sessionLog;
 }
 
 const levelOff = () => captureSession.machine.context.levelUnchecked;
@@ -36,6 +69,7 @@ export function attachRunner(heightMm: number): Promise<Host | null> {
     } else {
       await ready;
     }
+    const [torch, log] = await Promise.all([torchFor(), logFor()]);
     return {
       vision: made.client,
       speed: made.speed,
@@ -46,6 +80,8 @@ export function attachRunner(heightMm: number): Promise<Host | null> {
         speed: made.speed,
         selfTimedBurst: made.real,
         sensorTilt: made.real ? () => tilt : undefined,
+        torch,
+        log,
       }),
     };
   }).catch(() => {

@@ -86,7 +86,16 @@ describe('buildProfile', () => {
     expect(session.guidance_mode).toBe('voice');
     expect(session.camera_facing).toBe('environment');
     expect(session.free_arm).toBe('left');
-    expect(session.config_hash).toMatch(/^capture-2-/);
+    expect(session.config_hash).toMatch(/^capture-3-/);
+  });
+
+  it('the front camera is recorded and means visual guidance (A4)', async () => {
+    const captured = await capture();
+    captured.cameraFacing = 'user';
+    const session = buildProfile(captured, draft, 1).session;
+    expect(session.camera_facing).toBe('user');
+    expect(session.guidance_mode).toBe('visual');
+    expect(session.capture_mode).toBe('self');
   });
 
   it('a helper means visual guidance', async () => {

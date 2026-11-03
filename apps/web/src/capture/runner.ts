@@ -6,10 +6,12 @@ import type { Landmark, View } from '../vision/types';
 import type { AudioPort } from './audio';
 import { CombinedView, combineBurst } from './burst';
 import { CAPTURE_CONFIG } from './config';
-import { CheckId, CheckOutcome, CheckResults, evaluateChecks, firstFailing, toViewChecks } from './checks';
+import { CheckId, CheckOutcome, CheckResults, evaluateChecks, firstFailing, maskBounds, toViewChecks } from './checks';
 import { CheckFilter, GuidancePacer, InstructionHold } from './guidance';
 import { CORRECTION_CLIPS, MessageKey } from './messages';
 import type { CaptureSession } from './session';
+import type { SessionLog } from './sessionLog';
+import type { TorchPort } from './torch';
 
 export type Border = 'ok' | 'wait' | 'stop';
 
@@ -46,6 +48,10 @@ export interface RunnerDeps {
   sensorTilt?: () => { beta: number; gamma: number } | null;
   /** The vision worker spaces its own burst frames, so the runner must not wait first. */
   selfTimedBurst?: boolean;
+  /** The torch cue experiment (A3 item 5), only behind its flag with the rear camera in self mode. */
+  torch?: TorchPort;
+  /** Pilot instrumentation: check values per sample, numbers only (M15). */
+  log?: SessionLog;
 }
 
 export class CaptureRunner {
@@ -92,6 +98,11 @@ export class CaptureRunner {
     this.unsubscribe();
     this.deps.vision.terminate();
     this.deps.audio.stop();
+    void this.deps.torch?.off();
+  }
+
+  private note(event: string, view: View | null): void {
+    this.deps.log?.event(event, view, this.deps.session.machine.context.retakeCount);
   }
 
   private patch(changes: Partial<RunnerSnapshot>): void {
@@ -147,6 +158,8 @@ export class CaptureRunner {
 
   private enterWalkAway(): void {
     this.patch({ ...EMPTY, walkLeft: CAPTURE_CONFIG.timing.walkAwaySec });
+    this.deps.torch?.phase('off');
+    this.note('walk_away', null);
     this.say('walk_away', true);
     const tick = (left: number) => {
       if (left <= 0) {
@@ -165,6 +178,7 @@ export class CaptureRunner {
   private enterChecking(view: View, previous: string): void {
     const fromCountdown = previous.includes('countdown');
     this.patch({ countdown: null, walkLeft: null, transitionLeft: null, shutterReady: false });
+    this.note(fromCountdown ? 'countdown_cancelled' : 'checking', view);
     if (!fromCountdown) {
       this.filter.reset();
       this.pacer.reset();
@@ -220,6 +234,20 @@ export class CaptureRunner {
     const border: Border = failed === 0 ? 'ok' : failed === 1 ? 'wait' : 'stop';
     const tilt = orientation ?? sample.orientation ?? this.snapshot.tilt;
     const instruction = this.hold.update(now, key);
+    if (this.deps.log) {
+      const bounds = sample.mask ? maskBounds(sample.mask) : null;
+      this.deps.log.sample({
+        view,
+        state: machine.state.name,
+        checks: stable,
+        person_height: bounds ? bounds.bottom - bounds.top : null,
+        marker_px: sample.marker?.side_px ?? null,
+        luminance: sample.luminance,
+        sharpness: sample.sharpness,
+        beta: tilt.beta,
+        gamma: tilt.gamma,
+      });
+    }
 
     if (machine.state.name === 'countdown') {
       this.patch({ results: stable, instruction, border, tilt });
@@ -234,12 +262,16 @@ export class CaptureRunner {
     else this.greenSince ??= now;
     const green = this.greenSince !== null && now - this.greenSince >= CAPTURE_CONFIG.timing.allGreenMs;
     this.patch({ results: stable, instruction, border, tilt, shutterReady: green });
+    // Almost ready: at most one check left (A3 item 5).
+    this.deps.torch?.phase(failed <= 1 ? 'almost' : 'off');
     if (green && machine.context.mode === 'self') this.deps.session.send({ type: 'ALL_GREEN' });
   }
 
   private enterCountdown(): void {
     this.deps.audio.tone('chime');
     const view = (this.deps.session.machine.state as { view: View }).view;
+    this.note('countdown', view);
+    this.deps.torch?.phase('countdown');
     this.startSampling(view);
     const tick = (left: number) => {
       if (left <= 0) {
@@ -251,6 +283,11 @@ export class CaptureRunner {
       this.patch({ countdown: left });
       this.deps.audio.tone('beep');
       this.say(`n${left}` as MessageKey, true);
+      // The LED is out before the burst so it cannot change the exposure (A3 item 5).
+      if (left === 1 && this.deps.torch) {
+        const { torch } = this.deps;
+        this.after(1000 - CAPTURE_CONFIG.torch.offBeforeBurstMs, () => void torch.off());
+      }
       this.after(1000, () => tick(left - 1));
     };
     tick(CAPTURE_CONFIG.timing.countdownSec);
@@ -259,6 +296,8 @@ export class CaptureRunner {
   private async enterBurst(view: View): Promise<void> {
     const epoch = this.epoch;
     this.patch({ countdown: null, shutterReady: false });
+    this.note('burst', view);
+    void this.deps.torch?.off();
     this.say('hold_still', true);
     const { session, vision } = this.deps;
     let combined = null;
@@ -275,6 +314,7 @@ export class CaptureRunner {
     }
     if (epoch !== this.epoch || this.stopped) return;
     if (!combined || !this.lastOutcome) {
+      this.note('burst_bad', view);
       this.say('try_again', true);
       session.send({ type: 'BURST_BAD' });
       return;
@@ -306,6 +346,8 @@ export class CaptureRunner {
 
   private enterViewDone(view: View): void {
     const { audio, session } = this.deps;
+    this.note('view_done', view);
+    this.deps.torch?.phase('off');
     audio.tone('done');
     this.say('done', true);
     const { doneMs, sideTransitionSec } = CAPTURE_CONFIG.timing;

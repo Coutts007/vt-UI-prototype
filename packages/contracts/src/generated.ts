@@ -849,6 +849,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/capture-stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Completion of captures per mode (NFR-07), counts only
+         * @description One row per combination of capture mode, camera facing and guidance mode seen in the stored capture sessions, with how many finished within three attempts (retake_count of 2 or less). Aggregates only; nothing identifies a client.
+         */
+        get: operations["getCaptureStats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/rules": {
         parameters: {
             query?: never;
@@ -1799,6 +1819,25 @@ export interface components {
             rules_version: components["schemas"]["RulesVersion"];
             cohort: components["schemas"]["Cohort"];
             profiles_processed: number;
+        };
+        CaptureModeStats: {
+            /** @enum {string} */
+            capture_mode: "self" | "assisted";
+            /** @enum {string} */
+            camera_facing: "environment" | "user";
+            /** @enum {string} */
+            guidance_mode: "voice" | "visual";
+            sessions: number;
+            /** @description Sessions whose profile was saved after at most two retakes (NFR-07). */
+            within_three_attempts: number;
+            within_three_attempts_pct: number;
+            mean_retake_count: number;
+            level_unchecked: number;
+            capture_fallback: number;
+        };
+        CaptureStats: {
+            sessions: number;
+            modes: components["schemas"]["CaptureModeStats"][];
         };
         Participant: {
             /** Format: uuid */
@@ -3385,6 +3424,28 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    getCaptureStats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Completion per mode */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptureStats"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     listRules: {

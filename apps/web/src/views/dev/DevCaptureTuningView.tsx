@@ -2,11 +2,23 @@
 import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { CHECK_ORDER, evaluateChecks, firstFailing, maskBounds } from '../../capture/checks';
 import { CAPTURE_CONFIG, configHash } from '../../capture/config';
+import { sessionLog } from '../../capture/sessionLog';
 import { FAKE_VISION_KEY } from '../../vision/client';
 import { DEFAULT_FAKE, FakeOptions, FakeVisionWorker, readFakeOptions, SCENARIOS, Scenario } from '../../vision/fakeVision';
 import type { View } from '../../vision/types';
 
 const RealPanel = lazy(() => import('./DevRealVisionPanel').then((m) => ({ default: m.DevRealVisionPanel })));
+
+/** Pilot instrumentation (M15): the last capture's check values, numbers only, as a local download. */
+function downloadSessionLog(): void {
+  const text = JSON.stringify(sessionLog.toJSON(), null, 1);
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `vt-capture-log-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 export const DevCaptureTuningView: React.FC = () => {
   const [options, setOptions] = useState<FakeOptions>(readFakeOptions);
@@ -88,6 +100,21 @@ export const DevCaptureTuningView: React.FC = () => {
           <RealPanel view={view} />
         </Suspense>
       )}
+      <section className="border rounded-lg p-3 space-y-2" aria-label="Session log">
+        <p className="text-sm" data-testid="session-log-count">
+          Last capture in this tab: {sessionLog.samples.length} samples, {sessionLog.events.length} events
+          {sessionLog.meta.camera_facing ? ` (${String(sessionLog.meta.capture_mode)}, ${String(sessionLog.meta.camera_facing)} camera, ${String(sessionLog.meta.guidance_mode)} guidance)` : ''}.
+          Numbers only; nothing identifies the client.
+        </p>
+        <div className="flex gap-3">
+          <button type="button" data-testid="download-log" onClick={downloadSessionLog} disabled={!sessionLog.samples.length} className="min-h-12 px-3 border rounded-lg font-semibold disabled:opacity-50">
+            Download session log (JSON)
+          </button>
+          <button type="button" onClick={() => { sessionLog.clear(); setTick((value) => value + 1); }} className="min-h-12 px-3 border rounded-lg">
+            Clear
+          </button>
+        </div>
+      </section>
       <p data-testid="first-failing" className="font-bold">
         First failing: {failing ?? 'none'} {failing ? `(${outcome.corrections[failing]})` : ''}
       </p>

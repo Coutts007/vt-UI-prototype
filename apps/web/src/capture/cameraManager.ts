@@ -3,7 +3,7 @@
 import { frameGeometry } from '../vision/frameMath';
 import { trackFrame } from '../vision/ledger';
 import { CAPTURE_CONFIG } from './config';
-import { CAMERA_VIDEO } from './camera';
+import { CameraFacing, cameraConstraints } from './camera';
 
 export interface AppliedCamera {
   width: number;
@@ -15,9 +15,12 @@ export interface AppliedCamera {
   /** Whether a lens or zoom change was asked for and held. Read on /dev/capture-tuning. */
   zoomPinned: boolean;
   still: 'imagecapture' | 'canvas';
+  facing: CameraFacing;
+  /** The flash LED can be driven (A3 item 5). Rear camera only. */
+  torch: boolean;
 }
 
-type ZoomCaps = MediaTrackCapabilities & { zoom?: { min: number; max: number }; focusMode?: string[] };
+type ZoomCaps = MediaTrackCapabilities & { zoom?: { min: number; max: number }; focusMode?: string[]; torch?: boolean };
 type ZoomSettings = MediaTrackSettings & { zoom?: number; focusMode?: string };
 interface PhotoCapture {
   takePhoto(): Promise<Blob>;
@@ -56,29 +59,34 @@ export class CameraManager {
     return stream;
   }
 
-  /** Opens the stream, or returns the one already open. Safe to stop while it is still pending. */
-  start(): Promise<AppliedCamera> {
-    if (this.applied && this.stream) return Promise.resolve(this.applied);
-    this.opening ??= this.startFresh().finally(() => {
+  /**
+   * Opens the stream, or returns the one already open. Safe to stop while it is still pending.
+   * The front camera (A4) delivers the frame the same way round as the rear one: the browser
+   * mirrors nothing, so the pipeline computes on it unchanged and only the preview is mirrored.
+   */
+  start(facing: CameraFacing = 'environment'): Promise<AppliedCamera> {
+    if (this.applied && this.stream && this.applied.facing === facing) return Promise.resolve(this.applied);
+    this.opening ??= this.startFresh(facing).finally(() => {
       this.opening = null;
     });
     return this.opening;
   }
 
-  private async startFresh(): Promise<AppliedCamera> {
+  private async startFresh(facing: CameraFacing): Promise<AppliedCamera> {
     this.releaseStream(); // Safari falls to 640 x 480 if an old stream is still open (10.1.6).
     const generation = ++this.generation;
-    let stream = await this.open(CAMERA_VIDEO, generation);
+    const constraints = cameraConstraints(facing);
+    let stream = await this.open(constraints, generation);
     let track = stream.getVideoTracks()[0];
 
-    // After permission the labels are real, so a wide lens can be swapped for the main one.
+    // After permission the labels are real, so a wide rear lens can be swapped for the main one.
     try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
+      const devices = facing === 'environment' ? await navigator.mediaDevices.enumerateDevices() : [];
       const better = pickRearCamera(devices, track.label);
       if (generation !== this.generation) throw new CameraStopped('camera_stopped');
       if (better) {
         stream.getTracks().forEach((t) => t.stop());
-        stream = await this.open({ ...CAMERA_VIDEO, facingMode: undefined, deviceId: { exact: better } }, generation);
+        stream = await this.open({ ...constraints, facingMode: undefined, deviceId: { exact: better } }, generation);
         track = stream.getVideoTracks()[0];
       }
     } catch (error) {
@@ -96,10 +104,13 @@ export class CameraManager {
 
     const settings = track.getSettings() as ZoomSettings;
     const portrait = frameGeometry(settings.width ?? 0, settings.height ?? 0, 1e6, true);
-    if (Math.max(portrait.w, portrait.h) < CAPTURE_CONFIG.frames.minLongEdge) {
+    // The front camera must give a 1080p stream (A4); the rear one measures from 1280 (10.1.1).
+    const minLongEdge = facing === 'user' ? CAPTURE_CONFIG.frames.frontCameraLongEdge : CAPTURE_CONFIG.frames.minLongEdge;
+    if (Math.max(portrait.w, portrait.h) < minLongEdge) {
       this.stop();
       throw new CameraTooSmall('camera_too_small');
     }
+    const caps = (track.getCapabilities?.() ?? {}) as ZoomCaps;
     this.applied = {
       width: portrait.w,
       height: portrait.h,
@@ -109,6 +120,8 @@ export class CameraManager {
       label: track.label,
       zoomPinned,
       still: (window as unknown as WithImageCapture).ImageCapture ? 'imagecapture' : 'canvas',
+      facing,
+      torch: facing === 'environment' && caps.torch === true,
     };
     if (this.video) this.attach(this.video);
     return this.applied;
@@ -132,6 +145,11 @@ export class CameraManager {
   private attach(video: HTMLVideoElement): void {
     if (video.srcObject !== this.stream) video.srcObject = this.stream;
     void video.play().catch(() => {});
+  }
+
+  /** The live track, for the torch cue. Null until the stream is open. */
+  track(): MediaStreamTrack | null {
+    return this.stream?.getVideoTracks()[0] ?? null;
   }
 
   /** Each capture screen has its own video element. The stream carries on from front to side. */

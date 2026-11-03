@@ -103,6 +103,38 @@ describe('camera (10.1)', () => {
     expect(track.stop).toHaveBeenCalled();
   });
 
+  it('opens the front camera exactly, swaps no lens, requires 1080p and offers no torch (A4)', async () => {
+    const track = fakeTrack({ width: 1080, height: 1920 }, { torch: true });
+    track.label = 'camera 1, facing front';
+    const enumerateDevices = vi.fn(async () => []);
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia, enumerateDevices } });
+    getUserMedia.mockResolvedValue(streamOf(track));
+    const camera = new CameraManager();
+    const applied = await camera.start('user');
+    expect(getUserMedia.mock.calls[0][0].video.facingMode).toEqual({ exact: 'user' });
+    expect(enumerateDevices).not.toHaveBeenCalled();
+    expect(applied.facing).toBe('user');
+    expect(applied.torch).toBe(false);
+    camera.stop();
+
+    const small = fakeTrack({ width: 720, height: 1280 });
+    getUserMedia.mockResolvedValue(streamOf(small));
+    await expect(new CameraManager().start('user')).rejects.toBeInstanceOf(CameraTooSmall);
+    expect(small.stop).toHaveBeenCalled();
+  });
+
+  it('the rear camera reports a torch it can drive, and the track for it', async () => {
+    const track = fakeTrack({}, { torch: true });
+    getUserMedia.mockResolvedValue(streamOf(track));
+    const camera = new CameraManager();
+    const applied = await camera.start();
+    expect(applied.facing).toBe('environment');
+    expect(applied.torch).toBe(true);
+    expect(camera.track()).toBe(track);
+    camera.stop();
+    expect(camera.track()).toBeNull();
+  });
+
   it('stop ends every track, and a second start opens afresh', async () => {
     const first = fakeTrack();
     const second = fakeTrack();

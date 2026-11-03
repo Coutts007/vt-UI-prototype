@@ -417,6 +417,133 @@ test('nothing leaves the phone but numbers: no image, no outside request', async
   expect(stored).not.toMatch(/data:image|base64|"mask"|"landmarks"|ImageData/);
 });
 
+// The front camera (A4): the fake camera answers either facing, and says what it can deliver.
+async function frontCamera(page: Page, maxLongEdge: number) {
+  await page.addInitScript((max) => {
+    const original = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    const asked: string[] = [];
+    (window as unknown as { __vtFacing: string[] }).__vtFacing = asked;
+    navigator.mediaDevices.getUserMedia = async (constraints) => {
+      const video = (constraints?.video ?? {}) as MediaTrackConstraints;
+      const exact = (video.facingMode as { exact?: string } | undefined)?.exact;
+      asked.push(exact ?? 'environment');
+      const stream = await original({ ...constraints, video: { ...video, facingMode: undefined } });
+      for (const track of stream.getVideoTracks()) {
+        track.getCapabilities = () => ({
+          width: { max: 1080 },
+          height: { max: exact ? max : 1920 },
+        });
+      }
+      return stream;
+    };
+  }, maxLongEdge);
+}
+
+async function chooseFrontCamera(page: Page, d: Dict) {
+  await page.getByRole('button', { name: d.continue, exact: true }).click({ timeout: 15_000 });
+  await expect(page).toHaveURL(/\/sheet/);
+  await page.getByText(d.sheetOptionTailor, { exact: true }).click();
+  await page.getByRole('button', { name: d.printCheckYes }).click();
+  await page.getByRole('button', { name: d.continue, exact: true }).click();
+  await expect(page).toHaveURL(/\/setup/);
+  await page.getByRole('button', { name: d.downloadLater }).click();
+  await page.getByText(d.seeScreenYes, { exact: true }).click();
+  await page.getByRole('button', { name: d.continue, exact: true }).click();
+  await page.getByRole('button', { name: d.allowCamera }).click();
+  const motion = page.getByRole('button', { name: d.allowMotion });
+  const place = page.getByRole('heading', { name: d.placePhoneTitle });
+  await motion.or(place).first().waitFor();
+  if (await motion.isVisible()) await motion.click();
+  await place.waitFor();
+}
+
+test('the front camera is a mirror with visual guidance, and the record says so (A4)', async ({
+  page,
+}) => {
+  test.setTimeout(150_000);
+  await fake(page);
+  await frontCamera(page, 1920);
+  const posted: string[] = [];
+  page.on('request', (request) => {
+    const body = request.postData();
+    if (body) posted.push(body);
+  });
+  await toConsent(page, en);
+  await agree(page, en);
+  await chooseFrontCamera(page, en);
+  // No volume check: the client sees the screen (A4).
+  await expect(page.getByRole('button', { name: en.volumePlay })).toHaveCount(0);
+  const start = page.getByRole('button', { name: en.readyStart });
+  await expect(start).toBeEnabled({ timeout: 10_000 });
+  await start.click();
+  await expect(page).toHaveURL(/\/capture\/front/);
+  const main = page.locator('main[data-camera="user"][data-guidance="visual"]');
+  await expect(main).toBeVisible();
+  await expect(main.locator('video')).toHaveCSS('transform', 'matrix(-1, 0, 0, 1, 0, 0)');
+  expect(
+    await page.evaluate(() => (window as unknown as { __vtFacing: string[] }).__vtFacing),
+  ).toContain('user');
+  await expect(page).toHaveURL(/\/review/, { timeout: 120_000 });
+  await saveAndSee(page, en);
+  await expect(page.getByRole('heading', { name: en.savedTitleSynced })).toBeVisible({
+    timeout: 15_000,
+  });
+  const profile = posted.find((body) => body.includes('"session"'))!;
+  expect(profile).toContain('"camera_facing":"user"');
+  expect(profile).toContain('"guidance_mode":"visual"');
+  expect(profile).toContain('"capture_mode":"self"');
+});
+
+test('a front camera below 1080p falls back to the rear camera and is not offered again (A4)', async ({
+  page,
+}) => {
+  await fake(page);
+  await frontCamera(page, 1280);
+  await toConsent(page, en);
+  await agree(page, en);
+  await chooseFrontCamera(page, en);
+  await expect(page.getByText(en.frontCameraTooSmall)).toBeVisible();
+  // Back on voice guidance, so the volume check is asked for.
+  await expect(page.getByRole('button', { name: en.volumePlay })).toBeVisible();
+  await startCapture(page, en);
+  await expect(
+    page.locator('main[data-camera="environment"][data-guidance="voice"]'),
+  ).toBeVisible();
+  await page.goto('/setup');
+  await page.getByRole('button', { name: en.downloadLater }).click();
+  await expect(page.getByText(en.whoTakingPhotos)).toBeVisible();
+  await expect(page.getByText(en.seeScreenQuestion)).toHaveCount(0);
+});
+
+test('the dev page downloads the capture log as numbers only (M15)', async ({ page }) => {
+  test.setTimeout(150_000);
+  await fake(page);
+  await toReview(page);
+  // In the app, so the log kept in memory survives.
+  await page.evaluate(() => {
+    history.pushState(null, '', '/dev/capture-tuning');
+    dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page.getByTestId('session-log-count')).toContainText(/[1-9]\d* samples/);
+  const waiting = page.waitForEvent('download');
+  await page.getByTestId('download-log').click();
+  const download = await waiting;
+  expect(download.suggestedFilename()).toMatch(/^vt-capture-log-.*\.json$/);
+  const text = await (await import('node:fs/promises')).readFile(await download.path(), 'utf8');
+  const log = JSON.parse(text) as {
+    meta: Record<string, unknown>;
+    events: { event: string }[];
+    samples: unknown[];
+  };
+  expect(log.meta.camera_facing).toBe('environment');
+  expect(log.meta.guidance_mode).toBe('voice');
+  expect(log.events.map((e) => e.event)).toEqual(
+    expect.arrayContaining(['walk_away', 'countdown', 'burst', 'view_done']),
+  );
+  expect(log.samples.length).toBeGreaterThan(0);
+  expect(text).not.toMatch(/data:image|base64|"mask"|"landmarks"|AB10/);
+});
+
 test('stopping a retake returns to the reviewed result', async ({ page }) => {
   test.setTimeout(120_000);
   await fake(page);

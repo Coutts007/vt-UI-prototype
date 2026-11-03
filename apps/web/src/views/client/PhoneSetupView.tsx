@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Volume2, VolumeX } from 'lucide-react';
 import { voiceGuide } from '../../capture/audio';
 import {
+  CameraFacing,
   motionNeedsPermission,
   requestCameraPermission,
   requestMotionPermission,
@@ -69,6 +70,10 @@ export const PhoneSetupView: React.FC<{ onNavigate: (path: string) => void }> = 
   const [step, setStep] = useState<Step>('download');
   const [progress, setProgress] = useState<number | null>(null);
   const [mode, setMode] = useState<CaptureMode>('self');
+  const [facing, setFacing] = useState<CameraFacing>('environment');
+  // Tested by its build-time name (globals.d.ts), so a build without the flag drops the question.
+  const [frontOffered, setFrontOffered] = useState(__VT_FRONT_CAMERA__);
+  const [frontFellBack, setFrontFellBack] = useState(false);
   const [cameraIssue, setCameraIssue] = useState<'denied' | 'unavailable' | null>(null);
   const [motionDenied, setMotionDenied] = useState(false);
   const [tilt, setTilt] = useState<Tilt>({ beta: 90, gamma: 0 });
@@ -86,6 +91,8 @@ export const PhoneSetupView: React.FC<{ onNavigate: (path: string) => void }> = 
       if (!draft.consent) onNavigate(draft.client_code ? '/consent' : '/start');
       else if (draft.consent.withdrawn_at) onNavigate('/consent');
       if (draft.capture_mode) setMode(draft.capture_mode);
+      if (draft.front_camera_unavailable) setFrontOffered(false);
+      else if (draft.camera_facing === 'user' && __VT_FRONT_CAMERA__) setFacing('user');
     });
     // Only on arrival.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -156,14 +163,31 @@ export const PhoneSetupView: React.FC<{ onNavigate: (path: string) => void }> = 
     };
   }, [step, motionDenied]);
 
+  // The front camera is only offered in self mode: a helper always faces the rear camera at the client.
+  const wantFront = __VT_FRONT_CAMERA__ && frontOffered && mode === 'self' && facing === 'user';
+
   const allowCamera = async () => {
     setCameraIssue(null);
     const { state } = captureSession.machine;
+    let chosen: CameraFacing = wantFront ? 'user' : 'environment';
     if (state.name === 'error') captureSession.send({ type: 'RETRY' });
-    else captureSession.begin(mode);
-    vtStorage.saveDraft({ ...vtStorage.getDraft(), capture_mode: mode });
+    else captureSession.begin(mode, chosen);
+    vtStorage.saveDraft({ ...vtStorage.getDraft(), capture_mode: mode, camera_facing: chosen });
     voiceGuide.unlock();
-    const result = await requestCameraPermission();
+    let result = await requestCameraPermission(chosen);
+    // A4: a front camera that cannot give 1080p is hidden from now on, and the rear camera is used.
+    if (chosen === 'user' && result.ok && result.streamMax && result.streamMax < CAPTURE_CONFIG.frames.frontCameraLongEdge) {
+      result = { ok: false, reason: 'unavailable' };
+    }
+    if (chosen === 'user' && !result.ok && result.reason === 'unavailable') {
+      chosen = 'environment';
+      captureSession.cameraFacing = chosen;
+      setFacing(chosen);
+      setFrontOffered(false);
+      setFrontFellBack(true);
+      vtStorage.saveDraft({ ...vtStorage.getDraft(), camera_facing: chosen, front_camera_unavailable: true });
+      result = await requestCameraPermission(chosen);
+    }
     if (!result.ok) {
       setCameraIssue(result.reason);
       captureSession.send({ type: result.reason === 'denied' ? 'PERMISSION_DENIED' : 'CAMERA_UNAVAILABLE' });
@@ -199,7 +223,8 @@ export const PhoneSetupView: React.FC<{ onNavigate: (path: string) => void }> = 
   };
 
   const skipLevel = motionDenied || sensor === 'absent';
-  const volumeOk = mode === 'assisted' || heard;
+  // Voice guidance needs to be heard (A3 item 2); a client who sees the screen is guided visually (A4).
+  const volumeOk = mode === 'assisted' || captureSession.cameraFacing === 'user' || heard;
   const canStart = (levelHeld || skipLevel) && volumeOk;
 
   const start = () => {
@@ -279,6 +304,17 @@ export const PhoneSetupView: React.FC<{ onNavigate: (path: string) => void }> = 
               { value: 'assisted', label: t('modeAssisted') },
             ]}
           />
+          {__VT_FRONT_CAMERA__ && frontOffered && mode === 'self' && (
+            <RadioCards<CameraFacing>
+              legend={t('seeScreenQuestion')}
+              value={facing}
+              onChange={setFacing}
+              options={[
+                { value: 'environment', label: t('seeScreenNo') },
+                { value: 'user', label: t('seeScreenYes') },
+              ]}
+            />
+          )}
           <Button onClick={() => setStep('camera')}>{t('continue')}</Button>
         </section>
       )}
@@ -286,6 +322,7 @@ export const PhoneSetupView: React.FC<{ onNavigate: (path: string) => void }> = 
       {step === 'camera' && (
         <section className={CARD}>
           <p>{t('allowCameraRationale')}</p>
+          {__VT_FRONT_CAMERA__ && frontFellBack && <Banner tone="warn">{t('frontCameraTooSmall')}</Banner>}
           <Button onClick={() => void allowCamera()}>{cameraIssue ? t('retry') : t('allowCamera')}</Button>
           {cameraIssue === 'denied' && (
             <div role="alert" className="text-sm space-y-1">
@@ -333,7 +370,8 @@ export const PhoneSetupView: React.FC<{ onNavigate: (path: string) => void }> = 
               </div>
             )}
           </section>
-          {mode === 'self' && !heard && (
+          {__VT_FRONT_CAMERA__ && frontFellBack && <Banner tone="warn">{t('frontCameraTooSmall')}</Banner>}
+          {mode === 'self' && captureSession.cameraFacing !== 'user' && !heard && (
             <VolumeCheck
               onHeard={() => setHeard(true)}
               onHelper={() => {
