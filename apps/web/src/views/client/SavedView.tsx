@@ -39,7 +39,7 @@ export const SavedView: React.FC<{ onNavigate: (path: string) => void }> = ({ on
   if (profile === null) {
     return (
       <div className="max-w-xl mx-auto px-4 py-8">
-        <EmptyState title={cleared ? t('detailsCleared') : t('noMeasurementsYet')}>
+        <EmptyState heading title={cleared ? t('detailsCleared') : t('noMeasurementsYet')}>
           <Button className="mt-4" onClick={() => onNavigate('/start')}>
             {t('measureNow')}
           </Button>

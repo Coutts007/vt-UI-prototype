@@ -1,4 +1,4 @@
-.PHONY: prod-secrets prod-up prod-admin prod-backup prod-restore-drill prod-down frozen-guard setup dev-web dev-api up down seed lint typecheck test test-web test-api parity contract e2e e2e-real-api walkthrough stack-check fuzz load study-secrets study-up study-admin study-cert study-down licences build
+.PHONY: lighthouse prod-secrets prod-up prod-admin prod-backup prod-restore-drill prod-down frozen-guard setup dev-web dev-api up down seed lint typecheck test test-web test-api parity contract e2e e2e-real-api walkthrough stack-check fuzz load study-secrets study-up study-admin study-cert study-down licences build
 
 COMPOSE = docker compose -f deploy/docker-compose.yml
 
@@ -128,6 +128,10 @@ prod-restore-drill:
 	sh scripts/prod.sh restore-drill
 prod-down:
 	sh scripts/prod.sh down
+
+# Lighthouse CI on the built app (frontend-spec 18, M16): accessibility 1.0, interactive <= 3.5 s.
+lighthouse:
+	sh scripts/lighthouse.sh
 
 licences:
 	node scripts/licences.mjs
