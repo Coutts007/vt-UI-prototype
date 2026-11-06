@@ -2,15 +2,27 @@
 # certificate, everything under one directory on the encrypted disk, nightly encrypted backups.
 # Start it with `make prod-up`, never by hand, so the checks in scripts/prod.sh run first.
 # deploy/prod.env holds the secrets and the site address; it is git-ignored.
+# Docker keeps each container's JSON log for about 14 days at the study's traffic: fourteen
+# files of 10 MB, the oldest dropped first (backend-spec 16.3).
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: '14'
+
 services:
   db:
+    <<: *logging
     restart: unless-stopped
     volumes: !override
       - ${VT_DATA_DIR:?set VT_DATA_DIR in deploy/prod.env}/db:/var/lib/postgresql/data
   migrate:
+    <<: *logging
     environment:
       ENV: production
   api:
+    <<: *logging
     restart: unless-stopped
     environment:
       ENV: production
@@ -30,6 +42,7 @@ services:
     volumes: !override
       - ${VT_DATA_DIR}/sheets:/data/sheets
   jobs:
+    <<: *logging
     restart: unless-stopped
     environment:
       ENV: production
@@ -37,6 +50,7 @@ services:
       - ${VT_DATA_DIR}/sheets:/data/sheets
       - ${VT_DATA_DIR}/reports:/data/reports
   caddy:
+    <<: *logging
     restart: unless-stopped
     environment:
       VT_SITE_ADDRESS: ${VT_SITE_ADDRESS:?set VT_SITE_ADDRESS in deploy/prod.env}
@@ -46,6 +60,7 @@ services:
   # Nightly pg_dump at 03:00 Nairobi (after the 02:00 retention job), encrypted with age to the
   # owner's public key, kept 30 days (backend-spec 14.7). The private key never comes near the VM.
   backup:
+    <<: *logging
     build:
       context: ..
       dockerfile: deploy/Dockerfile.backup

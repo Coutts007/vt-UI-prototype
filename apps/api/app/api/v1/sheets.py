@@ -204,15 +204,32 @@ async def create_sheet(
     # The second transaction checks again what the first one read: the order and its client
     # may have gone while the sheet rendered. The lock holds the order until the sheet row is
     # in (review of M12, carried to M16).
+    # The session keeps loaded objects across commits, so both reads refresh them from the row.
+    # The client is locked too: a soft delete or an erased name committed after this check
+    # would otherwise still get a sheet.
     locked = await session.scalar(
-        select(Order).where(Order.order_id == order.order_id).with_for_update()
+        select(Order)
+        .where(Order.order_id == order.order_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
-    client = await session.get(Client, order.client_id, populate_existing=True) if locked else None
+    client = (
+        await session.scalar(
+            select(Client)
+            .where(Client.client_id == order.client_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if locked
+        else None
+    )
     if (
         locked is None
         or locked.tailor_id != order.tailor_id
         or client is None
         or client.deleted_at is not None
+        # A name erased while rendering (a deletion request carried out) must not be stored.
+        or (body.include_name and client.display_name != data.name)
     ):
         render_service.remove_files(directory, str(sheet_id))
         raise ApiError("not_found")

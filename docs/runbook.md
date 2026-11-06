@@ -142,4 +142,5 @@ A request that arrives by letter, phone or WhatsApp:
 | Date | Backup file | Where restored | Result | By |
 |---|---|---|---|---|
 | 2026-11-03 | `vt-2026-11-03T1633Z.dump.age` (98 KB, demo seed, migration 0011) | Scratch database on a local compose stack, through the `backup` image and a throw-away age key | OK: 28 tables, 11 clients, 12 profiles, 10 orders, 40 audit rows, head 0011; scratch dropped | Implementer (M16) |
+| 2026-11-03 | `vt-2026-11-03T2048Z.dump.age` (108 KB, demo seed) | Same, after the review fixes (pipefail, size floor, archive listing) | OK: 11 clients, 12 profiles, 10 orders, 40 audit rows, head 0011; a dump against an unreachable database failed and left no file | Implementer (M16) |
 |  |  |  |  | Owner (M16 "You check") |

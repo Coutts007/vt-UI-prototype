@@ -9,7 +9,8 @@
 # clear-text copy ever touches the disk. It carries the grants to vt_app, vt_retention and
 # vt_readonly (a live restore keeps them) but no owners. Output lines carry counts and file
 # names only.
-set -eu
+# pipefail: a failed pg_dump must fail the backup, not hand age an empty stream.
+set -euo pipefail
 BACKUPS=${BACKUPS_DIR:-/backups}
 # Backup files are readable by root only on the VM.
 umask 077
@@ -20,7 +21,13 @@ dump() {
   case "$recipient" in age1*) ;; *) echo "BACKUP_AGE_RECIPIENT must be an age public key" >&2; exit 1 ;; esac
   stamp=$(date -u +%Y-%m-%dT%H%MZ)
   out="$BACKUPS/vt-$stamp.dump.age"
-  pg_dump --format=custom --no-owner | age -r "$recipient" > "$out.part"
+  if ! pg_dump --format=custom --no-owner | age -r "$recipient" > "$out.part"; then
+    rm -f "$out.part"; echo "backup failed: pg_dump or age exited with an error" >&2; return 1
+  fi
+  # An encrypted dump of even an empty schema is several kilobytes; less means pg_dump wrote nothing.
+  if [ "$(wc -c < "$out.part")" -lt 4096 ]; then
+    rm -f "$out.part"; echo "backup failed: dump too small" >&2; return 1
+  fi
   mv "$out.part" "$out"
   # Keep KEEP days: a file older than that goes (mtime is the dump time).
   find "$BACKUPS" -maxdepth 1 -name 'vt-*.dump.age' -mtime +"$((KEEP - 1))" -delete
@@ -33,6 +40,8 @@ restore_drill() {
   echo "restore drill: $(basename "$file") into $scratch"
   psql -v ON_ERROR_STOP=1 -q -d postgres -c "CREATE DATABASE \"$scratch\""
   trap 'psql -q -d postgres -c "DROP DATABASE IF EXISTS \"$scratch\"" >/dev/null; echo "scratch database dropped"' EXIT
+  # A truncated or unreadable file fails here, before any restore starts.
+  age -d -i "$key" "$file" | pg_restore -l > /dev/null
   # The drill skips the grants, so it also works on a machine without the application roles.
   age -d -i "$key" "$file" | pg_restore --no-owner --no-privileges --exit-on-error -d "$scratch"
   psql -v ON_ERROR_STOP=1 -q -At -d "$scratch" -c "
