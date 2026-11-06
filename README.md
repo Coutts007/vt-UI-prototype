@@ -37,20 +37,23 @@ Without `VITE_API_MODE=mock`, `make dev-web` proxies `/api` to `localhost:8000`.
 
    The directory also needs `DIRECTORY_ENABLED=true` in `deploy/.env`.
 
-2. Start the web app (Ctrl+C stops it):
+2. Start the web app (Ctrl+C stops it). Choose one:
 
    ```bash
-   make dev-web
+   make phone-web   # real body detection: production build on http://localhost:5174
+   make dev-web     # simulated vision on http://localhost:5173 (screens only, no real measuring)
    ```
+
+   `make dev-web` cannot run the real MediaPipe and OpenCV workers, so its capture uses simulated vision and completes by itself whether or not anyone stands in front of the camera. Measure with `make phone-web`. Run it again after a code change, since it serves a build.
 
 3. Connect the phone with USB debugging or wireless debugging, then forward the port:
 
    ```bash
    adb devices                     # the phone shows as "device"
-   adb reverse tcp:5173 tcp:5173
+   adb reverse tcp:5174 tcp:5174   # make phone-web (use 5173 for make dev-web)
    ```
 
-   Open `http://localhost:5173/` in Chrome on the phone. Use `localhost`, not the laptop's network address: Chrome only allows the camera on `localhost` or HTTPS. Run `adb reverse` again after the phone reconnects.
+   Open `http://localhost:5174/` (or `:5173`) in Chrome on the phone. Use `localhost`, not the laptop's network address: Chrome only allows the camera on `localhost` or HTTPS. Run `adb reverse` again after the phone reconnects.
 
 4. Stop everything: Ctrl+C in the `make dev-web` terminal, then:
 
@@ -78,7 +81,7 @@ curl -k https://vt.localhost:8443/api/v1/health
 | Target                                                   | What it does                                                                                        |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | `make setup`                                             | Installs Node and Python dependencies and the git hooks                                             |
-| `make dev-web`, `make dev-api`                           | The web app on 5173 (proxies `/api` to 8000; mock with `VITE_API_MODE=mock`) and the API on 8000    |
+| `make dev-web`, `make dev-api`, `make phone-web`         | The web app on 5173 (proxies `/api` to 8000; mock with `VITE_API_MODE=mock`) and the API on 8000    |
 | `make up`, `make down`, `make seed`                      | The whole stack on Docker Compose with the demo seed                                                |
 | `make lint`, `make typecheck`, `make test`               | Checks; `test-web` and `test-api` run one side                                                      |
 | `make parity`                                            | Regenerates the parity fixtures from `vt_measure` and runs them in Python and TypeScript            |

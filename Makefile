@@ -1,4 +1,4 @@
-.PHONY: lighthouse prod-secrets prod-up prod-admin prod-backup prod-restore-drill prod-down frozen-guard setup dev-web dev-api up down seed lint typecheck test test-web test-api parity contract e2e e2e-real-api walkthrough stack-check fuzz load study-secrets study-up study-admin study-cert study-down licences build
+.PHONY: phone-web lighthouse prod-secrets prod-up prod-admin prod-backup prod-restore-drill prod-down frozen-guard setup dev-web dev-api up down seed lint typecheck test test-web test-api parity contract e2e e2e-real-api walkthrough stack-check fuzz load study-secrets study-up study-admin study-cert study-down licences build
 
 COMPOSE = docker compose -f deploy/docker-compose.yml
 
@@ -13,6 +13,12 @@ dev-web:
 
 dev-api:
 	cd apps/api && uv run uvicorn app.main:app --reload --port 8000 --no-access-log
+
+# A phone test with real body detection (A10, D37): the production build on 5174, with /api sent to
+# the API on 8000. The dev server can only run the simulated vision. Then: adb reverse tcp:5174 tcp:5174.
+phone-web:
+	cd apps/web && VITE_FEATURE_DIRECTORY=true pnpm exec vite build --outDir dist-phone
+	cd apps/web && pnpm exec vite preview --outDir dist-phone --port 5174 --strictPort --host 0.0.0.0
 
 up:
 	$(COMPOSE) up -d --build --wait

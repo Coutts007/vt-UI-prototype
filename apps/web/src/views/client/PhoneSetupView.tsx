@@ -20,6 +20,10 @@ import { RadioCards } from '../../components/ui/forms';
 import { vtStorage } from '../../db/storage';
 import { useI18n } from '../../i18n';
 
+// Not in every TypeScript DOM library yet; Android Chrome has it in fullscreen.
+interface OrientationLock {
+  lock?(orientation: 'portrait'): Promise<void>;
+}
 type Step = 'download' | 'who' | 'camera' | 'motion' | 'place';
 const { betaMin, betaMax, gammaMax, releaseMarginDeg } = CAPTURE_CONFIG.level;
 const isLevel = (tilt: Tilt) => tilt.beta >= betaMin && tilt.beta <= betaMax && Math.abs(tilt.gamma) <= gammaMax;
@@ -238,8 +242,12 @@ export const PhoneSetupView: React.FC<{ onNavigate: (path: string) => void }> = 
 
   const start = () => {
     voiceGuide.unlock();
-    // Fullscreen must come from the tap, and is only a nicety if the browser refuses.
-    void document.documentElement.requestFullscreen?.().catch(() => {});
+    // Fullscreen must come from the tap, and is only a nicety if the browser refuses. Android
+    // Chrome then lets the page hold portrait, so turning the phone does not turn the capture.
+    void document.documentElement
+      .requestFullscreen?.({ navigationUI: 'hide' })
+      .then(() => (screen.orientation as OrientationLock).lock?.('portrait'))
+      .catch(() => {});
     captureSession.send({ type: skipLevel ? 'LEVEL_SKIPPED' : 'LEVEL_OK' });
     onNavigate('/capture/front');
   };

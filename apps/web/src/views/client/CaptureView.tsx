@@ -97,6 +97,13 @@ export const CaptureView: React.FC<{ view: View; onNavigate: (path: string) => v
   const [askStop, setAskStop] = useState(false);
   const [help, setHelp] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  // Some phones deliver a landscape stream. The pipeline turns each frame upright (frameGeometry),
+  // so the preview is turned the same way and fills the portrait screen.
+  const [sideways, setSideways] = useState(false);
+  const readOrientation = () => {
+    const video = videoRef.current;
+    if (video?.videoWidth) setSideways(video.videoWidth > video.videoHeight);
+  };
   const { state, context } = machine;
 
   voiceGuide.setLocaleSource(() => locale);
@@ -183,14 +190,41 @@ export const CaptureView: React.FC<{ view: View; onNavigate: (path: string) => v
     return snapshot.results ? t('holdStill') : t('checksStarting');
   };
 
+  // The preview covers the whole screen. A sideways stream is sized to the screen turned through
+  // 90 degrees, then rotated clockwise as grab() does; the mirror is applied last, in screen space.
+  const videoStyle: React.CSSProperties = sideways
+    ? {
+        width: '100dvh',
+        height: '100dvw',
+        top: '50%',
+        left: '50%',
+        transform: `translate(-50%, -50%)${mirrored ? ' scaleX(-1)' : ''} rotate(90deg)`,
+      }
+    : { inset: 0, width: '100%', height: '100%', transform: mirrored ? 'scaleX(-1)' : undefined };
+
   return (
     <main
-      className={`fixed inset-0 z-50 bg-[#0E0E10] text-white flex flex-col select-none ${visual ? 'border-[28px]' : 'border-[16px]'} ${BORDER[snapshot.border]}`}
+      className={`fixed inset-0 z-50 bg-[#0E0E10] text-white flex flex-col select-none overflow-hidden ${visual ? 'p-[28px]' : 'p-4'}`}
       data-state={state.name}
       data-camera={captureSession.cameraFacing}
       data-guidance={captureSession.guidanceMode}
     >
-      <div className="flex items-center justify-between gap-2 px-2 py-1 bg-black/70 z-30">
+      <video
+        ref={videoRef}
+        playsInline
+        muted
+        onLoadedMetadata={readOrientation}
+        onResize={readOrientation}
+        data-sideways={sideways}
+        className="absolute max-w-none object-cover"
+        style={videoStyle}
+      />
+      {/* The status border sits over the preview, so the picture keeps the whole screen. */}
+      <div
+        aria-hidden="true"
+        className={`absolute inset-0 z-[45] pointer-events-none ${visual ? 'border-[28px]' : 'border-[16px]'} ${BORDER[snapshot.border]}`}
+      />
+      <div className="relative flex items-center justify-between gap-2 px-2 py-1 bg-black/70 z-30">
         <div className="bg-white text-black rounded-lg">
           <LangToggle />
         </div>
@@ -201,13 +235,6 @@ export const CaptureView: React.FC<{ view: View; onNavigate: (path: string) => v
       </div>
 
       <div className="relative flex-1 overflow-hidden flex items-center justify-center">
-        <video
-          ref={videoRef}
-          playsInline
-          muted
-          className="absolute inset-0 w-full h-full object-contain"
-          style={mirrored ? { transform: 'scaleX(-1)' } : undefined}
-        />
         <div className="relative z-10 pointer-events-none">
           <Outline view={view} label={t('outlineLabel')} sheetLabel={t('sheetHere')} mirrored={mirrored} />
         </div>
@@ -264,7 +291,7 @@ export const CaptureView: React.FC<{ view: View; onNavigate: (path: string) => v
         )}
       </div>
 
-      <div className="bg-black/80 px-2 py-2 z-30">
+      <div className="relative bg-black/80 px-2 py-2 z-30">
         <div className="flex items-center justify-between gap-2">
           <button type="button" onClick={() => setHelp(true)} className="min-h-12 px-2 flex items-center gap-1 text-sm cursor-pointer">
             <HelpCircle aria-hidden="true" className="w-5 h-5" />

@@ -19,6 +19,7 @@ dist-directory-off/
 dist-directory-default/
 dist-real-api/
 dist-stack/
+dist-phone/
 .venv/
 __pycache__/
 *.pyc
