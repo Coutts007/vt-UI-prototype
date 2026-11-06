@@ -16,6 +16,12 @@ dev-api:
 
 up:
 	$(COMPOSE) up -d --build --wait
+	@env_val() { v=$$(printenv "$$1"); [ -n "$$v" ] || v=$$(sed -n "s/^$$1=//p" deploy/.env 2>/dev/null | tail -1); echo "$${v:-$$2}"; }; \
+	host=$$(env_val VT_SITE_ADDRESS vt.localhost); port=$$(env_val VT_HTTPS_PORT 443); \
+	url="https://$$host"; [ "$$port" = 443 ] || url="$$url:$$port"; \
+	echo; echo "Virtual Tailor is running: $$url"; \
+	echo "API health: $$url/api/v1/health"; \
+	echo "Load the demo data with 'make seed'. Stop the stack with 'make down'."
 
 down:
 	$(COMPOSE) down
