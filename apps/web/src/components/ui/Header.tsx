@@ -47,7 +47,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Zone 1: Brand Wordmark (Single text element) */}
         <button
           onClick={() => onNavigate('/')}
-          className="flex items-center gap-2.5 text-left cursor-pointer group shrink-0"
+          className="flex items-center gap-2.5 min-h-[48px] text-left cursor-pointer group shrink-0"
         >
           <div className="w-8 h-8 rounded-lg bg-[var(--vt-thread,#2E3A87)] text-white flex items-center justify-center shadow-xs font-bold text-sm tracking-wider">
             VT
@@ -186,7 +186,7 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={toggleLanguage}
             title={t('hdrSwitchLang')}
             aria-label={`EN | SW: ${t('hdrSwitchLang')}`}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--vt-line,#DDD5C8)] bg-white hover:bg-[#FAF7F2] text-xs font-semibold text-[var(--vt-ink,#1F1C18)] cursor-pointer transition-colors shadow-2xs whitespace-nowrap shrink-0"
+            className="flex items-center gap-1.5 px-2.5 min-h-[48px] rounded-lg border border-[var(--vt-line,#DDD5C8)] bg-white hover:bg-[#FAF7F2] text-xs font-semibold text-[var(--vt-ink,#1F1C18)] cursor-pointer transition-colors shadow-2xs whitespace-nowrap shrink-0"
           >
             <Globe className="w-3.5 h-3.5 text-[var(--vt-ink-muted,#5C554C)]" />
             <span className={locale === 'en' ? 'text-[var(--vt-thread,#2E3A87)] font-bold' : 'opacity-70'}>
@@ -208,7 +208,7 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={onLogout}
                 title={t('hdrSignOut')}
                 aria-label={t('hdrSignOut')}
-                className="p-2 rounded-lg border border-[var(--vt-line,#DDD5C8)] bg-white text-[var(--vt-ink-muted,#5C554C)] hover:text-rose-600 hover:border-rose-300 transition-colors cursor-pointer"
+                className="w-12 h-12 inline-flex items-center justify-center shrink-0 rounded-lg border border-[var(--vt-line,#DDD5C8)] bg-white text-[var(--vt-ink-muted,#5C554C)] hover:text-rose-600 hover:border-rose-300 transition-colors cursor-pointer"
               >
                 <LogOut className="w-4 h-4" />
               </button>
@@ -217,7 +217,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={() => onNavigate('/login')}
               aria-label={t('hdrTailorLogin')}
-              className="px-3.5 py-1.5 rounded-lg bg-[var(--vt-thread,#2E3A87)] text-white text-xs font-semibold hover:bg-[#232c69] transition-colors whitespace-nowrap shrink-0 shadow-xs cursor-pointer flex items-center gap-1.5"
+              className="px-3.5 min-h-[48px] min-w-[48px] justify-center rounded-lg bg-[var(--vt-thread,#2E3A87)] text-white text-xs font-semibold hover:bg-[#232c69] transition-colors whitespace-nowrap shrink-0 shadow-xs cursor-pointer flex items-center gap-1.5"
             >
               <Scissors aria-hidden="true" className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">{t('hdrTailorLogin')}</span>
@@ -228,7 +228,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="relative">
             <button
               onClick={() => setMenuOpen(!menuOpen)}
-              className="p-2 rounded-lg border border-[var(--vt-line,#DDD5C8)] bg-white text-[var(--vt-ink-muted,#5C554C)] hover:text-[var(--vt-ink,#1F1C18)] transition-colors cursor-pointer"
+              className="w-12 h-12 inline-flex items-center justify-center shrink-0 rounded-lg border border-[var(--vt-line,#DDD5C8)] bg-white text-[var(--vt-ink-muted,#5C554C)] hover:text-[var(--vt-ink,#1F1C18)] transition-colors cursor-pointer"
               aria-label={t('hdrMenu')}
             >
               <MoreVertical className="w-4 h-4" />
@@ -250,7 +250,7 @@ export const Header: React.FC<HeaderProps> = ({
                       onNavigate('/tailors');
                       setMenuOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#F7F3EC] flex items-center gap-2 cursor-pointer font-medium"
+                    className="w-full text-left px-3 min-h-[48px] rounded-lg hover:bg-[#F7F3EC] flex items-center gap-2 cursor-pointer font-medium"
                   >
                     <Store className="w-4 h-4 text-[var(--vt-thread,#2E3A87)]" />
                     <span>{t('navFindTailor')}</span>
@@ -261,7 +261,7 @@ export const Header: React.FC<HeaderProps> = ({
                       onNavigate('/start');
                       setMenuOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#F7F3EC] flex items-center gap-2 cursor-pointer"
+                    className="w-full text-left px-3 min-h-[48px] rounded-lg hover:bg-[#F7F3EC] flex items-center gap-2 cursor-pointer"
                   >
                     <Scissors className="w-4 h-4 text-[var(--vt-thread,#2E3A87)]" />
                     <span>{t('hdrMeasure')}</span>
@@ -271,7 +271,7 @@ export const Header: React.FC<HeaderProps> = ({
                       onNavigate('/me');
                       setMenuOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#F7F3EC] flex items-center gap-2 cursor-pointer"
+                    className="w-full text-left px-3 min-h-[48px] rounded-lg hover:bg-[#F7F3EC] flex items-center gap-2 cursor-pointer"
                   >
                     <Layers className="w-4 h-4 text-emerald-600" />
                     <span>{t('hdrMine')}</span>
@@ -281,7 +281,7 @@ export const Header: React.FC<HeaderProps> = ({
                       onNavigate('/sheet');
                       setMenuOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#F7F3EC] flex items-center gap-2 cursor-pointer"
+                    className="w-full text-left px-3 min-h-[48px] rounded-lg hover:bg-[#F7F3EC] flex items-center gap-2 cursor-pointer"
                   >
                     <BookOpen className="w-4 h-4 text-indigo-600" />
                     <span>{t('hdrSheet')}</span>
@@ -291,7 +291,7 @@ export const Header: React.FC<HeaderProps> = ({
                       onNavigate('/help');
                       setMenuOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#F7F3EC] flex items-center gap-2 cursor-pointer"
+                    className="w-full text-left px-3 min-h-[48px] rounded-lg hover:bg-[#F7F3EC] flex items-center gap-2 cursor-pointer"
                   >
                     <BookOpen className="w-4 h-4 text-amber-600" />
                     <span>{t('hdrHelp')}</span>
@@ -301,7 +301,7 @@ export const Header: React.FC<HeaderProps> = ({
                       onNavigate('/privacy');
                       setMenuOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#F7F3EC] flex items-center gap-2 cursor-pointer"
+                    className="w-full text-left px-3 min-h-[48px] rounded-lg hover:bg-[#F7F3EC] flex items-center gap-2 cursor-pointer"
                   >
                     <Shield className="w-4 h-4 text-slate-600" />
                     <span>{t('hdrPrivacy')}</span>
@@ -316,7 +316,7 @@ export const Header: React.FC<HeaderProps> = ({
                       onNavigate('/dev/ui');
                       setMenuOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#F7F3EC] text-xs text-[var(--vt-ink-muted,#5C554C)] cursor-pointer"
+                    className="w-full text-left px-3 min-h-[48px] flex items-center rounded-lg hover:bg-[#F7F3EC] text-xs text-[var(--vt-ink-muted,#5C554C)] cursor-pointer"
                   >
                     UI Component Gallery (/dev/ui)
                   </button>
@@ -325,7 +325,7 @@ export const Header: React.FC<HeaderProps> = ({
                       onNavigate('/dev/capture-tuning');
                       setMenuOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#F7F3EC] text-xs text-[var(--vt-ink-muted,#5C554C)] cursor-pointer"
+                    className="w-full text-left px-3 min-h-[48px] flex items-center rounded-lg hover:bg-[#F7F3EC] text-xs text-[var(--vt-ink-muted,#5C554C)] cursor-pointer"
                   >
                     Capture Tuning &amp; Simulation (/dev)
                   </button>

@@ -100,7 +100,7 @@ export const OrderItemsTable: React.FC<{
                         setReason(item.override_reason ?? '');
                         setOverriding(item.site_code);
                       }}
-                      className="w-12 h-12 inline-flex items-center justify-center cursor-pointer"
+                      className="w-12 h-12 shrink-0 inline-flex items-center justify-center cursor-pointer"
                     >
                       <Pencil aria-hidden="true" className="w-4 h-4" />
                     </button>

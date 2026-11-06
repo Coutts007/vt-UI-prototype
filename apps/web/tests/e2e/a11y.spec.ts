@@ -1,7 +1,7 @@
 // The accessibility pass of frontend-spec 17 (M16): axe on every route in both languages at
 // 360 px and 1280 px with no serious or critical violation, one h1 per screen, the skip link
 // first in the tab order, reduced motion honoured on the capture and processing screens, and
-// the dashboard readable at 200 % zoom. On the mock, with the seed's accounts.
+// the dashboard readable at 200 % zoom, and touch targets of 48 px on a phone. On the mock, with the seed's accounts.
 import AxeBuilder from '@axe-core/playwright';
 import { expect, Page, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
@@ -17,15 +17,14 @@ const CLIENT = seed.clients.find((c: { client_code: string }) => c.client_code =
 const PROFILE = seed.profiles.find((p: { client_id: string }) => p.client_id === CLIENT.client_id);
 const ORDER = seed.orders.find((o: { client_code: string }) => o.client_code === 'AB1001');
 
-// Routes that need no capture state. /capture and /processing are checked below with the fake
-// vision worker; /review needs a finished capture and is covered by client.spec.
+// Routes that need no capture state. /capture/front, /capture/side, /processing, /review and
+// /me/:profileId need a capture, and /consent and /setup need the earlier steps (they send a
+// cold visit back to /start), so all of them are checked below during the walk-through.
 const CLIENT_ROUTES = [
   '/',
   '/start',
-  '/consent',
   '/check',
   '/sheet',
-  '/setup',
   '/saved',
   '/me',
   '/help',
@@ -85,19 +84,35 @@ async function seriousViolations(page: Page) {
     .flatMap((v) => v.nodes.map((n) => `${v.id}: ${n.html.slice(0, 120)}`));
 }
 
+// An error page also has one h1, a skip link and no axe finding, so it must not pass as a route.
+const ERROR_TITLES = (
+  ['errorNotFoundTitle', 'errorForbiddenTitle', 'errorGenericTitle', 'errorDisabledTitle'] as const
+).flatMap((k) => [en[k], sw[k]]);
+
+async function noErrorPage(page: Page, label: string) {
+  for (const title of ERROR_TITLES) {
+    await expect(page.getByRole('heading', { name: title, exact: true }), label).toHaveCount(0);
+  }
+}
+
+// The screen-level checks shared by every route: axe, one h1, the page's language.
+async function checkScreen(page: Page, label: string, locale: string) {
+  await expect(page.locator('html'), `${label}: lang`).toHaveAttribute('lang', locale);
+  await noErrorPage(page, label);
+  expect(await seriousViolations(page), label).toEqual([]);
+  expect(await page.locator('h1').count(), `${label}: one h1`).toBe(1);
+}
+
 async function checkRoute(page: Page, path: string, locale: string, width: number) {
   const label = `${path} ${locale} ${width}`;
   await page.setViewportSize({ width, height: 800 });
   await page.evaluate((l) => localStorage.setItem('vt_language', l), locale);
   await page.goto(path);
   await settle(page);
+  // A silent redirect (to /login after a lost session, say) is not this route.
+  expect(new URL(page.url()).pathname, `${label}: stayed on the route`).toBe(path);
   await expect(page.locator('#content'), label).not.toBeEmpty();
-  await expect(page.getByRole('heading', { name: /not found|haukupatikana/i }), label).toHaveCount(
-    0,
-  );
-  expect(await seriousViolations(page), label).toEqual([]);
-  // One h1 per screen (frontend-spec 17).
-  expect(await page.locator('h1').count(), `${label}: one h1`).toBe(1);
+  await checkScreen(page, label, locale);
   // The skip link comes first in the tab order and points at the content landmark.
   await page.locator('body').focus();
   await page.keyboard.press('Tab');
@@ -106,10 +121,42 @@ async function checkRoute(page: Page, path: string, locale: string, width: numbe
     return el ? { tag: el.tagName, href: el.getAttribute('href') } : null;
   });
   expect(first, `${label}: skip link first`).toEqual({ tag: 'A', href: '#content' });
+  // Focus is visible: the skip link comes on screen and carries the 3 px focus ring.
+  const focused = await page.evaluate(() => {
+    const el = document.activeElement as HTMLElement;
+    const box = el.getBoundingClientRect();
+    return { x: box.x, outline: getComputedStyle(el).outlineWidth };
+  });
+  expect(focused.x, `${label}: skip link visible on focus`).toBeGreaterThanOrEqual(0);
+  expect(focused.outline, `${label}: focus ring`).toBe('3px');
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > window.innerWidth,
   );
   expect(overflow, `${label}: scrolls sideways`).toBe(false);
+  // Touch targets of 48 px or more on a phone (frontend-spec 17). A control inside a label counts
+  // the label; a link inside running text and a visually hidden input are exempt.
+  if (width === 360) expect(await smallTargets(page), `${label}: touch targets`).toEqual([]);
+}
+
+async function smallTargets(page: Page) {
+  return page.evaluate(() => {
+    const small: string[] = [];
+    const controls = document.querySelectorAll<HTMLElement>(
+      'button, a[href], input:not([type=hidden]), select, textarea, [role=button], [role=tab]',
+    );
+    for (const el of controls) {
+      const box = el.getBoundingClientRect();
+      if (box.width <= 1 || box.height <= 1 || box.x < 0) continue;
+      if (el.tagName === 'A' && el.closest('p')) continue;
+      const label = el.closest('label')?.getBoundingClientRect();
+      const w = Math.max(box.width, label?.width ?? 0);
+      const h = Math.max(box.height, label?.height ?? 0);
+      if (w < 47.5 || h < 47.5) {
+        small.push(`${Math.round(w)}x${Math.round(h)} ${el.outerHTML.slice(0, 100)}`);
+      }
+    }
+    return small;
+  });
 }
 
 for (const locale of ['en', 'sw']) {
@@ -134,26 +181,45 @@ for (const locale of ['en', 'sw']) {
   }
 }
 
-// 200 % browser zoom on a 1280 px window leaves 640 CSS pixels: the dashboard must still fit.
-test('the dashboard has no sideways scroll at 200 % zoom', async ({ page }) => {
-  test.setTimeout(180_000);
-  await signIn(page, 'wanjiru@vt.test');
-  const check = async (path: string) => {
-    await page.setViewportSize({ width: 640, height: 400 });
-    await page.goto(path);
-    await settle(page);
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth > window.innerWidth,
-    );
-    expect(overflow, `${path} scrolls sideways at 200 % zoom`).toBe(false);
-  };
-  for (const path of TAILOR_ROUTES) await check(path);
-  await signIn(page, 'admin@vt.test');
-  for (const path of ADMIN_ROUTES) await check(path);
-  await signIn(page, 'measurer-a@vt.test');
-  for (const path of MEASURER_ROUTES) await check(path);
-  expect(DASHBOARD.length).toBeGreaterThan(0);
-});
+// 200 % zoom without loss (frontend-spec 17), in both languages because Kiswahili labels are
+// longer: page zoom (a 1280 px window at 200 % leaves 640 CSS pixels) and text zoom (root font
+// size doubled at 1280 px). Neither may scroll sideways or clip a heading or a button.
+async function fitsAtZoom(page: Page, label: string) {
+  const loss = await page.evaluate(() => {
+    const sideways = document.documentElement.scrollWidth > window.innerWidth;
+    const clipped = [...document.querySelectorAll<HTMLElement>('h1, button')]
+      .filter((el) => el.offsetParent !== null && el.scrollWidth > el.clientWidth + 1)
+      .map((el) => el.outerHTML.slice(0, 80));
+    return { sideways, clipped };
+  });
+  expect(loss, label).toEqual({ sideways: false, clipped: [] });
+}
+
+for (const locale of ['en', 'sw']) {
+  for (const mode of ['page', 'text'] as const) {
+    test(`the dashboard keeps everything at 200 % ${mode} zoom ${locale}`, async ({ page }) => {
+      test.setTimeout(240_000);
+      const check = async (path: string) => {
+        await page.setViewportSize({ width: mode === 'page' ? 640 : 1280, height: 800 });
+        await page.evaluate((l) => localStorage.setItem('vt_language', l), locale);
+        await page.goto(path);
+        await settle(page);
+        if (mode === 'text') {
+          await page.evaluate(() => (document.documentElement.style.fontSize = '200%'));
+          await settle(page);
+        }
+        await fitsAtZoom(page, `${path} ${locale} ${mode} zoom`);
+      };
+      await signIn(page, 'wanjiru@vt.test');
+      for (const path of TAILOR_ROUTES) await check(path);
+      await signIn(page, 'admin@vt.test');
+      for (const path of ADMIN_ROUTES) await check(path);
+      await signIn(page, 'measurer-a@vt.test');
+      for (const path of MEASURER_ROUTES) await check(path);
+      expect(DASHBOARD.length).toBeGreaterThan(0);
+    });
+  }
+}
 
 // The capture flow on the fake vision worker (as client.spec.ts), at the normal pace so the
 // processing screen stays long enough to be looked at.
@@ -172,6 +238,9 @@ async function toCapture(page: Page, d: Dict) {
   await page.getByText(d.sexFemale, { exact: true }).click();
   await page.getByRole('button', { name: d.continue, exact: true }).click();
   await expect(page).toHaveURL(/\/consent/);
+  const locale = d === sw ? 'sw' : 'en';
+  await settle(page);
+  await checkScreen(page, `/consent ${locale}`, locale);
   for (const box of [d.consentBox1, d.consentBox2, d.consentBox3]) {
     await page.getByText(box, { exact: true }).click();
   }
@@ -183,6 +252,8 @@ async function toCapture(page: Page, d: Dict) {
   await page.getByRole('button', { name: d.printCheckYes }).click();
   await page.getByRole('button', { name: d.continue, exact: true }).click();
   await expect(page).toHaveURL(/\/setup/);
+  await settle(page);
+  await checkScreen(page, `/setup ${locale}`, locale);
   await page.getByRole('button', { name: d.downloadLater }).click();
   await page.getByRole('button', { name: d.continue, exact: true }).click();
   await page.getByRole('button', { name: d.allowCamera }).click();
@@ -210,6 +281,41 @@ const longestAnimationMs = (page: Page) =>
       }),
     ),
   );
+
+// The capture screens, review and a saved profile: axe and one h1 in both languages, with
+// reduced motion checked on the way (every animation as good as instant).
+for (const locale of ['en', 'sw']) {
+  test(`capture, processing, review and a saved profile pass axe ${locale}`, async ({ page }) => {
+    // The fake vision runs at the normal pace, and the full suite shares the CPU with it.
+    test.setTimeout(480_000);
+    const d = locale === 'sw' ? sw : en;
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.addInitScript((l) => localStorage.setItem('vt_language', l), locale);
+    await toCapture(page, d);
+    await expect(page.getByTestId('instruction')).not.toBeEmpty({ timeout: 20_000 });
+    expect(await longestAnimationMs(page), 'front').toBeLessThanOrEqual(1);
+    await checkScreen(page, `/capture/front ${locale}`, locale);
+    await page.waitForURL(/\/capture\/side/, { timeout: 60_000 });
+    await expect(page.getByText(d.sideViewTitle)).toBeVisible({ timeout: 60_000 });
+    expect(await longestAnimationMs(page), 'side').toBeLessThanOrEqual(1);
+    await checkScreen(page, `/capture/side ${locale}`, locale);
+    await page.waitForURL(/\/processing/, { timeout: 60_000 });
+    expect(await longestAnimationMs(page), 'processing').toBeLessThanOrEqual(1);
+    await checkScreen(page, `/processing ${locale}`, locale);
+    await page.waitForURL(/\/review/, { timeout: 60_000 });
+    await settle(page);
+    await checkScreen(page, `/review ${locale}`, locale);
+    await page.getByRole('button', { name: d.saveAndSend }).click();
+    await expect(page).toHaveURL(/\/saved/);
+    await page.goto('/me');
+    await settle(page);
+    await page.getByTestId('profile-list').getByRole('button').first().click();
+    await expect(page).toHaveURL(/\/me\/[0-9a-f-]{36}$/);
+    await settle(page);
+    await checkScreen(page, `/me/:profileId ${locale}`, locale);
+  });
+}
 
 test('reduced motion is honoured on the capture and processing screens', async ({ page }) => {
   test.setTimeout(180_000);

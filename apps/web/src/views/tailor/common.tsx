@@ -150,7 +150,7 @@ export const BackLink: React.FC<{ onClick: () => void; label: string }> = ({ onC
   <button
     type="button"
     onClick={onClick}
-    className="min-h-[48px] text-sm text-[var(--vt-ink-muted)] hover:text-[var(--vt-ink)] flex items-center gap-1 self-start cursor-pointer"
+    className="min-h-[48px] min-w-[48px] text-sm text-[var(--vt-ink-muted)] hover:text-[var(--vt-ink)] flex items-center gap-1 self-start cursor-pointer"
   >
     <ChevronLeft aria-hidden="true" className="w-4 h-4" />
     <span>{label}</span>
@@ -175,7 +175,7 @@ export const hintClass = 'text-xs text-[var(--vt-ink-muted)]';
 export const rowClass =
   'w-full text-left p-4 rounded-xl border border-[var(--vt-line)] bg-white hover:border-[var(--vt-thread)] cursor-pointer flex items-center justify-between gap-3 min-h-[48px]';
 export const chipClass = (active: boolean) =>
-  `px-3 min-h-[48px] rounded-lg text-xs font-semibold whitespace-nowrap cursor-pointer ${
+  `px-3 min-h-[48px] min-w-[48px] rounded-lg text-xs font-semibold whitespace-nowrap cursor-pointer ${
     active
       ? 'bg-[var(--vt-thread)] text-white'
       : 'bg-white border border-[var(--vt-line)] text-[var(--vt-ink-muted)]'
