@@ -1,7 +1,9 @@
 // Every capture threshold (frontend-spec 10.3), versioned. Nothing here is inlined elsewhere.
 export const CAPTURE_CONFIG = {
-  version: 'capture-3',
-  level: { betaMin: 88, betaMax: 92, gammaMax: 2 },
+  version: 'capture-4',
+  // D50: the reading is smoothed, and once level is confirmed on set-up it holds until the phone leaves
+  // the band by releaseMarginDeg, so tapping the button does not switch it off again.
+  level: { betaMin: 88, betaMax: 92, gammaMax: 2, smoothingMs: 300, releaseMarginDeg: 2 },
   visibilityMin: 0.5,
   frame: { topMin: 0.03, bottomMax: 0.97, sideMargin: 0.03 },
   // 600 to 1200 px on a 1920-tall stream (C2).

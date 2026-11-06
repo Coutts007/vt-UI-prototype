@@ -1,4 +1,5 @@
 // Camera permission and motion sensors. The capture stream itself is in cameraManager.ts.
+import { CAPTURE_CONFIG } from './config';
 export type CameraResult = { ok: true } | { ok: false; reason: 'denied' | 'unavailable' };
 
 export type CameraFacing = 'environment' | 'user';
@@ -57,11 +58,59 @@ export interface Tilt {
   gamma: number;
 }
 
+type Up = [number, number, number];
+const DEG = Math.PI / 180;
+
+/** The "up" direction in the phone's own axes, from the event's Z-X'-Y'' angles (W3C). */
+function upVector(beta: number, gamma: number): Up {
+  const b = beta * DEG;
+  const g = gamma * DEG;
+  return [-Math.sin(g) * Math.cos(b), Math.sin(b), Math.cos(g) * Math.cos(b)];
+}
+
+/**
+ * Lean and sideways tilt from the up vector (D50). `beta` is 90 minus the lean towards or away from
+ * the screen; `gamma` is the rotation in the screen plane. Both read as the event's angles on a phone
+ * near upright, but stay steady at 90 degrees, where the event's own gamma jumps wildly (gimbal lock).
+ */
+function tiltFromUp([x, y, z]: Up): Tilt {
+  const norm = Math.hypot(x, y, z) || 1;
+  return {
+    beta: 90 - Math.asin(Math.max(-1, Math.min(1, z / norm))) / DEG,
+    gamma: Math.atan2(-x, y) / DEG,
+  };
+}
+
+export function tiltFromAngles(beta: number, gamma: number): Tilt {
+  return tiltFromUp(upVector(beta, gamma));
+}
+
+/**
+ * Low-pass filter on the up vector, so sensor jitter on a still phone does not flicker the level check.
+ * Averaging the vector, not the angles, avoids wrap-around at +-180 degrees.
+ */
+export function createTiltSmoother(timeConstantMs: number) {
+  let up: Up | null = null;
+  let last = 0;
+  return (beta: number, gamma: number, now: number): Tilt => {
+    const next = upVector(beta, gamma);
+    if (!up) {
+      up = next;
+    } else {
+      const a = 1 - Math.exp(-Math.max(0, now - last) / timeConstantMs);
+      up = [up[0] + a * (next[0] - up[0]), up[1] + a * (next[1] - up[1]), up[2] + a * (next[2] - up[2])];
+    }
+    last = now;
+    return tiltFromUp(up);
+  };
+}
+
 export function subscribeToOrientation(callback: (tilt: Tilt) => void): () => void {
   if (typeof window === 'undefined' || !('DeviceOrientationEvent' in window)) return () => {};
+  const smooth = createTiltSmoother(CAPTURE_CONFIG.level.smoothingMs);
   const handler = (event: DeviceOrientationEvent) => {
     if (event.beta === null || event.gamma === null) return;
-    callback({ beta: event.beta, gamma: event.gamma });
+    callback(smooth(event.beta, event.gamma, performance.now()));
   };
   window.addEventListener('deviceorientation', handler);
   return () => window.removeEventListener('deviceorientation', handler);

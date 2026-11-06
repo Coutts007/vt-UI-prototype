@@ -18,6 +18,46 @@ make dev-web   # http://localhost:5173
 make dev-api   # http://localhost:8000/api/v1/health
 ```
 
+### Run on a phone against the real API
+
+Without `VITE_API_MODE=mock`, `make dev-web` proxies `/api` to `localhost:8000`. These steps run the API with its database on Docker and open the app on an Android phone over ADB. Use a separate terminal for each step.
+
+1. Start the backend (Postgres, migrations, API on `localhost:8000`):
+
+   ```bash
+   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev-api.yml up -d --build --wait db migrate api
+   curl localhost:8000/api/v1/health   # {"status":"ok"}
+   ```
+
+   If the tailor directory is empty, load the demo data:
+
+   ```bash
+   docker compose -f deploy/docker-compose.yml exec api .venv/bin/vt seed demo
+   ```
+
+   The directory also needs `DIRECTORY_ENABLED=true` in `deploy/.env`.
+
+2. Start the web app (Ctrl+C stops it):
+
+   ```bash
+   make dev-web
+   ```
+
+3. Connect the phone with USB debugging or wireless debugging, then forward the port:
+
+   ```bash
+   adb devices                     # the phone shows as "device"
+   adb reverse tcp:5173 tcp:5173
+   ```
+
+   Open `http://localhost:5173/` in Chrome on the phone. Use `localhost`, not the laptop's network address: Chrome only allows the camera on `localhost` or HTTPS. Run `adb reverse` again after the phone reconnects.
+
+4. Stop everything: Ctrl+C in the `make dev-web` terminal, then:
+
+   ```bash
+   docker compose -f deploy/docker-compose.yml down
+   ```
+
 Run the whole stack (Postgres, API, Caddy):
 
 ```bash
@@ -38,7 +78,7 @@ curl -k https://vt.localhost:8443/api/v1/health
 | Target                                                   | What it does                                                                                        |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | `make setup`                                             | Installs Node and Python dependencies and the git hooks                                             |
-| `make dev-web`, `make dev-api`                           | The web app on 5173 (mock API) and the API on 8000                                                  |
+| `make dev-web`, `make dev-api`                           | The web app on 5173 (proxies `/api` to 8000; mock with `VITE_API_MODE=mock`) and the API on 8000    |
 | `make up`, `make down`, `make seed`                      | The whole stack on Docker Compose with the demo seed                                                |
 | `make lint`, `make typecheck`, `make test`               | Checks; `test-web` and `test-api` run one side                                                      |
 | `make parity`                                            | Regenerates the parity fixtures from `vt_measure` and runs them in Python and TypeScript            |
