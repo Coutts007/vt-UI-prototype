@@ -2,6 +2,12 @@
 
 The newest entry comes first. Every change or improvement adds a line in the same commit.
 
+## 2026-11-10: load test re-run with production's two workers (M12-13, M16-1)
+
+- **`make load` now runs two Uvicorn workers,** as `docker-compose.prod.yml` does; before, it measured one, so the M16 change was never load-tested. Same 2 vCPU / 4 GB limits, synthetic data, one 60-second run each, on the owner's laptop.
+- **Figures (target; M12 one worker; now two workers):** uploads 20 req/s; 17.2; 13.8, p95 300 ms; 1,800; 3,400. `GET /clients` p95 200 ms; 1,300; 850. A client's profiles 200 ms; 540; 290. Search 850 → 720 ms, orders 280 → 280 ms. Sheets under 50 users median 1.5 s; 7.7 s; 35 s, with 9 dropped connections (`RemoteDisconnected`) at 50 users.
+- **Reading:** a second worker helps the lists but makes uploads and sheets worse on 1.5 CPU; the render semaphore is per worker, so up to four renders compete with ingest. Not changed: the worker count, the semaphore, the targets. Owner decision (M12-13): a larger VM, one worker with the database-backed limiter, or a shared render limit; the study's real traffic is far below these rates.
+
 ## 2026-11-10: the client flow is back under its growth limit (D34)
 
 - **Staff links load on demand (A13, frontend-spec 18):** the header's tailor, admin and measurer links moved out of `Header.tsx` into `StaffNav.tsx`, which loads only for a signed-in account. CI's budget step failed on PRs #19 and #20 with the client whole flow at 170.3 KB gzip against the 170 KB stop (D34); it is now 169.8 KB. Client first screen 88.3 KB, tailor 110.2 KB. The margin is 0.2 KB, so the next client-flow addition needs a matching cut or an owner decision on D34.

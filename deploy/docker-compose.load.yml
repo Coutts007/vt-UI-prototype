@@ -4,6 +4,17 @@ services:
   api:
     cpus: 1.5
     mem_limit: 2560m
+    # Two workers, as in docker-compose.prod.yml (M16-1), so the figures are production's.
+    command:
+      - .venv/bin/uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - '8000'
+      - --no-access-log
+      - --workers
+      - ${VT_API_WORKERS:-2}
     environment:
       SHEETS_PER_TAILOR_HOUR: '100000'
   db:
