@@ -1,6 +1,6 @@
 // Every capture threshold (frontend-spec 10.3), versioned. Nothing here is inlined elsewhere.
 export const CAPTURE_CONFIG = {
-  version: 'capture-4',
+  version: 'capture-5',
   // D50: the reading is smoothed, and once level is confirmed on set-up it holds until the phone leaves
   // the band by releaseMarginDeg, so tapping the button does not switch it off again.
   level: { betaMin: 88, betaMax: 92, gammaMax: 2, smoothingMs: 300, releaseMarginDeg: 2 },
@@ -37,6 +37,9 @@ export const CAPTURE_CONFIG = {
   pacing: { correctionGapMs: 3000, repeatMs: 6000, goodGapMs: 1000 },
   burst: { frames: 5, spacingMs: 200, maxBadFrames: 2, stillAgreeSides: 0.05 },
   scale: { disagreePct: 4 },
+  // D52: a view that came out with no value of its own is taken again by itself, at most this many
+  // retakes in all; after that the client sees the empty review and chooses.
+  retake: { autoMax: 2 },
   // A3 item 5: the torch cue blinks slowly while almost ready, fast in the countdown, and is out at
   // least 300 ms before the burst.
   torch: { slowPeriodMs: 1000, fastPeriodMs: 250, offBeforeBurstMs: 300 },

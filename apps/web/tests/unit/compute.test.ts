@@ -8,6 +8,7 @@ import { parse } from 'yaml';
 import { combineBurst } from '../../src/capture/burst';
 import { evaluateChecks, toViewChecks } from '../../src/capture/checks';
 import { buildProfile, disagreeingView } from '../../src/capture/compute';
+import { unmeasuredView } from '../../src/capture/unmeasured';
 import { CaptureSession } from '../../src/capture/session';
 import { assertNoImages } from '../../src/db/storage';
 import { DEFAULT_FAKE, FakeVisionWorker, Scenario } from '../../src/vision/fakeVision';
@@ -63,6 +64,37 @@ const toBody = (profile: ReturnType<typeof buildProfile>) => {
   return body;
 };
 
+describe('unmeasuredView (D52)', () => {
+  const blank = (profile: ReturnType<typeof buildProfile>, sites: string[]) => ({
+    ...profile,
+    measurements: profile.measurements.map((m) =>
+      sites.includes(m.site_code) ? { ...m, value_mm: null, confidence_flag: 'fail' as const } : m,
+    ),
+  });
+  const FRONT = ['stature', 'shoulder', 'sleeve', 'inleg', 'neck', 'chest', 'waist', 'hip'];
+  const SIDE = ['outleg', 'neck', 'chest', 'waist', 'hip'];
+
+  it('a good capture measured both views', async () => {
+    expect(unmeasuredView(buildProfile(await capture(), draft, 1))).toBeNull();
+  });
+  it('a front view with no value of its own is unmeasured', async () => {
+    expect(unmeasuredView(blank(buildProfile(await capture(), draft, 1), FRONT))).toBe('front');
+  });
+  it('a side view with no value of its own is unmeasured', async () => {
+    expect(unmeasuredView(blank(buildProfile(await capture(), draft, 1), SIDE))).toBe('side');
+  });
+  it('both views empty names the front first', async () => {
+    expect(
+      unmeasuredView(blank(buildProfile(await capture(), draft, 1), [...FRONT, ...SIDE])),
+    ).toBe('front');
+  });
+  it('one or two empty sites are reviewed, not retaken by the phone', async () => {
+    const profile = buildProfile(await capture(), draft, 1);
+    expect(unmeasuredView(blank(profile, ['inleg']))).toBeNull();
+    expect(unmeasuredView(blank(profile, ['chest', 'waist', 'hip', 'neck']))).toBeNull();
+  });
+});
+
 describe('buildProfile', () => {
   it('matches the contract and holds no images', async () => {
     const profile = buildProfile(await capture(), draft, 1234);
@@ -86,7 +118,7 @@ describe('buildProfile', () => {
     expect(session.guidance_mode).toBe('voice');
     expect(session.camera_facing).toBe('environment');
     expect(session.free_arm).toBe('left');
-    expect(session.config_hash).toMatch(/^capture-4-/);
+    expect(session.config_hash).toMatch(/^capture-5-/);
   });
 
   it('the front camera is recorded and means visual guidance (A4)', async () => {

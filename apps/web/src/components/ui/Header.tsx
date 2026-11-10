@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { lazy, Suspense, useState } from 'react';
 import { FEATURE_DIRECTORY } from '../../config/features';
 import { useI18n, Locale } from '../../i18n';
 import { UserAccount } from '../../types/api';
 import { Globe, MoreVertical, LogOut, Scissors, Shield, BookOpen, Layers, Store } from 'lucide-react';
+
+const StaffNav = lazy(() => import('./StaffNav'));
 
 interface HeaderProps {
   currentPath: string;
@@ -43,101 +45,29 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-40 bg-[var(--vt-chalk,#F7F3EC)]/90 backdrop-blur-md border-b border-[var(--vt-line,#DDD5C8)] px-4 sm:px-6 py-3 transition-colors">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-8 min-w-0">
+      <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 sm:gap-8 min-w-0">
         {/* Zone 1: Brand Wordmark (Single text element) */}
         <button
           onClick={() => onNavigate('/')}
-          className="flex items-center gap-2.5 min-h-[48px] text-left cursor-pointer group shrink-0"
+          className="flex items-center justify-center gap-2.5 min-h-[48px] min-w-[48px] text-left cursor-pointer group shrink-0"
         >
           <div className="w-8 h-8 rounded-lg bg-[var(--vt-thread,#2E3A87)] text-white flex items-center justify-center shadow-xs font-bold text-sm tracking-wider">
             VT
           </div>
           <div className="flex flex-col">
-            <span className="text-lg font-bold tracking-tight text-[var(--vt-ink,#1F1C18)] whitespace-nowrap">
+            {/* Below 380 px the 48 px controls leave no room, so the wordmark is for screen readers only. */}
+            <span className="text-lg font-bold tracking-tight text-[var(--vt-ink,#1F1C18)] whitespace-nowrap max-[379px]:sr-only">
               Virtual Tailor
             </span>
           </div>
         </button>
 
         {/* Zone 2: Navigation Links (Clean single-line prose) */}
-        <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-[var(--vt-ink-muted,#5C554C)]">
-          {currentUser?.role === 'tailor' ? (
-            <>
-              <button
-                onClick={() => onNavigate('/t/orders')}
-                className={`hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
-                  currentPath.startsWith('/t/orders') ? 'text-[var(--vt-thread,#2E3A87)] font-semibold' : ''
-                }`}
-              >
-                {t('dashboardOrders')}
-              </button>
-              <button
-                onClick={() => onNavigate('/t/clients')}
-                className={`hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
-                  currentPath.startsWith('/t/clients') ? 'text-[var(--vt-thread,#2E3A87)] font-semibold' : ''
-                }`}
-              >
-                {t('dashboardClients')}
-              </button>
-              <button
-                onClick={() => onNavigate('/t/conflicts')}
-                className={`hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
-                  currentPath.startsWith('/t/conflicts') ? 'text-[var(--vt-thread,#2E3A87)] font-semibold' : ''
-                }`}
-              >
-                {t('syncConflicts')}
-              </button>
-              <button
-                onClick={() => onNavigate('/t/audit')}
-                className={`hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
-                  currentPath.startsWith('/t/audit') ? 'text-[var(--vt-thread,#2E3A87)] font-semibold' : ''
-                }`}
-              >
-                {t('dashboardAudit')}
-              </button>
-            </>
-          ) : currentUser?.role === 'admin' ? (
-            <>
-              <button
-                onClick={() => onNavigate('/admin/accounts')}
-                className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
-              >
-                {t('navAccounts')}
-              </button>
-              <button
-                onClick={() => onNavigate('/admin/audit')}
-                className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
-              >
-                {t('navAuditLog')}
-              </button>
-              <button
-                onClick={() => onNavigate('/admin/study/participants')}
-                className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
-              >
-                {t('navStudy')}
-              </button>
-              <button
-                onClick={() => onNavigate('/admin/capture-modes')}
-                className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
-              >
-                {t('navCaptureModes')}
-              </button>
-              <button
-                onClick={() => onNavigate('/admin/settings')}
-                className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
-              >
-                {t('navSettings')}
-              </button>
-            </>
-          ) : currentUser?.role === 'measurer' ? (
-            <>
-              <button
-                onClick={() => onNavigate('/study/reference')}
-                className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer text-[var(--vt-thread,#2E3A87)] font-semibold"
-              >
-                {t('navTapeEntry')}
-              </button>
-            </>
+        <nav className="hidden md:flex flex-wrap items-center gap-x-6 gap-y-1 text-sm font-medium text-[var(--vt-ink-muted,#5C554C)]">
+          {currentUser ? (
+            <Suspense fallback={null}>
+              <StaffNav role={currentUser.role} currentPath={currentPath} onNavigate={onNavigate} />
+            </Suspense>
           ) : (
             <>
               {FEATURE_DIRECTORY && (
@@ -201,7 +131,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Role Action / User Menu */}
           {currentUser ? (
             <div className="flex items-center gap-2">
-              <span className="hidden sm:inline-block text-xs font-medium text-[var(--vt-ink-muted,#5C554C)] bg-[#EAE3D6] px-2.5 py-1 rounded-md">
+              <span className="hidden sm:inline-block max-w-[12rem] truncate text-xs font-medium text-[var(--vt-ink-muted,#5C554C)] bg-[#EAE3D6] px-2.5 py-1 rounded-md">
                 {currentUser.business_name || currentUser.email}
               </span>
               <button

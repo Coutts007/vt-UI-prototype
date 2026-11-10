@@ -53,7 +53,7 @@ async function checkRoute(page: Page, path: string, locale: string, width: numbe
   await expect(page.locator('#root')).not.toBeEmpty();
   await expect(page.getByRole('heading', { name: /not found|haukupatikana/i })).toHaveCount(0);
   const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth > window.innerWidth,
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
   );
   expect.soft(overflow, `${path} scrolls sideways at ${width}`).toBe(false);
   const { violations } = await new AxeBuilder({ page }).analyze();

@@ -25,7 +25,8 @@ export const AdminCaptureModesView: React.FC<{ onNavigate: (path: string) => voi
           {stats.data.modes.length === 0 ? (
             <p className={hintClass}>{ax('captureModesEmpty')}</p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto" tabIndex={0} role="region" aria-label={ax('captureModesTitle')}>
+              {/* A narrow screen scrolls the table in its own box, so the box takes keyboard focus (axe). */}
               <table className="w-full min-w-[40rem] text-sm border-collapse" data-testid="capture-modes">
                 <caption className="sr-only">{ax('captureModesTitle')}</caption>
                 <thead>

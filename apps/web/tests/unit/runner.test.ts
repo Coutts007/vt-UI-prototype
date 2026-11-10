@@ -132,6 +132,33 @@ describe('self capture', () => {
     runner.stop();
   });
 
+  it('a burst whose own frames no longer show the whole person is rejected (D52)', async () => {
+    const { session, ear, runner } = start({ scenario: 'burst_stepped_out' });
+    await wait(8100 + 1300 + 3100 + 1100);
+    expect(ear.words).toContain('try_again');
+    expect(session.views.front).toBeUndefined();
+    expect(session.machine.state).toEqual({ name: 'checking', view: 'front' });
+    await wait(1400 + 3100 + 1100);
+    expect(session.views.front).toBeDefined();
+    runner.stop();
+  });
+
+  it('the real pipeline keeps no view whose burst found no person mask (D52)', async () => {
+    const session = new CaptureSession();
+    const ear = new Ear();
+    // The fake's bursts carry no mask, which is what a real burst without a person looks like.
+    const vision = new VisionClient(new FakeVisionWorker(DEFAULT_FAKE));
+    const runner = new CaptureRunner({ session, vision, audio: ear, requireMask: true });
+    session.begin('self');
+    session.send({ type: 'PERMISSIONS_OK' });
+    session.send({ type: 'LEVEL_OK' });
+    await wait(8100 + 1300 + 3100 + 1100);
+    expect(ear.words).toContain('try_again');
+    expect(session.views.front).toBeUndefined();
+    expect(session.machine.state).toEqual({ name: 'checking', view: 'front' });
+    runner.stop();
+  });
+
   it('a retake repeats only that view', async () => {
     const { session, runner } = start();
     await wait(8100 + 1300 + 3100 + 1100 + 1300 + 6000 + 1300 + 3100 + 1100 + 1300);
