@@ -4,6 +4,8 @@ The newest entry comes first. Every change or improvement adds a line in the sam
 
 ## 2026-11-10: load test re-run with production's two workers (M12-13, M16-1)
 
+- **Flaky accessibility check fixed (test only):** `a11y.spec.ts` counted the page's h1 once, after axe, and on one CI run of PR #21 `/setup` had not rendered yet (the URL changes before the lazy screen, and `networkidle` can come first), so it saw none. It now waits for exactly one h1 with a retrying assertion before axe runs, so axe also never scans a half-rendered screen. The rule itself (one h1 per screen) is unchanged.
+
 - **`make load` now runs two Uvicorn workers,** as `docker-compose.prod.yml` does; before, it measured one, so the M16 change was never load-tested. Same 2 vCPU / 4 GB limits, synthetic data, one 60-second run each, on the owner's laptop.
 - **Figures (target; M12 one worker; now two workers):** uploads 20 req/s; 17.2; 13.8, p95 300 ms; 1,800; 3,400. `GET /clients` p95 200 ms; 1,300; 850. A client's profiles 200 ms; 540; 290. Search 850 → 720 ms, orders 280 → 280 ms. Sheets under 50 users median 1.5 s; 7.7 s; 35 s, with 9 dropped connections (`RemoteDisconnected`) at 50 users.
 - **Reading:** a second worker helps the lists but makes uploads and sheets worse on 1.5 CPU; the render semaphore is per worker, so up to four renders compete with ingest. Not changed: the worker count, the semaphore, the targets. Owner decision (M12-13): a larger VM, one worker with the database-backed limiter, or a shared render limit; the study's real traffic is far below these rates.

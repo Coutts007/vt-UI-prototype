@@ -99,8 +99,10 @@ async function noErrorPage(page: Page, label: string) {
 async function checkScreen(page: Page, label: string, locale: string) {
   await expect(page.locator('html'), `${label}: lang`).toHaveAttribute('lang', locale);
   await noErrorPage(page, label);
+  // Retrying, and before axe: the URL changes before a lazily loaded screen has rendered, and
+  // networkidle can come first, which left the CI run of PR #21 counting no h1 on /setup.
+  await expect(page.locator('h1'), `${label}: one h1`).toHaveCount(1);
   expect(await seriousViolations(page), label).toEqual([]);
-  expect(await page.locator('h1').count(), `${label}: one h1`).toBe(1);
 }
 
 async function checkRoute(page: Page, path: string, locale: string, width: number) {
