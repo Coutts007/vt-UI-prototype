@@ -9,6 +9,7 @@ setup:
 	git config core.hooksPath .githooks
 
 dev-web:
+	@echo "The dev server cannot run the real vision workers (D37): a capture here stops at 'Measuring could not start'. To measure on a phone, use: make phone-web"
 	pnpm --filter @vt/web dev
 
 dev-api:

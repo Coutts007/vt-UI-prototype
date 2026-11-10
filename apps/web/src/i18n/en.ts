@@ -397,6 +397,8 @@ export const en = {
   viewFront: 'front',
   viewSide: 'side',
   scaleBanner: 'The two ways of measuring disagree. Retake the {view} view.',
+  unmeasuredBanner: 'The {view} view could not be measured. Retake it before saving.',
+  simulatedVisionBanner: 'Simulated vision: nothing is being measured (test build only).',
   saveFailed: 'Could not save on this phone. Your measurements are still here; try again.',
   reviewFooter: 'Saved measurements stay on this phone until you have a connection.',
   savedTitleConflict: 'A newer version of your measurements is saved. Your tailor has the latest one.',

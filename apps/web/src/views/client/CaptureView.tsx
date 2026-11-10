@@ -89,6 +89,8 @@ export const CaptureView: React.FC<{ view: View; onNavigate: (path: string) => v
   const { locale, t } = useI18n();
   const machine = useSyncExternalStore(captureSession.subscribe, captureSession.getMachine);
   const [runner, setRunner] = useState<CaptureRunner | null>(null);
+  // Dev and mock builds can replay recorded numbers; the screen must never pass that off as measuring (D52).
+  const [simulated, setSimulated] = useState(false);
   const snapshot = useSyncExternalStore(
     runner?.subscribe ?? noSubscribe,
     runner?.getSnapshot ?? (() => EMPTY_SNAPSHOT),
@@ -116,7 +118,10 @@ export const CaptureView: React.FC<{ view: View; onNavigate: (path: string) => v
     let live = true;
     void vtStorage.loadDraft().then(async (draft) => {
       const host = await attachRunner(draft.height_mm ?? 1700);
-      if (live && host) setRunner(host.runner);
+      if (live && host) {
+        setRunner(host.runner);
+        setSimulated(!host.real);
+      }
     });
     return () => {
       live = false;
@@ -233,6 +238,11 @@ export const CaptureView: React.FC<{ view: View; onNavigate: (path: string) => v
           <X aria-hidden="true" className="w-6 h-6" />
         </button>
       </div>
+      {simulated && (
+        <p role="status" className="relative z-30 bg-amber-300 text-black text-center text-xs font-bold px-2 py-1">
+          {t('simulatedVisionBanner')}
+        </p>
+      )}
 
       <div className="relative flex-1 overflow-hidden flex items-center justify-center">
         <div className="relative z-10 pointer-events-none">

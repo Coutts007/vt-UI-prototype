@@ -88,18 +88,24 @@ async function realClient(): Promise<VisionMade> {
   return { client: new VisionClient(new RealVisionWorker(), REAL_LIMITS), speed: 1, real: true };
 }
 
-const wantsReal = (): boolean => {
+/** Only a tab that stored fake options without `real: true` (the tuning page, a browser test) replays. */
+const wantsFake = (): boolean => {
   try {
-    return (JSON.parse(sessionStorage.getItem(FAKE_VISION_KEY) ?? '{}') as { real?: boolean }).real === true;
+    const stored = sessionStorage.getItem(FAKE_VISION_KEY);
+    return !!stored && (JSON.parse(stored) as { real?: boolean }).real !== true;
   } catch {
     return false;
   }
 };
 
-/** Production always uses real vision, and the fake is compiled out of it. */
+/**
+ * Production always uses real vision, and the fake is compiled out of it. Dev, mock and test builds
+ * use real vision too unless this tab has opted into the replay (D52), so a capture never completes
+ * on made-up numbers by default.
+ */
 export async function createVisionClient(): Promise<VisionMade> {
   if (!import.meta.env.DEV && import.meta.env.MODE !== 'mock' && import.meta.env.MODE !== 'test') return realClient();
-  if (wantsReal()) return realClient();
+  if (!wantsFake()) return realClient();
   const { FakeVisionWorker, readFakeOptions } = await import('./fakeVision');
   const options = readFakeOptions();
   return { client: new VisionClient(new FakeVisionWorker(options, fakeBursts)), speed: options.speed, real: false };

@@ -44,7 +44,7 @@ Without `VITE_API_MODE=mock`, `make dev-web` proxies `/api` to `localhost:8000`.
    make dev-web     # simulated vision on http://localhost:5173 (screens only, no real measuring)
    ```
 
-   `make dev-web` cannot run the real MediaPipe and OpenCV workers, so its capture uses simulated vision and completes by itself whether or not anyone stands in front of the camera. Measure with `make phone-web`. Run it again after a code change, since it serves a build.
+   `make dev-web` cannot run the real MediaPipe and OpenCV workers, so on the dev server a capture stops at "Measuring could not start". It never completes on simulated numbers unless a tab opts into the replay on `/dev/capture-tuning`, and then the capture screen says so. Measure with `make phone-web`. Run it again after a code change, since it serves a build.
 
 3. Connect the phone with USB debugging or wireless debugging, then forward the port:
 

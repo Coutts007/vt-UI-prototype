@@ -399,6 +399,8 @@ export const sw: Record<TranslationKey, string> = {
   viewFront: 'mbele',
   viewSide: 'upande',
   scaleBanner: 'Njia mbili za kupima hazilingani. Piga upya mwonekano wa {view}.',
+  unmeasuredBanner: 'Mwonekano wa {view} haukuweza kupimwa. Piga upya kabla ya kuhifadhi.',
+  simulatedVisionBanner: 'Uonaji wa kuigiza: hakuna kinachopimwa (toleo la majaribio tu).',
   saveFailed: 'Imeshindikana kuhifadhi kwenye simu hii. Vipimo vyako bado vipo; jaribu tena.',
   reviewFooter: 'Vipimo vilivyohifadhiwa vinabaki kwenye simu hii hadi upate muunganisho.',
   savedTitleConflict: 'Toleo jipya zaidi la vipimo vyako limehifadhiwa. Fundi wako ana la hivi karibuni.',

@@ -52,6 +52,8 @@ export interface RunnerDeps {
   torch?: TorchPort;
   /** Pilot instrumentation: check values per sample, numbers only (M15). */
   log?: SessionLog;
+  /** The real pipeline: a burst that found no person mask measured nothing, so it is rejected (D52). */
+  requireMask?: boolean;
 }
 
 export class CaptureRunner {
@@ -63,6 +65,7 @@ export class CaptureRunner {
   private history: Landmark[][] = [];
   private greenSince: number | null = null;
   private lastOutcome: CheckOutcome | null = null;
+  private lastSample: { luminance: number; sharpness: number } | null = null;
   private timers = new Set<ReturnType<typeof setTimeout>>();
   private epoch = 0;
   private stopped = false;
@@ -219,6 +222,7 @@ export class CaptureRunner {
       this.history = [...this.history, sample.landmarks].slice(-CAPTURE_CONFIG.stability.window);
     }
     this.lastOutcome = outcome;
+    this.lastSample = { luminance: sample.luminance, sharpness: sample.sharpness };
     const now = this.clock();
     const stable = this.filter.update(now, outcome.results);
     const failing: CheckId | null = firstFailing(stable);
@@ -313,7 +317,7 @@ export class CaptureRunner {
       combined = null;
     }
     if (epoch !== this.epoch || this.stopped) return;
-    if (!combined || !this.lastOutcome) {
+    if (!combined || !this.lastOutcome || !this.burstUsable(view, combined)) {
       this.note('burst_bad', view);
       this.say('try_again', true);
       session.send({ type: 'BURST_BAD' });
@@ -327,6 +331,30 @@ export class CaptureRunner {
       free_arm: view === 'front' ? this.freeArmOf(numbers) : null,
     };
     session.send({ type: 'BURST_OK' });
+  }
+
+  /**
+   * The burst's own numbers must still show the whole person and the sheet (D52). The live checks
+   * passed before the countdown; this refuses a view whose frames lost the person during the burst,
+   * or came back without a mask, instead of keeping it and measuring nothing from it.
+   */
+  private burstUsable(view: View, combined: CombinedView): boolean {
+    if (!combined.mask && this.deps.requireMask) return false;
+    const { results } = evaluateChecks({
+      view,
+      sample: {
+        image_w: combined.marker.image_w,
+        image_h: combined.marker.image_h,
+        landmarks: combined.landmarks,
+        mask: combined.mask,
+        marker: combined.marker,
+        luminance: this.lastSample?.luminance ?? 0,
+        sharpness: this.lastSample?.sharpness ?? 0,
+      },
+      levelUnchecked: true,
+    });
+    const inFrame = combined.mask ? results.frame && results.distance : true;
+    return results.person && results.sheet && inFrame;
   }
 
   private freeArmOf(combined: Pick<CombinedView, 'marker' | 'landmarks'>) {

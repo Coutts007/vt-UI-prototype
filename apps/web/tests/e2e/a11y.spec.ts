@@ -130,7 +130,7 @@ async function checkRoute(page: Page, path: string, locale: string, width: numbe
   expect(focused.x, `${label}: skip link visible on focus`).toBeGreaterThanOrEqual(0);
   expect(focused.outline, `${label}: focus ring`).toBe('3px');
   const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth > window.innerWidth,
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
   );
   expect(overflow, `${label}: scrolls sideways`).toBe(false);
   // Touch targets of 48 px or more on a phone (frontend-spec 17). A control inside a label counts
@@ -186,7 +186,7 @@ for (const locale of ['en', 'sw']) {
 // size doubled at 1280 px). Neither may scroll sideways or clip a heading or a button.
 async function fitsAtZoom(page: Page, label: string) {
   const loss = await page.evaluate(() => {
-    const sideways = document.documentElement.scrollWidth > window.innerWidth;
+    const sideways = document.documentElement.scrollWidth > document.documentElement.clientWidth;
     const clipped = [...document.querySelectorAll<HTMLElement>('h1, button')]
       .filter((el) => el.offsetParent !== null && el.scrollWidth > el.clientWidth + 1)
       .map((el) => el.outerHTML.slice(0, 80));

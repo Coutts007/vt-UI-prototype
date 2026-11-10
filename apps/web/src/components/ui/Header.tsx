@@ -43,24 +43,25 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-40 bg-[var(--vt-chalk,#F7F3EC)]/90 backdrop-blur-md border-b border-[var(--vt-line,#DDD5C8)] px-4 sm:px-6 py-3 transition-colors">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-8 min-w-0">
+      <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 sm:gap-8 min-w-0">
         {/* Zone 1: Brand Wordmark (Single text element) */}
         <button
           onClick={() => onNavigate('/')}
-          className="flex items-center gap-2.5 min-h-[48px] text-left cursor-pointer group shrink-0"
+          className="flex items-center justify-center gap-2.5 min-h-[48px] min-w-[48px] text-left cursor-pointer group shrink-0"
         >
           <div className="w-8 h-8 rounded-lg bg-[var(--vt-thread,#2E3A87)] text-white flex items-center justify-center shadow-xs font-bold text-sm tracking-wider">
             VT
           </div>
           <div className="flex flex-col">
-            <span className="text-lg font-bold tracking-tight text-[var(--vt-ink,#1F1C18)] whitespace-nowrap">
+            {/* Below 380 px the 48 px controls leave no room, so the wordmark is for screen readers only. */}
+            <span className="text-lg font-bold tracking-tight text-[var(--vt-ink,#1F1C18)] whitespace-nowrap max-[379px]:sr-only">
               Virtual Tailor
             </span>
           </div>
         </button>
 
         {/* Zone 2: Navigation Links (Clean single-line prose) */}
-        <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-[var(--vt-ink-muted,#5C554C)]">
+        <nav className="hidden md:flex flex-wrap items-center gap-x-6 gap-y-1 text-sm font-medium text-[var(--vt-ink-muted,#5C554C)]">
           {currentUser?.role === 'tailor' ? (
             <>
               <button
@@ -201,7 +202,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Role Action / User Menu */}
           {currentUser ? (
             <div className="flex items-center gap-2">
-              <span className="hidden sm:inline-block text-xs font-medium text-[var(--vt-ink-muted,#5C554C)] bg-[#EAE3D6] px-2.5 py-1 rounded-md">
+              <span className="hidden sm:inline-block max-w-[12rem] truncate text-xs font-medium text-[var(--vt-ink-muted,#5C554C)] bg-[#EAE3D6] px-2.5 py-1 rounded-md">
                 {currentUser.business_name || currentUser.email}
               </span>
               <button
