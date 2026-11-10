@@ -37,7 +37,7 @@ async def current_principal(request: Request, session: Session) -> Principal:
         raise ApiError("token_expired")
     if user.status != "active":
         raise ApiError(f"account_{user.status}")
-    request.app.state.limiter.hit("user", str(user.user_id), 300, 60)
+    await request.app.state.limiter.hit("user", str(user.user_id), 300, 60)
     return Principal(user, claims)
 
 

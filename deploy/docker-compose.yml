@@ -91,6 +91,9 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.caddy
+      args:
+        # The web half of the directory switch (D27); the API half is DIRECTORY_ENABLED.
+        VITE_FEATURE_DIRECTORY: ${VITE_FEATURE_DIRECTORY:-false}
     ports:
       - '${VT_HTTP_PORT:-80}:80'
       - '${VT_HTTPS_PORT:-443}:443'

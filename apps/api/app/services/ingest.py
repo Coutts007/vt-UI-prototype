@@ -27,7 +27,7 @@ from app.models import (
 )
 from app.schemas import MeasurementProfilePayload
 from app.security.client_secret import hash_secret, matches, well_formed
-from app.security.ip_hash import ip_hash
+from app.security.ip_hash import ip_hash, keyed_hash
 from app.services import audit
 from app.services.approvals import require_approvals
 from app.services.profile_checks import (
@@ -337,7 +337,9 @@ async def ingest(
         raise invalid("session.session_id", "session_id_reused")
 
     # Last, so refused and replayed requests cannot use up the honest client's hour.
-    request.app.state.limiter.hit("profile-code", body.client_code, CODE_LIMIT, HOUR)
+    await request.app.state.limiter.hit(
+        "profile-code", keyed_hash(request, body.client_code), CODE_LIMIT, HOUR
+    )
 
     newest = await session.scalar(
         select(MeasurementProfile)

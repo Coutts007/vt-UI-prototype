@@ -233,9 +233,7 @@ async def test_the_day_limit_also_holds(app: FastAPI, client: AsyncClient) -> No
     for _ in range(3):
         for _ in range(10):
             assert (await issue(client, WANJIRU)).status_code == 201
-        limiter.windows = {
-            k: v for k, v in limiter.windows.items() if k[0] != "directory-code-hour"
-        }
+        await limiter.reset("directory-code-hour")
     assert (await issue(client, WANJIRU)).status_code == 429
 
 

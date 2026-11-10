@@ -1,4 +1,4 @@
-.PHONY: frozen-guard setup dev-web dev-api up down seed lint typecheck test test-web test-api parity contract e2e e2e-real-api walkthrough stack-check fuzz load study-secrets study-up study-admin study-cert study-down licences build
+.PHONY: phone-web lighthouse prod-secrets prod-up prod-admin prod-backup prod-restore-drill prod-down frozen-guard setup dev-web dev-api up down seed lint typecheck test test-web test-api parity contract e2e e2e-real-api walkthrough stack-check fuzz load study-secrets study-up study-admin study-cert study-down licences build
 
 COMPOSE = docker compose -f deploy/docker-compose.yml
 
@@ -9,13 +9,26 @@ setup:
 	git config core.hooksPath .githooks
 
 dev-web:
+	@echo "The dev server cannot run the real vision workers (D37): a capture here stops at 'Measuring could not start'. To measure on a phone, use: make phone-web"
 	pnpm --filter @vt/web dev
 
 dev-api:
 	cd apps/api && uv run uvicorn app.main:app --reload --port 8000 --no-access-log
 
+# A phone test with real body detection (A10, D37): the production build on 5174, with /api sent to
+# the API on 8000. The dev server can only run the simulated vision. Then: adb reverse tcp:5174 tcp:5174.
+phone-web:
+	cd apps/web && VITE_FEATURE_DIRECTORY=true pnpm exec vite build --outDir dist-phone
+	cd apps/web && pnpm exec vite preview --outDir dist-phone --port 5174 --strictPort --host 0.0.0.0
+
 up:
 	$(COMPOSE) up -d --build --wait
+	@env_val() { v=$$(printenv "$$1"); [ -n "$$v" ] || v=$$(sed -n "s/^$$1=//p" deploy/.env 2>/dev/null | tail -1); echo "$${v:-$$2}"; }; \
+	host=$$(env_val VT_SITE_ADDRESS vt.localhost); port=$$(env_val VT_HTTPS_PORT 443); \
+	url="https://$$host"; [ "$$port" = 443 ] || url="$$url:$$port"; \
+	echo; echo "Virtual Tailor is running: $$url"; \
+	echo "API health: $$url/api/v1/health"; \
+	echo "Load the demo data with 'make seed'. Stop the stack with 'make down'."
 
 down:
 	$(COMPOSE) down
@@ -114,6 +127,24 @@ study-cert:
 	sh scripts/study.sh cert
 study-down:
 	sh scripts/study.sh down
+
+# The production VM (M16, backend-spec 16). See docs/runbook.md.
+prod-secrets:
+	sh scripts/prod.sh secrets
+prod-up:
+	sh scripts/prod.sh up
+prod-admin:
+	sh scripts/prod.sh admin
+prod-backup:
+	sh scripts/prod.sh backup
+prod-restore-drill:
+	sh scripts/prod.sh restore-drill
+prod-down:
+	sh scripts/prod.sh down
+
+# Lighthouse CI on the built app (frontend-spec 18, M16): accessibility 1.0, interactive <= 3.5 s.
+lighthouse:
+	sh scripts/lighthouse.sh
 
 licences:
 	node scripts/licences.mjs

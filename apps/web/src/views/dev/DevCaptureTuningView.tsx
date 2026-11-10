@@ -21,7 +21,17 @@ function downloadSessionLog(): void {
 }
 
 export const DevCaptureTuningView: React.FC = () => {
-  const [options, setOptions] = useState<FakeOptions>(readFakeOptions);
+  const [options, setOptions] = useState<FakeOptions>(() => {
+    // A tab with no stored choice runs the real pipeline (D52); the page writes that down so the box
+    // below says what the next capture in this tab will do.
+    let stored: string | null = null;
+    try {
+      stored = sessionStorage.getItem(FAKE_VISION_KEY);
+    } catch {
+      stored = null;
+    }
+    return stored ? readFakeOptions() : { ...DEFAULT_FAKE, real: true };
+  });
   const [view, setView] = useState<View>('front');
   const [tick, setTick] = useState(0);
   const worker = useMemo(() => new FakeVisionWorker(DEFAULT_FAKE), []);
@@ -93,7 +103,8 @@ export const DevCaptureTuningView: React.FC = () => {
           checked={options.real === true}
           onChange={(event) => setOptions({ ...options, real: event.target.checked })}
         />
-        Real camera and models (built app only, not the Vite dev server)
+        Real camera and models. This is the default; untick it to replay the scenario above instead. It needs a built
+        app (make phone-web or the mock build), not the Vite dev server.
       </label>
       {options.real && (
         <Suspense fallback={null}>

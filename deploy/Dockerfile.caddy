@@ -3,7 +3,14 @@ RUN corepack enable
 WORKDIR /repo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web apps/web
+# The web build imports the shared workspace packages (contract, error codes, seed, rules).
+COPY packages/contracts packages/contracts
+COPY packages/seed packages/seed
+COPY packages/parity-fixtures packages/parity-fixtures
+COPY packages/rules packages/rules
 RUN pnpm install --frozen-lockfile --filter @vt/web
+# Build-time flag (D27): off unless the compose build arg sets it to 'true'.
+ARG VITE_FEATURE_DIRECTORY=false
 RUN pnpm --filter @vt/web build
 
 FROM caddy:2.8.4-alpine

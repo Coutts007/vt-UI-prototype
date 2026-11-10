@@ -173,8 +173,10 @@ async def issue_directory_code(
     # The tailor first: taps at a tailor already refused must not use up everyone's allowance.
     settings = request.app.state.settings
     limiter = request.app.state.limiter
-    limiter.hit("directory-code-tailor", str(owner), settings.directory_codes_per_tailor_day, DAY)
-    limiter.hit("directory-code-global", "all", settings.directory_codes_global_day, DAY)
+    await limiter.hit(
+        "directory-code-tailor", str(owner), settings.directory_codes_per_tailor_day, DAY
+    )
+    await limiter.hit("directory-code-global", "all", settings.directory_codes_global_day, DAY)
     for _ in range(CODE_ATTEMPTS):
         client = Client(client_code=new_code(), tailor_id=owner, source="directory")
         try:

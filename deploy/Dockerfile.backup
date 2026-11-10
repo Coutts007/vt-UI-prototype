@@ -1,0 +1,6 @@
+# pg_dump and age in one small image for the nightly backup and the restore drill (M16).
+FROM postgres:16-alpine
+RUN apk add --no-cache age
+COPY deploy/backup.sh /usr/local/bin/vt-backup
+RUN chmod 0755 /usr/local/bin/vt-backup
+CMD ["vt-backup", "nightly"]

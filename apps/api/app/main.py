@@ -42,7 +42,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.engine = make_engine(settings.database_url)
     app.state.sessions = make_sessions(app.state.engine)
-    app.state.limiter = RateLimiter(off=settings.rate_limits_off)
+    app.state.limiter = RateLimiter(app.state.sessions, off=settings.rate_limits_off)
     app.state.rules = load_rules()
     app.add_middleware(ApiMiddleware, docs_prefix=None if production else docs)
     install_error_handlers(app)

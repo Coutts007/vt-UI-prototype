@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { RotateCcw, Send, Trash2 } from 'lucide-react';
 import { captureSession } from '../../capture/session';
+import { unmeasuredView } from '../../capture/unmeasured';
 import { Button } from '../../components/ui/Button';
 import { ProgressSteps } from '../../components/ui/data';
 import { Banner, Dialog } from '../../components/ui/feedback';
@@ -29,7 +30,9 @@ export const ReviewView: React.FC<{ onNavigate: (path: string) => void }> = ({ o
     profile.measurements.find((m) => m.confidence_flag === 'check');
   const worstView = worst ? SITE_VIEW[worst.site_code] : 'both';
   const scaleView = machine.context.scaleDisagree;
-  const highlight = scaleView ?? (worstView === 'both' ? null : worstView);
+  // D52: a view that measured nothing has nothing to send; it must be retaken first.
+  const unmeasured = unmeasuredView(profile);
+  const highlight = scaleView ?? unmeasured ?? (worstView === 'both' ? null : worstView);
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 flex flex-col gap-5">
@@ -39,6 +42,11 @@ export const ReviewView: React.FC<{ onNavigate: (path: string) => void }> = ({ o
       {scaleView && (
         <Banner tone="warn">
           {t('scaleBanner', { view: t(scaleView === 'front' ? 'viewFront' : 'viewSide') })}
+        </Banner>
+      )}
+      {unmeasured && (
+        <Banner tone="warn">
+          {t('unmeasuredBanner', { view: t(unmeasured === 'front' ? 'viewFront' : 'viewSide') })}
         </Banner>
       )}
       {failedSave && <Banner tone="warn">{t('saveFailed')}</Banner>}
@@ -59,6 +67,7 @@ export const ReviewView: React.FC<{ onNavigate: (path: string) => void }> = ({ o
         <Button
           size="xl"
           loading={saving}
+          disabled={!!unmeasured}
           icon={<Send aria-hidden="true" className="w-5 h-5" />}
           className="w-full sm:flex-1"
           onClick={async () => {

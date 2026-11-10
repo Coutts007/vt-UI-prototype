@@ -11,6 +11,8 @@ interface Host {
   runner: CaptureRunner;
   vision: VisionClient;
   speed: number;
+  /** False only when a dev or mock tab opted into the replay (D52). */
+  real: boolean;
 }
 
 let host: Promise<Host | null> | null = null;
@@ -73,6 +75,7 @@ export function attachRunner(heightMm: number): Promise<Host | null> {
     return {
       vision: made.client,
       speed: made.speed,
+      real: made.real,
       runner: new CaptureRunner({
         session: captureSession,
         vision: made.client,
@@ -82,6 +85,7 @@ export function attachRunner(heightMm: number): Promise<Host | null> {
         sensorTilt: made.real ? () => tilt : undefined,
         torch,
         log,
+        requireMask: made.real,
       }),
     };
   }).catch(() => {

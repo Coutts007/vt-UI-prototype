@@ -70,7 +70,7 @@ export const OrderQueueView: React.FC<{ onNavigate: (path: string) => void }> = 
           {tx('newOrder')}
         </Button>
       </div>
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      <div className="flex flex-wrap gap-2 pb-1">
         {shownStatuses.map((name) => (
           <button key={name} type="button" aria-pressed={status === name} className={chipClass(status === name)} onClick={() => setStatus(status === name ? null : name)}>
             {statusName(name)} ({count(name)})

@@ -474,7 +474,23 @@ describe('which vision a build uses', () => {
     vi.unstubAllGlobals();
     vi.resetModules();
   });
-  it('dev and mock builds replay fake vision unless real is asked for', async () => {
+  it('a tab that has not chosen runs the real pipeline, even in dev, mock and test builds (D52)', async () => {
+    vi.stubGlobal('sessionStorage', { getItem: () => null });
+    vi.stubGlobal('navigator', {});
+    vi.stubGlobal('window', {});
+    const { createVisionClient } = await import('../../src/vision/client');
+    const made = await createVisionClient();
+    expect(made.real).toBe(true);
+    made.client.terminate();
+  });
+  it('a tab that stored fake options without asking for real replays them', async () => {
+    vi.stubGlobal('sessionStorage', {
+      getItem: () => JSON.stringify({ scenario: 'good', speed: 0.1 }),
+    });
+    const { createVisionClient } = await import('../../src/vision/client');
+    expect((await createVisionClient()).real).toBe(false);
+  });
+  it('dev and mock builds replay fake vision when real is refused', async () => {
     vi.stubGlobal('sessionStorage', { getItem: () => JSON.stringify({ real: false }) });
     const { createVisionClient } = await import('../../src/vision/client');
     expect((await createVisionClient()).real).toBe(false);

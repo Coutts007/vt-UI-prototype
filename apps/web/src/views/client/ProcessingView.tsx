@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { CheckCircle2, Cpu, ShieldCheck } from 'lucide-react';
+import { voiceGuide } from '../../capture/audio';
+import { CAPTURE_CONFIG } from '../../capture/config';
 import { currentHost, stopRunner } from '../../capture/runnerHost';
 import { captureSession } from '../../capture/session';
+import { unmeasuredView } from '../../capture/unmeasured';
 import { Button } from '../../components/ui/Button';
 import type { LocalProfile } from '../../db/storage';
 import { vtStorage } from '../../db/storage';
@@ -26,7 +29,8 @@ export const ProcessingView: React.FC<{ onNavigate: (path: string) => void }> = 
   useEffect(() => {
     if (machine.state.name === 'error') return;
     if (machine.state.name !== 'computing') {
-      onNavigate(machine.state.name === 'review' ? '/review' : '/');
+      const { state } = machine;
+      onNavigate(state.name === 'review' ? '/review' : 'view' in state ? `/capture/${state.view}` : '/');
       return;
     }
     if (running.current) return;
@@ -65,6 +69,16 @@ export const ProcessingView: React.FC<{ onNavigate: (path: string) => void }> = 
       stopRunner();
       captureSession.send({ type: 'COMPUTED' });
       captureSession.send(disagreeing ? { type: 'SCALE_DISAGREE', view: disagreeing } : { type: 'SCALE_OK' });
+      // D52: a view that measured nothing is taken again by itself, up to the limit, instead of
+      // being shown as if it had values.
+      const unmeasured = unmeasuredView(profile);
+      if (unmeasured && captureSession.machine.context.retakeCount < CAPTURE_CONFIG.retake.autoMax) {
+        voiceGuide.say('try_again', { interrupt: true });
+        captureSession.send({ type: 'RETAKE', view: unmeasured });
+        captureSession.send({ type: 'BEGIN_RETAKE' });
+        onNavigate(`/capture/${unmeasured}`);
+        return;
+      }
       onNavigate('/review');
     };
     void run();

@@ -83,7 +83,7 @@ export const TailorLayout: React.FC<TailorLayoutProps> = ({
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-6xl w-full mx-auto pb-24 lg:pb-8">
+      <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 max-w-6xl w-full mx-auto pb-24 lg:pb-8">
         {children}
       </main>
 
@@ -97,7 +97,7 @@ export const TailorLayout: React.FC<TailorLayoutProps> = ({
               <button
                 key={item.path}
                 onClick={() => onNavigate(item.path)}
-                className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg cursor-pointer ${
+                className={`flex flex-col items-center justify-center min-h-[48px] py-1.5 px-1 rounded-lg cursor-pointer ${
                   active ? 'text-[var(--vt-thread,#2E3A87)]' : 'text-[var(--vt-ink-muted,#5C554C)]'
                 }`}
               >

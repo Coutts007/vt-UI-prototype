@@ -80,7 +80,7 @@ export const Page: React.FC<{ title: string; intro?: string; children: React.Rea
   intro,
   children,
 }) => (
-  <main className="max-w-4xl mx-auto px-4 py-8 flex flex-col gap-5">
+  <main className="max-w-4xl w-full min-w-0 mx-auto px-4 py-8 flex flex-col gap-5">
     <div>
       <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--vt-ink)] tracking-tight">{title}</h1>
       {intro && <p className="text-sm text-[var(--vt-ink-muted)] mt-1">{intro}</p>}

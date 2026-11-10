@@ -37,7 +37,7 @@ No binary columns exist and the API accepts JSON only; a privacy guard refuses i
 | `measurer`, `reference_measurement`, `reference_correction` | Measurer code, training date; tape readings and corrections | Study reference values. Readings cannot be changed or deleted by the API role |
 | `audit_log` | Who did what and when, the entity id, a keyed hash of the IP address, a short detail without measurements or names | Accountability (append-only) |
 | `app_setting` | Retention periods, study settings, approval references and dates | Configuration and the A9 guard |
-| `revoked_token`, `rules_version`, `ease_preset` | No personal data | Sessions, measurement rules, ease defaults |
+| `revoked_token`, `rules_version`, `ease_preset`, `rate_limit_window` | No personal data (rate-limit keys are keyed hashes of addresses, emails and client codes, or user ids) | Sessions, measurement rules, ease defaults |
 
 ## 3. Files on the server
 

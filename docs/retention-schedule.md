@@ -18,6 +18,7 @@ Periods marked *setting* are changed by the admin in Settings and are audited.
 | Revoked sign-in tokens | Until they would have expired | Nightly job |
 | Specification sheet files | 30 days; unnamed files after an hour | Nightly job (`clean_sheets`) |
 | Data on the client's phone | Until the client deletes it or clears the browser | The client |
-| Backups | Not built yet (M12) | — |
+| Rate-limit windows (keyed hashes or user ids) | Until the window ends | Nightly job |
+| Backups (`age`-encrypted database dumps) | 30 days | Backup job, on the VM; the owner's off-VM copies by hand |
 
 **Withdrawal of study consent (D44, open for the owner).** Until the owner decides, the most protective reversible default applies: the participant's row, capture sets and tape readings are kept but are excluded from both study exports, and no new readings are accepted for them. No deletion path (the client's request, the admin's "Carry out", the 30-day step) removes study capture sets. Nothing is destroyed, so the owner's later decision can still go either way. Withdrawal is recorded on the participant row, needs no consent record, and cannot be undone.

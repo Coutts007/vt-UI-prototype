@@ -1,0 +1,6 @@
+# Development only: publishes the Compose API on localhost:8000 so `make dev-web` can proxy /api to it.
+# Use with deploy/docker-compose.yml; see "Run on a phone against the real API" in the README.
+services:
+  api:
+    ports:
+      - '127.0.0.1:8000:8000'

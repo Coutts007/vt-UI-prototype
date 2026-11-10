@@ -34,6 +34,7 @@ export const SCENARIOS = [
   'blurry',
   'unsteady',
   'burst_bad',
+  'burst_stepped_out',
   'scale_disagree',
   'no_crotch',
   'compute_crash_once',
@@ -47,7 +48,7 @@ export interface FakeOptions {
   recover: boolean;
   /** Below 1 runs every wait faster, for tests. */
   speed: number;
-  /** Use the real camera and models instead (/dev/capture-tuning). */
+  /** Use the real camera and models instead (/dev/capture-tuning). A tab with no stored options runs them anyway (D52). */
   real?: boolean;
 }
 
@@ -317,7 +318,11 @@ export class FakeVisionWorker implements WorkerLike {
     this.bursts[view] += 1;
     const first = this.bursts[view] === 1;
     const clean = this.live('good', view);
-    const landmarks = clean.landmarks;
+    // The first burst's own frames no longer show the feet, as if the client moved during it (D52).
+    const steppedOut = scenario === 'burst_stepped_out' && first;
+    const landmarks = steppedOut
+      ? clean.landmarks!.map((point, index) => (index >= 27 ? { ...point, visibility: 0.1 } : point))
+      : clean.landmarks;
     let marker = clean.marker;
     // Only the first front burst is wrong, so a retake recovers.
     if (scenario === 'scale_disagree' && view === 'front' && first && marker) {

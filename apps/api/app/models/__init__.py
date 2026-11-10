@@ -558,3 +558,14 @@ class RevokedToken(Base):
     __tablename__ = "revoked_token"
     jti: Mapped[str] = mapped_column(String(36), primary_key=True)
     expires_at: Mapped[datetime] = stamp(nullable=False)
+
+
+class RateLimitWindow(Base):
+    """One fixed window per bucket and key, shared by every API worker (M16). Keys are hashes
+    or identifiers, never an address or an email in clear."""
+
+    __tablename__ = "rate_limit_window"
+    bucket: Mapped[str] = mapped_column(String(32), primary_key=True)
+    bucket_key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    ends_at: Mapped[datetime] = stamp(nullable=False)
+    count: Mapped[int] = mapped_column(Integer)

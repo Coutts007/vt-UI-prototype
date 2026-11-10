@@ -80,7 +80,7 @@ export const Silhouette: React.FC<SilhouetteProps> = ({
                 <div className="text-lg font-bold text-[var(--vt-thread,#2E3A87)] tabular-nums mt-0.5">
                   {formatValue(m?.value_mm ?? null)}
                 </div>
-                <div className="text-[10px] text-[var(--vt-ink-muted,#5C554C)] opacity-75 font-mono truncate">
+                <div className="text-[10px] text-[var(--vt-ink-muted,#5C554C)] font-mono truncate">
                   {isoTerm(code)}
                 </div>
               </button>
@@ -195,7 +195,7 @@ export const Silhouette: React.FC<SilhouetteProps> = ({
                 <div className="text-lg font-bold text-[var(--vt-thread,#2E3A87)] tabular-nums mt-0.5">
                   {formatValue(m?.value_mm ?? null)}
                 </div>
-                <div className="text-[10px] text-[var(--vt-ink-muted,#5C554C)] opacity-75 font-mono truncate">
+                <div className="text-[10px] text-[var(--vt-ink-muted,#5C554C)] font-mono truncate">
                   {isoTerm(code)}
                 </div>
               </button>

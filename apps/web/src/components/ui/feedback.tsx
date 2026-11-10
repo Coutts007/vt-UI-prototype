@@ -45,11 +45,17 @@ export const Skeleton: React.FC = () => {
   );
 };
 
-export const EmptyState: React.FC<{ title?: string; children?: React.ReactNode }> = ({ title, children }) => {
+// `heading` makes the title the screen's h1, for a screen whose only content is the empty state.
+export const EmptyState: React.FC<{ title?: string; heading?: boolean; children?: React.ReactNode }> = ({
+  title,
+  heading = false,
+  children,
+}) => {
   const { t } = useI18n();
+  const Title = heading ? 'h1' : 'p';
   return (
     <div className="p-8 text-center text-[var(--vt-ink-muted)]">
-      <p className="font-semibold text-[var(--vt-ink)]">{title ?? t('emptyDefault')}</p>
+      <Title className="font-semibold text-[var(--vt-ink)]">{title ?? t('emptyDefault')}</Title>
       {children}
     </div>
   );

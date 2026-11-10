@@ -20,9 +20,17 @@ import { RadioCards } from '../../components/ui/forms';
 import { vtStorage } from '../../db/storage';
 import { useI18n } from '../../i18n';
 
+// Not in every TypeScript DOM library yet; Android Chrome has it in fullscreen.
+interface OrientationLock {
+  lock?(orientation: 'portrait'): Promise<void>;
+}
 type Step = 'download' | 'who' | 'camera' | 'motion' | 'place';
-const { betaMin, betaMax, gammaMax } = CAPTURE_CONFIG.level;
+const { betaMin, betaMax, gammaMax, releaseMarginDeg } = CAPTURE_CONFIG.level;
 const isLevel = (tilt: Tilt) => tilt.beta >= betaMin && tilt.beta <= betaMax && Math.abs(tilt.gamma) <= gammaMax;
+const isNearLevel = (tilt: Tilt) =>
+  tilt.beta >= betaMin - releaseMarginDeg &&
+  tilt.beta <= betaMax + releaseMarginDeg &&
+  Math.abs(tilt.gamma) <= gammaMax + releaseMarginDeg;
 // Laptops have no sensor. Dev and mock builds pretend the phone is level, so the flow can be tried.
 const SIMULATE_LEVEL = import.meta.env.DEV || import.meta.env.MODE === 'mock';
 
@@ -85,6 +93,7 @@ export const PhoneSetupView: React.FC<{ onNavigate: (path: string) => void }> = 
   const [failed, setFailed] = useState(false);
   const [muted, setMuted] = useState(voiceGuide.getMuted());
   const levelSince = useRef<number | null>(null);
+  const levelHeldRef = useRef(false);
 
   useEffect(() => {
     void vtStorage.loadDraft().then((draft) => {
@@ -126,6 +135,9 @@ export const PhoneSetupView: React.FC<{ onNavigate: (path: string) => void }> = 
 
   const applyLevel = (next: Tilt) => {
     setTilt(next);
+    // Once confirmed, a small nudge (such as tapping the button) does not take it back (D50).
+    if (levelHeldRef.current && isNearLevel(next)) return;
+    levelHeldRef.current = false;
     if (!isLevel(next)) {
       levelSince.current = null;
       setLevelHeld(false);
@@ -133,6 +145,7 @@ export const PhoneSetupView: React.FC<{ onNavigate: (path: string) => void }> = 
     }
     levelSince.current ??= Date.now();
     if (Date.now() - levelSince.current >= CAPTURE_CONFIG.timing.levelHoldMs) {
+      levelHeldRef.current = true;
       setLevelHeld((was) => {
         if (!was) voiceGuide.tone('chime');
         return true;
@@ -229,8 +242,12 @@ export const PhoneSetupView: React.FC<{ onNavigate: (path: string) => void }> = 
 
   const start = () => {
     voiceGuide.unlock();
-    // Fullscreen must come from the tap, and is only a nicety if the browser refuses.
-    void document.documentElement.requestFullscreen?.().catch(() => {});
+    // Fullscreen must come from the tap, and is only a nicety if the browser refuses. Android
+    // Chrome then lets the page hold portrait, so turning the phone does not turn the capture.
+    void document.documentElement
+      .requestFullscreen?.({ navigationUI: 'hide' })
+      .then(() => (screen.orientation as OrientationLock).lock?.('portrait'))
+      .catch(() => {});
     captureSession.send({ type: skipLevel ? 'LEVEL_SKIPPED' : 'LEVEL_OK' });
     onNavigate('/capture/front');
   };

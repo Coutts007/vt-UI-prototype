@@ -31,6 +31,7 @@ from app.models import (
     SpecSheet,
 )
 from app.services.erasure import erase_profiles
+from app.services.ratelimit import purge_ended
 from app.services.settings import read_settings
 from app.services.sheet_cleanup import clean_sheets
 
@@ -57,6 +58,7 @@ class RetentionReport:
     study_readings: int = 0
     audit_rows: int = 0
     revoked_tokens: int = 0
+    rate_limit_windows: int = 0
     tombstones: int = 0
     sheet_files: int = 0
     study_collection_end: str | None = None
@@ -284,6 +286,7 @@ async def _small_rows(
         .execution_options(synchronize_session=False)
     )
     report.revoked_tokens = tokens.rowcount or 0  # type: ignore[attr-defined]
+    report.rate_limit_windows = await purge_ended(session, now)
     tombstones = await session.execute(
         delete(DeletedProfile)
         .where(DeletedProfile.deleted_at < now - timedelta(days=TOMBSTONE_DAYS))
