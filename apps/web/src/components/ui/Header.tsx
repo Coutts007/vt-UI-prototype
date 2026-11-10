@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { lazy, Suspense, useState } from 'react';
 import { FEATURE_DIRECTORY } from '../../config/features';
 import { useI18n, Locale } from '../../i18n';
 import { UserAccount } from '../../types/api';
 import { Globe, MoreVertical, LogOut, Scissors, Shield, BookOpen, Layers, Store } from 'lucide-react';
+
+const StaffNav = lazy(() => import('./StaffNav'));
 
 interface HeaderProps {
   currentPath: string;
@@ -62,83 +64,10 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Zone 2: Navigation Links (Clean single-line prose) */}
         <nav className="hidden md:flex flex-wrap items-center gap-x-6 gap-y-1 text-sm font-medium text-[var(--vt-ink-muted,#5C554C)]">
-          {currentUser?.role === 'tailor' ? (
-            <>
-              <button
-                onClick={() => onNavigate('/t/orders')}
-                className={`hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
-                  currentPath.startsWith('/t/orders') ? 'text-[var(--vt-thread,#2E3A87)] font-semibold' : ''
-                }`}
-              >
-                {t('dashboardOrders')}
-              </button>
-              <button
-                onClick={() => onNavigate('/t/clients')}
-                className={`hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
-                  currentPath.startsWith('/t/clients') ? 'text-[var(--vt-thread,#2E3A87)] font-semibold' : ''
-                }`}
-              >
-                {t('dashboardClients')}
-              </button>
-              <button
-                onClick={() => onNavigate('/t/conflicts')}
-                className={`hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
-                  currentPath.startsWith('/t/conflicts') ? 'text-[var(--vt-thread,#2E3A87)] font-semibold' : ''
-                }`}
-              >
-                {t('syncConflicts')}
-              </button>
-              <button
-                onClick={() => onNavigate('/t/audit')}
-                className={`hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
-                  currentPath.startsWith('/t/audit') ? 'text-[var(--vt-thread,#2E3A87)] font-semibold' : ''
-                }`}
-              >
-                {t('dashboardAudit')}
-              </button>
-            </>
-          ) : currentUser?.role === 'admin' ? (
-            <>
-              <button
-                onClick={() => onNavigate('/admin/accounts')}
-                className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
-              >
-                {t('navAccounts')}
-              </button>
-              <button
-                onClick={() => onNavigate('/admin/audit')}
-                className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
-              >
-                {t('navAuditLog')}
-              </button>
-              <button
-                onClick={() => onNavigate('/admin/study/participants')}
-                className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
-              >
-                {t('navStudy')}
-              </button>
-              <button
-                onClick={() => onNavigate('/admin/capture-modes')}
-                className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
-              >
-                {t('navCaptureModes')}
-              </button>
-              <button
-                onClick={() => onNavigate('/admin/settings')}
-                className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer"
-              >
-                {t('navSettings')}
-              </button>
-            </>
-          ) : currentUser?.role === 'measurer' ? (
-            <>
-              <button
-                onClick={() => onNavigate('/study/reference')}
-                className="hover:text-[var(--vt-ink,#1F1C18)] whitespace-nowrap shrink-0 transition-colors cursor-pointer text-[var(--vt-thread,#2E3A87)] font-semibold"
-              >
-                {t('navTapeEntry')}
-              </button>
-            </>
+          {currentUser ? (
+            <Suspense fallback={null}>
+              <StaffNav role={currentUser.role} currentPath={currentPath} onNavigate={onNavigate} />
+            </Suspense>
           ) : (
             <>
               {FEATURE_DIRECTORY && (

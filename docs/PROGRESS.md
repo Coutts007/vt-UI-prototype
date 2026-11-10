@@ -2,6 +2,10 @@
 
 The newest entry comes first. Every change or improvement adds a line in the same commit.
 
+## 2026-11-10: the client flow is back under its growth limit (D34)
+
+- **Staff links load on demand (A13, frontend-spec 18):** the header's tailor, admin and measurer links moved out of `Header.tsx` into `StaffNav.tsx`, which loads only for a signed-in account. CI's budget step failed on PRs #19 and #20 with the client whole flow at 170.3 KB gzip against the 170 KB stop (D34); it is now 169.8 KB. Client first screen 88.3 KB, tailor 110.2 KB. The margin is 0.2 KB, so the next client-flow addition needs a matching cut or an owner decision on D34.
+
 ## 2026-11-10: a capture never completes on numbers that were not measured (D52)
 
 - **Real vision is the default in every build.** Dev, mock and test builds replayed the fake's `good` scenario unless a tab asked for the real pipeline, which is why a capture on the dev server completed with nobody in front of the phone. The replay now runs only in a tab that stored fake options without `real: true` (the tuning page's box, or a browser test's init script, which all the capture suites already set). Under `vite dev` the real workers cannot start (D37), so `make dev-web` ends in the "Measuring could not start" screen instead of a pretend result; `make phone-web` measures. Tests: `vision.test.ts`.
